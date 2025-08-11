@@ -78,8 +78,12 @@ const [ownerIds, setOwnerIds] = useState<string[]>([]);
   return (
     <>
       <div className="space-y-4">
-        <Link to="/" className="text-sm underline">← Back to Dashboard</Link>
         <h1 className="text-2xl font-semibold">{project.name}</h1>
+        {project.design_link && (
+          <div>
+            <a className="inline-flex items-center px-3 py-1.5 rounded bg-white/10 hover:bg-white/20 transition text-sm" href={project.design_link} target="_blank" rel="noreferrer">Slides</a>
+          </div>
+        )}
         <div className="text-sm text-uconn-muted">
           Owners: {owners.map(o => o.name).join(", ") || "—"}
           {canEdit && (
@@ -102,8 +106,10 @@ const [ownerIds, setOwnerIds] = useState<string[]>([]);
           <section className="space-y-2">
             <h2 className="font-semibold">Tasks</h2>
             <ul className="space-y-2">
-              {tasks.map(t => (
-                <li key={t.id} className="flex items-center justify-between gap-3 rounded bg-white/5 border border-white/10 p-3">
+              {tasks.map(t => {
+                const color = t.status === "Complete" ? "bg-green-500" : t.status === "In Progress" ? "bg-yellow-400" : "bg-red-500";
+                return (
+                <li key={t.id} className="relative flex items-center justify-between gap-3 rounded bg-white/5 border border-white/10 p-3 pr-8">
                   <div>
                     <div className="font-medium">{t.description}</div>
                     <div className="text-xs text-uconn-muted">{t.status}</div>
@@ -116,8 +122,10 @@ const [ownerIds, setOwnerIds] = useState<string[]>([]);
                       <button onClick={() => handleDelete(t)} className="px-2 py-1 rounded border border-red-400 text-red-300">Delete</button>
                     </div>
                   )}
+                  <span className={`absolute top-3 right-3 w-2 h-2 rounded-full ${color}`} aria-hidden />
                 </li>
-              ))}
+                );
+              })}
             </ul>
 
             {canEdit && (

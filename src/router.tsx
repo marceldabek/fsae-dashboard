@@ -1,7 +1,6 @@
 
 import { createBrowserRouter, Outlet } from "react-router-dom";
 import Layout from "./components/Layout";
-import Dashboard from "./pages/Dashboard";
 import Overview from "./pages/Overview";
 import People from "./pages/People";
 import PersonDetail from "./pages/PersonDetail";
@@ -14,8 +13,8 @@ export const router = createBrowserRouter(
     {
       element: <Layout />,
       children: [
-        { index: true, element: <Dashboard /> },
-        { path: "overview", element: <Overview /> },
+  { index: true, element: <Overview /> },
+  // { path: "overview", element: <Overview /> },
         { path: "people", element: <People /> },
         { path: "person/:id", element: <PersonDetail /> },
         { path: "project/:id", element: <ProjectDetail /> },

@@ -21,4 +21,5 @@ export type Task = {
   project_id: string;
   description: string;
   status: "In Progress" | "Complete" | "Todo";
+  assignee_id?: string; // Person.id of the assignee
 };

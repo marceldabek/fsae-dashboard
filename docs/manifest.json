@@ -1,6 +1,6 @@
 {
-  "name": "FSAE EV Powertrain",
-  "short_name": "FSAE EV",
+  "name": "UCONN FSAE",
+  "short_name": "UCONN FSAE",
   "start_url": "/fsae-dashboard/",
   "scope": "/fsae-dashboard/",
   "display": "standalone",
@@ -16,12 +16,6 @@
       "src": "/fsae-dashboard/icons/icon-512.png",
       "sizes": "512x512",
       "type": "image/png"
-    },
-    {
-      "src": "/fsae-dashboard/icons/maskable-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "maskable"
     }
   ]
 }

@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 
 import ProjectCard from "../components/ProjectCard";
+import TrophyIcon from "../components/TrophyIcon";
 import { fetchPeople, fetchProjects, fetchTasks } from "../lib/firestore";
 import type { Person, Project, Task } from "../types";
 
@@ -24,9 +25,48 @@ export default function Dashboard() {
     arr.push(t); tasksByProject.set(t.project_id, arr);
   }
 
+  // Leaderboard logic
+  const leaderboard = people.map(person => {
+    const completed = tasks.filter(
+      t => t.assignee_id === person.id && t.status === "Complete"
+    ).length;
+    return { ...person, completed };
+  }).sort((a, b) => b.completed - a.completed);
+
   return (
     <>
       <h1 className="text-2xl font-semibold mb-4">EV Powertrain — Dashboard</h1>
+
+      {/* Leaderboard section */}
+      <div className="mb-8">
+        <div className="rounded-2xl bg-white/5 border border-white/10 p-4">
+          <h2 className="text-xl font-bold mb-2">Leaderboard</h2>
+          <div className="overflow-x-auto">
+            <table className="min-w-[320px] w-full text-sm">
+              <thead>
+                <tr>
+                  <th className="py-2 px-4 text-left text-uconn-muted font-semibold">Rank</th>
+                  <th className="py-2 px-4 text-left text-uconn-muted font-semibold">Name</th>
+                  <th className="py-2 px-4 text-left text-uconn-muted font-semibold">Completed Tasks</th>
+                </tr>
+              </thead>
+              <tbody>
+                {leaderboard.map((person, idx) => (
+                  <tr key={person.id} className={idx === 0 ? "bg-yellow-100/40" : ""}>
+                    <td className="py-2 px-4">{idx + 1}</td>
+                    <td className="py-2 px-4 flex items-center gap-1">
+                      {person.name}
+                      {idx === 0 && <TrophyIcon />}
+                    </td>
+                    <td className="py-2 px-4">{person.completed}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
       <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
         {projects.map(p => (
           <ProjectCard
