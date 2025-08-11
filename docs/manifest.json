@@ -1,0 +1,27 @@
+{
+  "name": "FSAE EV Powertrain",
+  "short_name": "FSAE EV",
+  "start_url": "/fsae-dashboard/",
+  "scope": "/fsae-dashboard/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2D3142",
+  "icons": [
+    {
+      "src": "/fsae-dashboard/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/fsae-dashboard/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/fsae-dashboard/icons/maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
