@@ -1,6 +1,7 @@
 
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, User } from "firebase/auth";
 import { app } from "./firebase";
+import { ADMIN_UID } from "./admin";
 
 const auth = getAuth(app);
 const provider = new GoogleAuthProvider();
@@ -14,4 +15,14 @@ export async function signIn() {
 }
 export async function signOutUser() {
   await signOut(auth);
+}
+
+// Lightweight sync getters (no listeners) for current user/admin checks
+export function getCurrentUser(): User | null {
+  return auth.currentUser;
+}
+
+export function isCurrentUserAdmin(): boolean {
+  const u = auth.currentUser;
+  return !!u && u.uid === ADMIN_UID;
 }

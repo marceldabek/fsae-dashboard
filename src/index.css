@@ -1,4 +1,5 @@
 
+/* tailwindcss v3.4.7 | @tailwind directives for VS Code IntelliSense */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -40,4 +41,35 @@ input:focus, textarea:focus, select:focus { outline: 2px solid #64C7C9; outline-
 	background: rgba(255,255,255,0.04);
 	border: 1px solid #24304f;
 	border-radius: 16px;
+	width: 100%;
+}
+.form-section.wide { max-width: none; }
+.form-section.relaxed { padding: 1.25rem; }
+
+/* On large screens, keep admin cards narrow for better readability */
+@media (min-width: 1024px) {
+	.form-section {
+	max-width: 520px; /* ~32.5rem */
+		margin-left: auto;
+		margin-right: auto;
+	}
+}
+
+/* Denser Admin page layout on larger screens */
+.admin-dense {
+	--adm-pad: 0.5rem;   /* base padding */
+	--adm-gap: 0.5rem;   /* base gap */
+	--adm-fs: 0.875rem;  /* text size */
+}
+
+@media (min-width: 1024px) {
+	.admin-dense h1 { margin-bottom: 0.5rem; }
+	.admin-dense section { margin-bottom: 1rem; }
+	.admin-dense .form-section { padding: var(--adm-pad); }
+	.admin-dense .form-section .space-y-2 > * + * { margin-top: var(--adm-gap); }
+	.admin-dense .form-section .space-y-3 > * + * { margin-top: var(--adm-gap); }
+	.admin-dense input, .admin-dense select, .admin-dense textarea { font-size: var(--adm-fs); padding-top: 0.4rem; padding-bottom: 0.4rem; }
+	.admin-dense button { font-size: var(--adm-fs); padding-top: 0.4rem; padding-bottom: 0.4rem; }
+	.admin-dense .grid { gap: 1rem; }
+	.admin-dense .grid .form-section { padding: calc(var(--adm-pad) + 0.25rem); }
 }

@@ -1,52 +1,152 @@
 
-import { Link, NavLink, Outlet } from "react-router-dom";
+import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { ADMIN_UID } from "../admin";
 import { signIn, signOutUser } from "../auth";
 import { useEffect, useState } from "react";
+import TeamLogo from "./TeamLogo";
+import { fetchRankedSettings, setRankedSettings } from "../lib/firestore";
+import { useRankedEnabled } from "../hooks/useRankedEnabled";
 
 export default function Layout() {
   const user = useAuth();
-  const isAdmin = user?.uid === ADMIN_UID;
-  const [showSignIn, setShowSignIn] = useState(false);
+  const isAdminUser = user?.uid === ADMIN_UID;
+  const isAdmin = isAdminUser; // admin view concept removed
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [rankedEnabled, updateRankedEnabled] = useRankedEnabled();
+  const location = useLocation();
 
-  // Press Alt+S to toggle sign-in button when logged out
+  // Close menu on route change
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (!user && (e.key === 's' || e.key === 'S') && e.altKey) {
-        setShowSignIn(v => !v);
-      }
+    setMenuOpen(false);
+  }, [location.pathname]);
+
+  // Close on Escape
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMenuOpen(false);
     };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [user]);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  // Load ranked setting once
+  // rankedEnabled managed by hook; no manual effect needed
   return (
-  <div className="min-h-screen bg-uconn-blue bg-app-gradient text-uconn-text">
-      <header className="sticky top-0 z-40 bg-uconn-blue/90 backdrop-blur border-b border-uconn-border">
+  <div className="min-h-[100dvh] bg-uconn-blue bg-app-gradient text-uconn-text">
+      {/* iOS PWA safe area top spacer to avoid visual gap under the status bar */}
+  <div style={{ height: 'env(safe-area-inset-top)' }} className="bg-black" />
+  <header className="sticky top-0 z-40 bg-uconn-blue/90 backdrop-blur border-b border-uconn-border">
         <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
           <Link to="/" className="flex items-center h-10">
-            {/* Replace this file with your 120x32 transparent PNG: /public/icons/team-logo-120x32.png */}
-            <img src={`${import.meta.env.BASE_URL}icons/team-logo-120x32.png`} alt="Team Logo" className="h-8 w-[120px] object-contain" style={{maxHeight: 32, maxWidth: 120}} />
+            <TeamLogo className="h-8 w-auto" />
           </Link>
-      <nav className="text-sm flex gap-4">
-            <NavLink to="/" className={({isActive}) => isActive ? "underline" : ""}>Overview</NavLink>
-            <NavLink to="/people" className={({isActive}) => isActive ? "underline" : ""}>People</NavLink>
-            {isAdmin && <NavLink to="/admin" className={({isActive}) => isActive ? "underline" : ""}>Admin</NavLink>}
-            {/* Sign in moved to bottom of Overview; hidden in header */}
+          {/* Hamburger button */}
+          <button
+            aria-label={menuOpen ? "Close menu" : "Open menu"}
+            aria-expanded={menuOpen}
+            onClick={() => setMenuOpen(v => !v)}
+            className="relative inline-flex h-10 w-10 items-center justify-center rounded-md border border-uconn-border/60 bg-black/10 hover:bg-black/20 transition focus:outline-none focus:ring-2 focus:ring-brand-teal/60"
+          >
+            {/* Icon */}
+            <span className="sr-only">Menu</span>
+            <span
+              className={`absolute block h-0.5 w-5 bg-current transition-transform duration-300 ease-out ${menuOpen ? "translate-y-0 rotate-45" : "-translate-y-2 rotate-0"}`}
+              style={{ color: "#E5E7EB" }}
+            />
+            <span
+              className={`absolute block h-0.5 w-5 bg-current transition-opacity duration-300 ${menuOpen ? "opacity-0" : "opacity-100"}`}
+              style={{ color: "#E5E7EB" }}
+            />
+            <span
+              className={`absolute block h-0.5 w-5 bg-current transition-transform duration-300 ease-out ${menuOpen ? "translate-y-0 -rotate-45" : "translate-y-2 rotate-0"}`}
+              style={{ color: "#E5E7EB" }}
+            />
+          </button>
+        </div>
+      </header>
+      {/* Slide-over menu */}
+      <div className={`fixed inset-0 z-50 ${menuOpen ? "pointer-events-auto" : "pointer-events-none"}`}>
+        {/* Backdrop */}
+        <div
+          className={`absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity duration-300 ${menuOpen ? "opacity-100" : "opacity-0"}`}
+          onClick={() => setMenuOpen(false)}
+        />
+        {/* Panel */}
+        <aside
+          className={`absolute right-0 top-0 h-full w-[18rem] max-w-[85vw] bg-uconn-blue/95 border-l border-uconn-border shadow-xl transition-transform duration-300 ease-out ${menuOpen ? "translate-x-0" : "translate-x-full"}`}
+        >
+          <div className="h-14 px-4 flex items-center justify-between border-b border-uconn-border/60">
+            <span className="text-sm font-medium text-uconn-muted">Menu</span>
+            <button
+              aria-label="Close menu"
+              onClick={() => setMenuOpen(false)}
+              className="h-9 w-9 inline-flex items-center justify-center rounded-md hover:bg-black/20"
+            >
+              <span className="sr-only">Close</span>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#E5E7EB" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </button>
+          </div>
+          <nav className="px-2 py-3 text-base">
+            <MenuLink to="/" label="Overview" />
+            <MenuLink to="/people" label="People" />
+            <MenuLink to="/stats" label="Stats" />
+            <MenuLink to="/timeline" label="Timeline" />
+            <MenuLink to="/ranked" label="Ranked" />
+            {isAdminUser && <MenuLink to="/admin" label="Admin" />}
+            <div className="my-3 border-t border-uconn-border/60" />
+            <label className="flex items-center gap-2 px-3 py-2 text-sm select-none cursor-pointer">
+              <span className="text-uconn-muted">Ranked mode</span>
+              <span className="relative inline-block w-10 h-6 align-middle select-none ml-auto">
+                <input
+                  type="checkbox"
+                  checked={rankedEnabled}
+                  onChange={(e)=>updateRankedEnabled(e.target.checked)}
+                  className="peer absolute w-10 h-6 opacity-0 cursor-pointer z-10"
+                />
+                <span className="block w-10 h-6 rounded-full transition-colors bg-uconn-surface border border-uconn-border peer-checked:bg-brand-teal/70" />
+                <span className="absolute left-1 top-1 w-4 h-4 rounded-full bg-uconn-muted transition-transform duration-200 peer-checked:translate-x-4 peer-checked:bg-brand-teal shadow" />
+              </span>
+            </label>
             {user ? (
-              <button onClick={signOutUser} className="text-xs border px-2 py-1 rounded">
+              <button onClick={signOutUser} className="w-full text-left px-3 py-2 rounded-md hover:bg-black/20 transition text-sm">
                 Sign out
               </button>
-            ) : showSignIn && (
-              <button onClick={signIn} className="text-xs border px-2 py-1 rounded bg-brand-teal/30 hover:bg-brand-teal/50 transition" title="Press Alt+S to hide">
+            ) : (
+              <button onClick={signIn} className="w-full text-left px-3 py-2 rounded-md bg-brand-teal/30 hover:bg-brand-teal/50 transition text-sm">
                 Sign in
               </button>
             )}
           </nav>
-        </div>
-      </header>
+          <div className="mt-auto p-3 text-[11px] text-uconn-muted/80 border-t border-uconn-border/60">
+            © UConn FSAE
+          </div>
+        </aside>
+      </div>
     <main className="max-w-6xl mx-auto px-4 py-6"><Outlet /></main>
       <footer className="py-6 text-center text-xs text-uconn-muted">© UConn FSAE</footer>
     </div>
+  );
+}
+
+// Slide-over menu link with subtle hover animation
+function MenuLink({ to, label }: { to: string; label: string }) {
+  return (
+    <NavLink
+      to={to}
+      className={({ isActive }) =>
+        `group flex items-center gap-2 px-3 py-2 rounded-md transition ${
+          isActive ? "bg-black/25" : "hover:bg-black/15"
+        }`
+      }
+    >
+      <span className="relative">
+        <span className="transition-transform duration-300 group-hover:translate-x-0.5">{label}</span>
+        <span className="ml-2 inline-block opacity-0 -translate-x-1 transition-all duration-300 group-hover:opacity-100 group-hover:translate-x-0">→</span>
+      </span>
+    </NavLink>
   );
 }

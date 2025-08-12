@@ -1,9 +1,86 @@
 
-import { getFirestore, collection, getDocs, query, where, addDoc, updateDoc, deleteDoc, doc, setDoc } from "firebase/firestore";
-import { app } from "../firebase";
-import type { Person, Project, Task } from "../types";
+import { collection, getDocs, query, where, addDoc, updateDoc, deleteDoc, doc, setDoc } from "firebase/firestore";
+import { db } from "../firebase";
+import type { Person, Project, Task, RankedSettings, RankLevel } from "../types";
+import { isCurrentUserAdmin } from "../auth";
 
-export const db = getFirestore(app);
+// ---- Simple client-side cache with TTL ----
+type CacheKey = "people" | "projects" | "tasks" | `tasks:project:${string}` | "settings" | "ranked:settings";
+const CACHE_PREFIX = "fsae:";
+const DEFAULT_TTL_MS = 5 * 60 * 1000; // 5 minutes; tweak as desired
+
+function makeKey(key: CacheKey) { return `${CACHE_PREFIX}${key}`; }
+
+function readCache<T>(key: CacheKey): T | null {
+  // Admins should always see fresh data
+  if (isCurrentUserAdmin()) return null;
+  try {
+    const raw = localStorage.getItem(makeKey(key));
+    if (!raw) return null;
+    const { exp, data } = JSON.parse(raw);
+    if (exp && Date.now() < exp) return data as T;
+    // expired
+    localStorage.removeItem(makeKey(key));
+    return null;
+  } catch { return null; }
+}
+
+function writeCache<T>(key: CacheKey, data: T, ttlMs = DEFAULT_TTL_MS) {
+  if (isCurrentUserAdmin()) return; // don't persist admin views
+  try {
+    const payload = JSON.stringify({ exp: Date.now() + ttlMs, data });
+    localStorage.setItem(makeKey(key), payload);
+  } catch { /* storage full or unavailable */ }
+}
+
+function bustCache(keys: CacheKey[]) {
+  for (const k of keys) try { localStorage.removeItem(makeKey(k)); } catch {}
+}
+
+function bustCacheByPrefix(prefix: string) {
+  try {
+    const full = CACHE_PREFIX + prefix;
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i) || "";
+      if (key.startsWith(full)) localStorage.removeItem(key);
+    }
+  } catch {}
+}
+
+// Proactively refresh caches in the background (called from app shell)
+export async function refreshAllCaches() {
+  if (isCurrentUserAdmin()) return; // skip admin
+  try {
+    const [pplSnap, projSnap, taskSnap, settingsSnap, rankedSnap] = await Promise.all([
+      getDocs(collection(db, "people")),
+      getDocs(collection(db, "projects")),
+      getDocs(collection(db, "tasks")),
+      getDocs(collection(db, "settings")),
+      getDocs(collection(db, "ranked")),
+    ]);
+    writeCache("people", pplSnap.docs.map(d => d.data() as Person));
+    writeCache("projects", projSnap.docs.map(d => d.data() as Project));
+    writeCache("tasks", taskSnap.docs.map(d => d.data() as Task));
+  const d = settingsSnap.docs.find(x => x.id === "global");
+    if (d) writeCache("settings", d.data() as any);
+  const r = rankedSnap.docs.find(x => x.id === "settings");
+  if (r) writeCache("ranked:settings", r.data() as any);
+  } catch {
+    // ignore background refresh errors
+  }
+}
+
+// Clear all app-managed localStorage caches (does not affect Firestore IndexedDB)
+export function clearAllLocalCaches() {
+  try {
+    const keys: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i) || "";
+      if (key.startsWith(CACHE_PREFIX)) keys.push(key);
+    }
+    for (const k of keys) localStorage.removeItem(k);
+  } catch {}
+}
 
 // Utility to remove keys whose value is strictly undefined (Firestore disallows them)
 function pruneUndefined<T extends Record<string, any>>(obj: T): T {
@@ -15,47 +92,78 @@ function pruneUndefined<T extends Record<string, any>>(obj: T): T {
 }
 
 export async function fetchPeople(): Promise<Person[]> {
+  const cached = readCache<Person[]>("people");
+  if (cached) return cached;
   const snap = await getDocs(collection(db, "people"));
-  return snap.docs.map(d => d.data() as Person);
+  const data = snap.docs.map(d => d.data() as Person);
+  writeCache("people", data);
+  return data;
 }
 
 export async function fetchProjects(): Promise<Project[]> {
+  const cached = readCache<Project[]>("projects");
+  if (cached) return cached;
   const snap = await getDocs(collection(db, "projects"));
-  return snap.docs.map(d => d.data() as Project);
+  const data = snap.docs.map(d => d.data() as Project);
+  writeCache("projects", data);
+  return data;
 }
 
 export async function fetchTasks(): Promise<Task[]> {
+  const cached = readCache<Task[]>("tasks");
+  if (cached) return cached;
   const snap = await getDocs(collection(db, "tasks"));
-  return snap.docs.map(d => d.data() as Task);
+  const data = snap.docs.map(d => d.data() as Task);
+  writeCache("tasks", data);
+  return data;
 }
 
 export async function fetchTasksForProject(projectId: string): Promise<Task[]> {
+  const key = `tasks:project:${projectId}` as CacheKey;
+  const cached = readCache<Task[]>(key);
+  if (cached) return cached;
   const q = query(collection(db, "tasks"), where("project_id", "==", projectId));
   const snap = await getDocs(q);
-  return snap.docs.map(d => d.data() as Task);
+  const data = snap.docs.map(d => d.data() as Task);
+  writeCache(key, data);
+  return data;
 }
 
 // Admin-only ops (security enforced by Firestore Rules)
 export async function addTask(t: Omit<Task, "id">) {
-  const ref = await addDoc(collection(db, "tasks"), pruneUndefined(t));
+  const now = Date.now();
+  const payload: Omit<Task, "id"> = { ...t, created_at: t.created_at ?? now } as any;
+  const ref = await addDoc(collection(db, "tasks"), pruneUndefined(payload));
   await updateDoc(ref, { id: ref.id });
+  bustCache(["tasks"]);
+  bustCacheByPrefix("tasks:project:");
   return ref.id;
 }
 
 export async function updateTask(id: string, data: Partial<Task>) {
   const ref = doc(db, "tasks", id);
-  await updateDoc(ref, data);
+  // auto-stamp completed_at if moving to Complete and not set
+  const patch = { ...data } as Partial<Task> & { completed_at?: number };
+  if (data.status === "Complete" && (data as any).completed_at === undefined) {
+    patch.completed_at = Date.now();
+  }
+  await updateDoc(ref, pruneUndefined(patch as any));
+  bustCache(["tasks"]);
+  bustCacheByPrefix("tasks:project:");
 }
 
 export async function deleteTaskById(id: string) {
   const ref = doc(db, "tasks", id);
   await deleteDoc(ref);
+  bustCache(["tasks"]);
+  bustCacheByPrefix("tasks:project:");
 }
 
 
 export async function updateProjectOwners(projectId: string, owner_ids: string[]) {
   const ref = doc(db, "projects", projectId);
   await updateDoc(ref, { owner_ids });
+  bustCache(["projects", "people"]);
 }
 
 
@@ -63,10 +171,12 @@ export async function addPerson(p: Omit<Person, "id"> & { id?: string }) {
   if (p.id) {
     const ref = doc(db, "people", p.id);
   await setDoc(ref, pruneUndefined({ ...p, id: p.id }), { merge: true }); // create-or-merge
+  bustCache(["people"]);
     return p.id;
   } else {
   const ref = await addDoc(collection(db, "people"), pruneUndefined(p as any)); // auto-id
     await updateDoc(ref, { id: ref.id });
+  bustCache(["people"]);
     return ref.id;
   }
 }
@@ -75,10 +185,12 @@ export async function addProject(pr: Omit<Project, "id"> & { id?: string }) {
   if (pr.id) {
     const ref = doc(db, "projects", pr.id);
   await setDoc(ref, pruneUndefined({ ...pr, id: pr.id }), { merge: true }); // create-or-merge
+  bustCache(["projects"]);
     return pr.id;
   } else {
   const ref = await addDoc(collection(db, "projects"), pruneUndefined(pr as any));
     await updateDoc(ref, { id: ref.id });
+  bustCache(["projects"]);
     return ref.id;
   }
 }
@@ -87,21 +199,178 @@ export async function addProject(pr: Omit<Project, "id"> & { id?: string }) {
 export async function updatePerson(id: string, patch: Partial<Person>) {
   const ref = doc(db, "people", id);
   await updateDoc(ref, pruneUndefined(patch as any));
+  bustCache(["people"]);
 }
 
 export async function updateProject(id: string, patch: Partial<Project>) {
   const ref = doc(db, "projects", id);
   await updateDoc(ref, pruneUndefined(patch as any));
+  bustCache(["projects"]);
 }
 
 export async function fetchSettings(): Promise<{ rulebook_url?: string; sharepoint_url?: string } | null> {
-  const ref = doc(db, "settings", "global");
+  const cached = readCache<any>("settings");
+  if (cached) return cached;
   const snap = await getDocs(collection(db, "settings"));
   const d = snap.docs.find(x => x.id === "global");
-  return d ? (d.data() as any) : null;
+  const data = d ? (d.data() as any) : null;
+  if (data) writeCache("settings", data, DEFAULT_TTL_MS);
+  return data;
 }
 
 export async function setSettings(data: { rulebook_url?: string; sharepoint_url?: string }) {
   const ref = doc(db, "settings", "global");
   await setDoc(ref, { ...(data || {}) }, { merge: true });
+  bustCache(["settings"]);
+}
+
+// Ranked settings
+export async function fetchRankedSettings(): Promise<RankedSettings> {
+  const cached = readCache<RankedSettings>("ranked:settings");
+  if (cached) return cached;
+  const snap = await getDocs(collection(db, "ranked"));
+  const d = snap.docs.find(x => x.id === "settings");
+  const defaults: RankedSettings = {
+    enabled: true,
+    autoApply: true,
+    applyEvery: "hourly",
+    promotion_pct: { bronze: 40, silver: 30, gold: 20, platinum: 10, diamond: 0 },
+    demotion_pct: { bronze: 0, silver: 10, gold: 15, platinum: 20, diamond: 0 },
+  default_task_points: 10,
+  };
+  const data = d ? ({ ...defaults, ...(d.data() as any) } as RankedSettings) : defaults;
+  writeCache("ranked:settings", data, DEFAULT_TTL_MS);
+  return data;
+}
+
+export async function setRankedSettings(s: Partial<RankedSettings>) {
+  const ref = doc(db, "ranked", "settings");
+  await setDoc(ref, pruneUndefined(s as any), { merge: true });
+  bustCache(["ranked:settings"]);
+}
+
+// Helpers for ranked mode
+export function rankOrder(level: RankLevel): number {
+  return ("Bronze Silver Gold Platinum Diamond" as const).split(" ").indexOf(level);
+}
+
+export function nextRank(level: RankLevel): RankLevel {
+  const order: RankLevel[] = ["Bronze", "Silver", "Gold", "Platinum", "Diamond"];
+  return order[Math.min(order.indexOf(level) + 1, order.length - 1)];
+}
+
+export function prevRank(level: RankLevel): RankLevel {
+  const order: RankLevel[] = ["Bronze", "Silver", "Gold", "Platinum", "Diamond"];
+  return order[Math.max(order.indexOf(level) - 1, 0)];
+}
+
+export function taskPoints(t: Task, settings?: RankedSettings): number {
+  if (t.ranked_points) return t.ranked_points;
+  // fallback: heavier weight to Completed vs Todo/In Progress
+  const base = settings?.default_task_points ?? 10;
+  if (t.status === "Complete") return 35; // medium by default
+  if (t.status === "In Progress") return base;
+  return base; // Todo
+}
+
+// Compute total points for each person for the period
+export function computeRankedScores(people: Person[], tasks: Task[], settings: RankedSettings): Map<string, number> {
+  const scores = new Map<string, number>();
+  const optIn = (p: Person) => !!p.ranked_opt_in; // opt-in only
+  for (const p of people) {
+    if (!optIn(p)) continue;
+    scores.set(p.id, 0);
+  }
+  for (const t of tasks) {
+    if (!t.assignee_id) continue;
+    if (!scores.has(t.assignee_id)) continue;
+    const pts = taskPoints(t, settings);
+    scores.set(t.assignee_id, (scores.get(t.assignee_id) || 0) + pts);
+  }
+  return scores;
+}
+
+// Apply promotion/relegation tables based on percentages and funneling rules
+export async function applyRankedPromotionsDemotions(people: Person[], tasks: Task[], settings: RankedSettings) {
+  // Group participants by rank
+  const participants = people.filter(p => !!p.ranked_opt_in); // opt-in only
+  const byRank: Record<RankLevel, Person[]> = {
+    Bronze: [], Silver: [], Gold: [], Platinum: [], Diamond: [],
+  } as any;
+  for (const p of participants) byRank[(p.rank || "Bronze") as RankLevel].push(p);
+
+  const scores = computeRankedScores(participants, tasks, settings);
+
+  const updates: Array<{ id: string; rank: RankLevel }> = [];
+  const pct = (n?: number) => Math.max(0, Math.min(100, n ?? 0));
+
+  const ranks: RankLevel[] = ["Bronze", "Silver", "Gold", "Platinum", "Diamond"];
+  for (const level of ranks) {
+    const arr = byRank[level];
+    if (arr.length === 0) continue;
+    // Sort by score desc
+    const sorted = [...arr].sort((a, b) => (scores.get(b.id) || 0) - (scores.get(a.id) || 0));
+    const key = (level.toLowerCase() as "bronze" | "silver" | "gold" | "platinum" | "diamond");
+    const promoPct = pct(settings.promotion_pct?.[key]);
+    const demoPct = pct(settings.demotion_pct?.[key]);
+    const promos = Math.floor((promoPct / 100) * sorted.length);
+    const demos = Math.floor((demoPct / 100) * sorted.length);
+
+    // Apply fixed boundaries: no promotion from Diamond, no demotion from Bronze
+    if (level !== "Diamond") {
+      for (let i = 0; i < promos; i++) {
+        const p = sorted[i];
+        const newRank = nextRank(level);
+        updates.push({ id: p.id, rank: newRank });
+      }
+    }
+    if (level !== "Bronze") {
+      for (let i = 0; i < demos; i++) {
+        const p = sorted[sorted.length - 1 - i];
+        const newRank = prevRank(level);
+        updates.push({ id: p.id, rank: newRank });
+      }
+    }
+  }
+
+  // Persist updates (+ append rank history)
+  const ops: Promise<any>[] = [];
+  const now = Date.now();
+  for (const u of updates) {
+    const person = people.find(p => p.id === u.id);
+    const fromRank = (person?.rank || "Bronze") as RankLevel;
+    const toRank = u.rank;
+    // Only write history if there is an actual change
+    if (fromRank === toRank) {
+      ops.push(updateDoc(doc(db, "people", u.id), { rank: toRank }));
+    } else {
+      const prevHist = Array.isArray((person as any)?.rank_history) ? (person as any).rank_history : [];
+      const nextHist = [...prevHist, { ts: now, from: fromRank, to: toRank }];
+      ops.push(updateDoc(doc(db, "people", u.id), { rank: toRank, rank_history: nextHist } as any));
+    }
+  }
+  await Promise.all(ops);
+  bustCache(["people"]);
+  return updates.length;
+}
+
+// Danger zone: remove all people, projects, and tasks documents.
+export async function fullSystemReset() {
+  // Note: Firestore charges per document delete; ensure admin-only access in security rules.
+  const [peopleSnap, projectsSnap, tasksSnap] = await Promise.all([
+    getDocs(collection(db, "people")),
+    getDocs(collection(db, "projects")),
+    getDocs(collection(db, "tasks")),
+  ]);
+
+  // Delete tasks first (downstream of projects/people conceptually)
+  const deletes: Promise<any>[] = [];
+  for (const d of tasksSnap.docs) deletes.push(deleteDoc(doc(db, "tasks", d.id)));
+  for (const d of projectsSnap.docs) deletes.push(deleteDoc(doc(db, "projects", d.id)));
+  for (const d of peopleSnap.docs) deletes.push(deleteDoc(doc(db, "people", d.id)));
+  await Promise.all(deletes);
+
+  // Clear caches
+  bustCache(["people", "projects", "tasks"]);
+  bustCacheByPrefix("tasks:project:");
 }

@@ -4,7 +4,8 @@ import { useParams, Link } from "react-router-dom";
 
 import ProgressBar from "../components/ProgressBar";
 import PeoplePicker from "../components/PeoplePicker";
-import { fetchPeople, fetchProjects, fetchTasksForProject, addTask, updateTask, deleteTaskById, updateProjectOwners } from "../lib/firestore";
+import { fetchPeople, fetchProjects, fetchTasksForProject, addTask, updateTask, deleteTaskById, updateProjectOwners, fetchRankedSettings } from "../lib/firestore";
+import { useRankedEnabled } from "../hooks/useRankedEnabled";
 import { useAuth } from "../hooks/useAuth";
 import { ADMIN_UID } from "../admin";
 import type { Person, Project, Task } from "../types";
@@ -15,9 +16,10 @@ export default function ProjectDetail() {
   const [owners, setOwners] = useState<Person[]>([]);
   const [allPeople, setAllPeople] = useState<Person[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [rankedEnabled] = useRankedEnabled();
   
 const user = useAuth();
-const canEdit = user?.uid === ADMIN_UID;
+const canEdit = (user?.uid === ADMIN_UID);
 const [ownerIds, setOwnerIds] = useState<string[]>([]);
 
 
@@ -45,6 +47,7 @@ const [ownerIds, setOwnerIds] = useState<string[]>([]);
     setTasks(await fetchTasksForProject(id));
   }
   useEffect(() => { reloadTasks(); }, [id]);
+  // rankedEnabled managed by hook
 
   const total = tasks.length;
   const done = tasks.filter(t => t.status === "Complete").length;
@@ -160,6 +163,7 @@ const [ownerIds, setOwnerIds] = useState<string[]>([]);
               {(hideCompleted ? tasks.filter(t=>t.status!=="Complete") : tasks).map(t => {
                 const color = t.status === "Complete" ? "bg-green-500" : t.status === "In Progress" ? "bg-yellow-400" : "bg-red-500";
                 const assignee = allPeople.find(p=>p.id===t.assignee_id);
+                const pts = t.ranked_points ?? (t.status === "Complete" ? 35 : 10);
                 return (
                 <li key={t.id} className="relative flex flex-col justify-between gap-3 rounded bg-uconn-surface border border-uconn-border p-3 pr-10 flex-1 min-w-[260px] md:w-[calc(50%-1rem)] xl:w-[calc(33.333%-1rem)]">
                   <div className="min-w-0">
@@ -170,6 +174,9 @@ const [ownerIds, setOwnerIds] = useState<string[]>([]);
                       <span>{assignee ? `@${assignee.name}` : "Unassigned"}</span>
                     </div>
                   </div>
+                  {rankedEnabled && (
+                    <span className="absolute top-2 right-3 text-[11px] text-uconn-muted font-semibold">+{pts}</span>
+                  )}
                   {canEdit && (
                     <div className="flex flex-col items-end gap-2 text-xs">
                       <select

@@ -4,7 +4,7 @@ import { ADMIN_UID } from "../admin";
 
 export default function AdminBadge() {
   const user = useAuth();
-  const isAdmin = user?.uid === ADMIN_UID;
+  const isAdmin = (user?.uid === ADMIN_UID);
 
   if (!isAdmin) return null;
 

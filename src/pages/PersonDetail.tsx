@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { fetchPeople, fetchProjects, fetchTasks, fetchSettings } from "../lib/firestore";
-import type { Person, Project, Task } from "../types";
+import type { Person, Project, Task, RankLevel } from "../types";
 
 export default function PersonDetail() {
   const { id } = useParams();
@@ -51,13 +51,24 @@ export default function PersonDetail() {
   const myRank = id ? sorted.findIndex(([pid]) => pid === id) + 1 : undefined;
   const myCompleted = completedByPerson.get(id || "") || 0;
 
+  function rankIcon(rank: RankLevel | undefined) {
+    const r = (rank || "Bronze").toLowerCase();
+    return `/icons/rank-${r}.svg`;
+  }
+
+  // Sort rank history newest first for display
+  const history = (person.rank_history || []).slice().sort((a,b)=>b.ts-a.ts);
+
   return (
     <div className="max-w-2xl mx-auto mt-6 space-y-6">
       {/* Profile Card */}
       <div className="rounded-2xl bg-white/5 border border-white/10 p-4 flex flex-col gap-1.5 relative">
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1 min-w-0">
-            <div className="text-xl font-semibold leading-tight truncate">{person.name}</div>
+            <div className="text-xl font-semibold leading-tight truncate flex items-center gap-2">
+              {person.rank && (<img src={rankIcon(person.rank)} alt={person.rank} className="h-5 w-5" />)}
+              <span className="truncate">{person.name}</span>
+            </div>
             {person.discord && (
               <div className="text-xs text-uconn-muted leading-snug truncate">@{person.discord.replace(/^@/, '')}</div>
             )}
@@ -154,6 +165,31 @@ export default function PersonDetail() {
             );
           })}
         </ul>
+      </div>
+
+      {/* Ranked History */}
+      <div className="rounded-2xl bg-white/5 border border-white/10 p-4">
+        <h2 className="font-semibold mb-2">Ranked History</h2>
+        {history.length === 0 ? (
+          <div className="text-xs text-uconn-muted">No rank changes yet.</div>
+        ) : (
+          <ul className="space-y-2 text-sm">
+            {history.map((h, i) => (
+              <li key={i} className="flex items-center gap-2">
+                <span className="text-xs text-uconn-muted w-28">{new Date(h.ts).toLocaleDateString('en-US')}</span>
+                <span className="inline-flex items-center gap-1">
+                  <img src={rankIcon(h.from)} alt={h.from} className="h-4 w-4" />
+                  <span>{h.from}</span>
+                </span>
+                <span className="text-uconn-muted">→</span>
+                <span className="inline-flex items-center gap-1">
+                  <img src={rankIcon(h.to)} alt={h.to} className="h-4 w-4" />
+                  <span>{h.to}</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </div>
   );

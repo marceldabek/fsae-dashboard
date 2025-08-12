@@ -1,4 +1,6 @@
 
+export type RankLevel = "Bronze" | "Silver" | "Gold" | "Platinum" | "Diamond";
+
 export type Person = {
   id: string;
   name: string;
@@ -6,6 +8,11 @@ export type Person = {
   skills?: string[];
   role?: string;
   discord?: string; // @username
+  // Ranked mode fields
+  rank?: RankLevel; // defaults to Bronze if undefined
+  ranked_opt_in?: boolean; // participates in the weekly/hourly pool
+  // History of rank changes (newest last)
+  rank_history?: { ts: number; from: RankLevel; to: RankLevel }[];
 };
 
 export type Project = {
@@ -25,4 +32,35 @@ export type Task = {
   description: string;
   status: "In Progress" | "Complete" | "Todo";
   assignee_id?: string; // Person.id of the assignee
+  // Timestamps (ms since epoch) for basic analytics; optional for legacy tasks
+  created_at?: number;
+  completed_at?: number;
+  // Optional ranked scoring override for this task (default handled in app logic)
+  ranked_points?: 5 | 10 | 25 | 35 | 50 | 100;
+};
+
+// Settings for Ranked mode (stored in Firestore: settings/ranked)
+export type RankedSettings = {
+  enabled?: boolean; // master toggle
+  autoApply?: boolean; // automatically apply promotions/demotions on schedule
+  applyEvery?: "hourly" | "weekly"; // currently use "hourly" per request
+  last_reset_at?: number; // ms since epoch of last applied period end
+  // Promotion percentages (top X% of rank move up at reset)
+  promotion_pct?: {
+    bronze?: number; // 0-100
+    silver?: number;
+    gold?: number;
+    platinum?: number;
+    diamond?: number; // generally 0 (no promotion from Diamond)
+  };
+  // Demotion percentages (bottom Y% of rank move down at reset)
+  demotion_pct?: {
+    bronze?: number; // generally 0 (no demotion from Bronze)
+    silver?: number;
+    gold?: number;
+    platinum?: number;
+    diamond?: number;
+  };
+  // Default points when a task has no ranked_points set
+  default_task_points?: 10 | 35 | 100 | number;
 };
