@@ -23,18 +23,19 @@ export default function People() {
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-semibold">People</h1>
         <input
-          className="px-3 py-2 rounded bg-white text-black text-sm"
+          className="px-3 py-2 rounded text-sm w-56"
           placeholder="Search by name or skill…"
           value={q}
           onChange={e=>setQ(e.target.value)}
         />
       </div>
 
-      <ul className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+  <ul className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filtered.map(p => (
           <li key={p.id} className="rounded-2xl bg-white/5 border border-white/10 p-4">
-            <Link to={`/person/${p.id}`} className="text-lg font-medium hover:underline">{p.name}</Link>
-            <div className="text-sm text-uconn-muted">{p.year}</div>
+    <Link to={`/person/${p.id}`} className="text-base font-medium hover:underline">{p.name}</Link>
+    <div className="text-xs text-uconn-muted">{p.year}</div>
+    {p.discord && <div className="text-xs text-uconn-muted">@{p.discord.replace(/^@/, '')}</div>}
             <div className="text-xs text-uconn-muted mt-2">Skills: {p.skills?.join(", ") || "—"}</div>
           </li>
         ))}

@@ -5,6 +5,7 @@ export type Person = {
   year?: string;
   skills?: string[];
   role?: string;
+  discord?: string; // @username
 };
 
 export type Project = {
@@ -14,6 +15,8 @@ export type Project = {
   design_link?: string;
   description?: string;
   due_date?: string;
+  // Subsystem this project belongs to (e.g. "Aero", "Business", etc.)
+  subsystem?: string;
 };
 
 export type Task = {

@@ -8,6 +8,7 @@
         "CAD",
         "Testing"
       ],
+      "discord": "testperson",
       "sharepoint_link": "https://example.com"
     }
   ],
@@ -19,6 +20,7 @@
         "p1"
       ],
       "design_link": "https://example.com",
+  "subsystem": "Electrical EV",
       "progress": 20,
       "notes": "Waiting on material."
     }

@@ -4,3 +4,40 @@
 @tailwind utilities;
 
 html, body, #root { height: 100%; }
+
+/* Optional: gradient backdrop if desired via a parent class */
+.bg-app-gradient {
+	background: radial-gradient(1200px 600px at 10% -10%, rgba(100,199,201,0.15), transparent 60%),
+							radial-gradient(1000px 600px at 90% 10%, rgba(0,67,105,0.25), transparent 60%),
+							#000E2F;
+}
+
+/* Dark input styling */
+input[type="text"], input[type="date"], textarea, select, input:not([type]) {
+	background-color: rgba(255,255,255,0.06);
+	color: #FFFFFF;
+	border: 1px solid #2e3a55;
+	font-size: 0.875rem;
+	border-radius: 6px;
+}
+input::placeholder, textarea::placeholder { color: #7e868C; opacity: 1; }
+input:focus, textarea:focus, select:focus { outline: 2px solid #64C7C9; outline-offset: 0; background-color: rgba(255,255,255,0.1); }
+
+/* Consistent dark dropdown styling (apply class 'dark-select') */
+.dark-select {
+	background-color: rgba(255,255,255,0.06);
+	color: #fff;
+	border: 1px solid #2e3a55;
+	font-size: 0.875rem;
+	border-radius: 6px;
+}
+.dark-select:focus { outline: 2px solid #64C7C9; background-color: rgba(255,255,255,0.1); }
+.dark-select option { background:#06152e; color:#fff; }
+.dark-select option:checked { background:#64C7C9; color:#000; }
+.dark-select option:hover { background:#1a2a48; }
+
+.form-section {
+	background: rgba(255,255,255,0.04);
+	border: 1px solid #24304f;
+	border-radius: 16px;
+}

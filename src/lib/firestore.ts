@@ -5,6 +5,15 @@ import type { Person, Project, Task } from "../types";
 
 export const db = getFirestore(app);
 
+// Utility to remove keys whose value is strictly undefined (Firestore disallows them)
+function pruneUndefined<T extends Record<string, any>>(obj: T): T {
+  const clean: any = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (v !== undefined) clean[k] = v;
+  }
+  return clean;
+}
+
 export async function fetchPeople(): Promise<Person[]> {
   const snap = await getDocs(collection(db, "people"));
   return snap.docs.map(d => d.data() as Person);
@@ -28,7 +37,7 @@ export async function fetchTasksForProject(projectId: string): Promise<Task[]> {
 
 // Admin-only ops (security enforced by Firestore Rules)
 export async function addTask(t: Omit<Task, "id">) {
-  const ref = await addDoc(collection(db, "tasks"), t);
+  const ref = await addDoc(collection(db, "tasks"), pruneUndefined(t));
   await updateDoc(ref, { id: ref.id });
   return ref.id;
 }
@@ -53,10 +62,10 @@ export async function updateProjectOwners(projectId: string, owner_ids: string[]
 export async function addPerson(p: Omit<Person, "id"> & { id?: string }) {
   if (p.id) {
     const ref = doc(db, "people", p.id);
-    await setDoc(ref, { ...p, id: p.id }, { merge: true }); // create-or-merge
+  await setDoc(ref, pruneUndefined({ ...p, id: p.id }), { merge: true }); // create-or-merge
     return p.id;
   } else {
-    const ref = await addDoc(collection(db, "people"), p as any); // auto-id
+  const ref = await addDoc(collection(db, "people"), pruneUndefined(p as any)); // auto-id
     await updateDoc(ref, { id: ref.id });
     return ref.id;
   }
@@ -65,10 +74,10 @@ export async function addPerson(p: Omit<Person, "id"> & { id?: string }) {
 export async function addProject(pr: Omit<Project, "id"> & { id?: string }) {
   if (pr.id) {
     const ref = doc(db, "projects", pr.id);
-    await setDoc(ref, { ...pr, id: pr.id }, { merge: true }); // create-or-merge
+  await setDoc(ref, pruneUndefined({ ...pr, id: pr.id }), { merge: true }); // create-or-merge
     return pr.id;
   } else {
-    const ref = await addDoc(collection(db, "projects"), pr as any);
+  const ref = await addDoc(collection(db, "projects"), pruneUndefined(pr as any));
     await updateDoc(ref, { id: ref.id });
     return ref.id;
   }
@@ -77,12 +86,12 @@ export async function addProject(pr: Omit<Project, "id"> & { id?: string }) {
 // Simple settings doc: settings/global => { rulebook_url?: string }
 export async function updatePerson(id: string, patch: Partial<Person>) {
   const ref = doc(db, "people", id);
-  await updateDoc(ref, patch as any);
+  await updateDoc(ref, pruneUndefined(patch as any));
 }
 
 export async function updateProject(id: string, patch: Partial<Project>) {
   const ref = doc(db, "projects", id);
-  await updateDoc(ref, patch as any);
+  await updateDoc(ref, pruneUndefined(patch as any));
 }
 
 export async function fetchSettings(): Promise<{ rulebook_url?: string; sharepoint_url?: string } | null> {

@@ -8,6 +8,7 @@ import type { Person, Project, Task } from "../types";
 export default function PersonDetail() {
   const { id } = useParams();
   const [person, setPerson] = useState<Person | null>(null);
+  // All projects (we'll derive which to show)
   const [projects, setProjects] = useState<Project[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]); // tasks assigned to this person
   const [allTasks, setAllTasks] = useState<Task[]>([]); // all tasks (for leaderboard rank)
@@ -20,7 +21,8 @@ export default function PersonDetail() {
       ]);
       const p = people.find(pp => pp.id === id) || null;
       setPerson(p);
-      setProjects(projects.filter(pr => pr.owner_ids?.includes(id!)));
+  // Keep all projects; we'll filter for display later (include ownership OR assigned tasks)
+  setProjects(projects);
   setAllTasks(allTasks);
   setTasks(allTasks.filter(t => t.assignee_id === id));
   setSettings(settings);
@@ -30,7 +32,11 @@ export default function PersonDetail() {
   if (!person) return <div className="text-sm">Loading…</div>;
 
   // Stats
-  const numProjects = projects.length;
+  // Derive list of projects to display: owned OR has at least one task assigned to this person
+  const displayProjects = projects.filter(pr =>
+    pr.owner_ids?.includes(id!) || allTasks.some(t => t.project_id === pr.id && t.assignee_id === id)
+  );
+  const numProjects = displayProjects.length;
   const numTasks = tasks.length;
   const numTasksTodo = tasks.filter(t => t.status !== "Complete").length;
 
@@ -48,18 +54,31 @@ export default function PersonDetail() {
   return (
     <div className="max-w-2xl mx-auto mt-6 space-y-6">
       {/* Profile Card */}
-      <div className="rounded-2xl bg-white/5 border border-white/10 p-6 flex flex-col gap-2 items-start">
-        <div className="text-2xl font-bold">{person.name}</div>
-        <div className="text-sm text-uconn-muted">{person.year || person.role}</div>
-        {myRank ? (
-          <div className="text-xs bg-white/10 rounded px-2 py-1">Leaderboard Rank: #{myRank} · {myCompleted} completed</div>
-        ) : (
-          <div className="text-xs text-uconn-muted">No completed tasks yet</div>
-        )}
+      <div className="rounded-2xl bg-white/5 border border-white/10 p-4 flex flex-col gap-1.5 relative">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex-1 min-w-0">
+            <div className="text-xl font-semibold leading-tight truncate">{person.name}</div>
+            {person.discord && (
+              <div className="text-xs text-uconn-muted leading-snug truncate">@{person.discord.replace(/^@/, '')}</div>
+            )}
+            <div className="text-xs text-uconn-muted leading-snug">{person.year || person.role}</div>
+          </div>
+          {myRank ? (
+            <div className="shrink-0 flex flex-col items-end text-right">
+              <div className="text-[10px] tracking-wide text-uconn-muted uppercase">Rank</div>
+              <div className="mt-0.5 px-2 py-1 rounded-md bg-gradient-to-r from-brand-teal/30 to-brand-lightTeal/30 border border-brand-teal/40 text-xs font-semibold">
+                #{myRank}
+              </div>
+              <div className="mt-1 text-[10px] text-uconn-muted">{myCompleted} done</div>
+            </div>
+          ) : (
+            <div className="shrink-0 text-[10px] text-uconn-muted mt-1">No rank yet</div>
+          )}
+        </div>
         {person.skills && person.skills.length > 0 && (
           <div className="text-sm">Skills: {person.skills.join(", ")}</div>
         )}
-        <div className="flex gap-6 mt-2">
+        <div className="flex gap-4 mt-1">
           <div className="text-center">
             <div className="text-lg font-semibold">{numProjects}</div>
             <div className="text-xs text-uconn-muted">Projects</div>
@@ -91,11 +110,31 @@ export default function PersonDetail() {
       <div className="rounded-2xl bg-white/5 border border-white/10 p-4">
         <h2 className="font-semibold mb-2">Projects</h2>
         <ul className="space-y-3">
-          {projects.map(p => {
-            const ptasks = tasks.filter(t => t.project_id === p.id);
-            const total = ptasks.length;
-            const done = ptasks.filter(t => t.status === "Complete").length;
+          {displayProjects.map(p => {
+            // Use ALL tasks for the project for progress, not just tasks assigned to this person
+            const ptasksAll = allTasks.filter(t => t.project_id === p.id);
+            const total = ptasksAll.length;
+            const done = ptasksAll.filter(t => t.status === "Complete").length;
             const percent = total ? Math.round((done/total)*100) : 0;
+            const due = (() => {
+              const s = p.due_date || "";
+              // Try to parse YYYY-MM-DD or similar
+              const m = s.match(/(\d{4})[\/-]?(\d{2})[\/-]?(\d{2})/);
+              let date: Date | null = null;
+              if (m) {
+                const [, y, mo, d] = m;
+                date = new Date(Number(y), Number(mo) - 1, Number(d));
+              } else if (!isNaN(Date.parse(s))) {
+                date = new Date(s);
+              }
+              if (date) {
+                const month = date.toLocaleString('en-US', { month: 'long' });
+                const day = date.getDate();
+                const suffix = (n: number) => n === 1 || n === 21 || n === 31 ? 'st' : n === 2 || n === 22 ? 'nd' : n === 3 || n === 23 ? 'rd' : 'th';
+                return `${month} ${day}${suffix(day)}`;
+              }
+              return s;
+            })();
             return (
               <li key={p.id} className="rounded-xl bg-white/10 border border-white/10 p-3">
                 <div className="flex items-center justify-between">
@@ -104,11 +143,11 @@ export default function PersonDetail() {
                 </div>
                 <div className="text-xs text-uconn-muted">
                   {p.description || "—"}
-                  {p.due_date && <> · Due {p.due_date}</>}
+                  {p.due_date && <> · Due {due}</>}
                 </div>
-                {ptasks.length>0 && (
+                {ptasksAll.length>0 && (
                   <ul className="mt-2 list-disc pl-5 text-sm">
-                    {ptasks.map(t => <li key={t.id}>{t.description} <span className="text-uconn-muted">({t.status})</span></li>)}
+                    {ptasksAll.map(t => <li key={t.id}>{t.description} <span className="text-uconn-muted">({t.status})</span></li>)}
                   </ul>
                 )}
               </li>
