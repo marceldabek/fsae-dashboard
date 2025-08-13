@@ -1,0 +1,1 @@
+import{j as r}from"./index-DrAM74WJ.js";function s({value:a,heightClass:n="h-2"}){const e=Math.max(0,Math.min(100,Math.round(a)));return r.jsx("div",{className:`w-full ${n} bg-brand-blue/30 rounded-full overflow-hidden`,children:r.jsx("div",{className:"h-full transition-all",style:{width:`${e}%`,background:"linear-gradient(90deg,#64C7C9,#98D7D8)"}})})}export{s as P};

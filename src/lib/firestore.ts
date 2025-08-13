@@ -1,7 +1,7 @@
 
-import { collection, getDocs, query, where, addDoc, updateDoc, deleteDoc, doc, setDoc } from "firebase/firestore";
+import { collection, getDocs, query, where, addDoc, updateDoc, deleteDoc, doc, setDoc, getDoc } from "firebase/firestore";
 import { db } from "../firebase";
-import type { Person, Project, Task, RankedSettings, RankLevel } from "../types";
+import type { Person, Project, Task, RankedSettings, RankLevel, Attendance, LogEvent } from "../types";
 import { isCurrentUserAdmin } from "../auth";
 
 // ---- Simple client-side cache with TTL ----
@@ -142,6 +142,12 @@ export async function addTask(t: Omit<Task, "id">) {
 
 export async function updateTask(id: string, data: Partial<Task>) {
   const ref = doc(db, "tasks", id);
+  // read current to detect transitions
+  let prev: Task | null = null;
+  try {
+    const snap = await getDoc(ref);
+    prev = (snap.exists() ? (snap.data() as Task) : null);
+  } catch {}
   // auto-stamp completed_at if moving to Complete and not set
   const patch = { ...data } as Partial<Task> & { completed_at?: number };
   if (data.status === "Complete" && (data as any).completed_at === undefined) {
@@ -150,6 +156,24 @@ export async function updateTask(id: string, data: Partial<Task>) {
   await updateDoc(ref, pruneUndefined(patch as any));
   bustCache(["tasks"]);
   bustCacheByPrefix("tasks:project:");
+
+  // If newly completed, log task points for the assignee
+  try {
+    const wasComplete = prev?.status === "Complete";
+    const nowComplete = data.status === "Complete";
+    if (!wasComplete && nowComplete) {
+      const settings = await fetchRankedSettings();
+      const effectiveAssignee = (data.assignee_id ?? prev?.assignee_id) || undefined;
+      const pts = taskPoints({ ...(prev || {} as any), status: "Complete" } as Task, settings);
+      await addLogEvent({
+        ts: Date.now(),
+        type: "task_points",
+        person_id: effectiveAssignee,
+        points: pts,
+        note: `Task complete: ${(prev?.description || id)}`,
+      });
+    }
+  } catch {}
 }
 
 export async function deleteTaskById(id: string) {
@@ -157,6 +181,50 @@ export async function deleteTaskById(id: string) {
   await deleteDoc(ref);
   bustCache(["tasks"]);
   bustCacheByPrefix("tasks:project:");
+}
+
+// Attendance helpers
+export async function addAttendance(a: Omit<Attendance, "id">) {
+  const now = Date.now();
+  const payload: Omit<Attendance, "id"> = { ...a, created_at: a.created_at ?? now };
+  const ref = await addDoc(collection(db, "attendance"), pruneUndefined(payload as any));
+  await updateDoc(ref, { id: ref.id });
+  // Log the event
+  try {
+    await addLogEvent({
+      ts: now,
+      type: "attendance",
+      person_id: a.person_id,
+      points: a.points,
+      note: `Attendance ${a.points} pts on ${a.date}`,
+    });
+  } catch {}
+  return ref.id;
+}
+
+export async function fetchAttendance(): Promise<Attendance[]> {
+  const snap = await getDocs(collection(db, "attendance"));
+  return snap.docs.map(d => d.data() as Attendance);
+}
+
+// ---- Ranked/Activity log helpers ----
+export async function addLogEvent(e: Omit<LogEvent, "id">) {
+  const ref = await addDoc(collection(db, "logs"), pruneUndefined(e as any));
+  await updateDoc(ref, { id: ref.id });
+  return ref.id;
+}
+
+export async function fetchRecentLogs(limit: number = 50): Promise<LogEvent[]> {
+  // Using getDocs(collection) then sort client-side since we didn't add an index/orderBy to keep it simple client-only.
+  const snap = await getDocs(collection(db, "logs"));
+  const rows = snap.docs.map(d => d.data() as LogEvent).sort((a, b) => (b.ts || 0) - (a.ts || 0));
+  return rows.slice(0, Math.max(1, limit));
+}
+
+// Simple color palette for charts
+export function palette(i: number) {
+  const colors = ["#34d399", "#60a5fa", "#fbbf24", "#f472b6", "#a78bfa", "#f87171", "#22d3ee", "#84cc16", "#fb7185", "#f59e0b"];
+  return colors[i % colors.length];
 }
 
 
@@ -208,6 +276,17 @@ export async function updateProject(id: string, patch: Partial<Project>) {
   bustCache(["projects"]);
 }
 
+export async function deleteProject(id: string) {
+  // Best-effort: delete tasks under this project first
+  try {
+    const qTasks = query(collection(db, "tasks"), where("project_id", "==", id));
+    const snap = await getDocs(qTasks);
+    await Promise.all(snap.docs.map(d => deleteDoc(doc(db, "tasks", d.id))));
+  } catch {}
+  await deleteDoc(doc(db, "projects", id));
+  bustCache(["projects", "tasks"]);
+}
+
 export async function fetchSettings(): Promise<{ rulebook_url?: string; sharepoint_url?: string } | null> {
   const cached = readCache<any>("settings");
   if (cached) return cached;
@@ -249,6 +328,11 @@ export async function setRankedSettings(s: Partial<RankedSettings>) {
   bustCache(["ranked:settings"]);
 }
 
+// Helper to stamp the boundary (used after weekly/hourly apply). Consumers use this to know when a new period starts.
+export async function markRankedResetBoundary(ts: number = Date.now()) {
+  await setRankedSettings({ last_reset_at: ts });
+}
+
 // Helpers for ranked mode
 export function rankOrder(level: RankLevel): number {
   return ("Bronze Silver Gold Platinum Diamond" as const).split(" ").indexOf(level);
@@ -274,7 +358,7 @@ export function taskPoints(t: Task, settings?: RankedSettings): number {
 }
 
 // Compute total points for each person for the period
-export function computeRankedScores(people: Person[], tasks: Task[], settings: RankedSettings): Map<string, number> {
+export function computeRankedScores(people: Person[], tasks: Task[], settings: RankedSettings, attendance?: Attendance[]): Map<string, number> {
   const scores = new Map<string, number>();
   const optIn = (p: Person) => !!p.ranked_opt_in; // opt-in only
   for (const p of people) {
@@ -287,11 +371,20 @@ export function computeRankedScores(people: Person[], tasks: Task[], settings: R
     const pts = taskPoints(t, settings);
     scores.set(t.assignee_id, (scores.get(t.assignee_id) || 0) + pts);
   }
+  if (attendance && attendance.length) {
+    for (const a of attendance) {
+      if (!a.person_id) continue;
+      if (!scores.has(a.person_id)) continue;
+      const pts = Math.max(0, Number(a.points || 0));
+      if (!pts) continue;
+      scores.set(a.person_id, (scores.get(a.person_id) || 0) + pts);
+    }
+  }
   return scores;
 }
 
 // Apply promotion/relegation tables based on percentages and funneling rules
-export async function applyRankedPromotionsDemotions(people: Person[], tasks: Task[], settings: RankedSettings) {
+export async function applyRankedPromotionsDemotions(people: Person[], tasks: Task[], settings: RankedSettings, attendance?: Attendance[]) {
   // Group participants by rank
   const participants = people.filter(p => !!p.ranked_opt_in); // opt-in only
   const byRank: Record<RankLevel, Person[]> = {
@@ -299,7 +392,7 @@ export async function applyRankedPromotionsDemotions(people: Person[], tasks: Ta
   } as any;
   for (const p of participants) byRank[(p.rank || "Bronze") as RankLevel].push(p);
 
-  const scores = computeRankedScores(participants, tasks, settings);
+  const scores = computeRankedScores(participants, tasks, settings, attendance);
 
   const updates: Array<{ id: string; rank: RankLevel }> = [];
   const pct = (n?: number) => Math.max(0, Math.min(100, n ?? 0));
@@ -347,9 +440,16 @@ export async function applyRankedPromotionsDemotions(people: Person[], tasks: Ta
       const prevHist = Array.isArray((person as any)?.rank_history) ? (person as any).rank_history : [];
       const nextHist = [...prevHist, { ts: now, from: fromRank, to: toRank }];
       ops.push(updateDoc(doc(db, "people", u.id), { rank: toRank, rank_history: nextHist } as any));
+      // log event per person rank change
+      ops.push(addLogEvent({ ts: now, type: "rank_change", person_id: u.id, from_rank: fromRank, to_rank: toRank }));
     }
   }
   await Promise.all(ops);
+  const now2 = Date.now();
+  // One aggregate entry for apply action
+  try { await addLogEvent({ ts: now2, type: "rank_apply", note: `Applied promotions/demotions to ${updates.length} person(s)` }); } catch {}
+  // Mark new period boundary so UI resets "Change Today" and timers; this is effectively the weekly reset anchor
+  try { await markRankedResetBoundary(now2); } catch {}
   bustCache(["people"]);
   return updates.length;
 }

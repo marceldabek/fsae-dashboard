@@ -4,10 +4,19 @@ import { useEffect, useState } from "react";
 import { fetchPeople } from "../lib/firestore";
 import type { Person } from "../types";
 import { Link } from "react-router-dom";
+import { useRankedEnabled } from "../hooks/useRankedEnabled";
+
+function rankIconSrc(rank?: string) {
+  const base = import.meta.env.BASE_URL || '/';
+  const r = (rank || 'Bronze').toLowerCase();
+  const ext = (r === 'bronze' || r === 'silver' || r === 'gold') ? 'png' : 'svg';
+  return `${base}icons/rank-${r}.${ext}`;
+}
 
 export default function People() {
   const [people, setPeople] = useState<Person[]>([]);
   const [q, setQ] = useState("");
+  const [rankedEnabled] = useRankedEnabled();
 
   useEffect(() => {
     (async () => setPeople(await fetchPeople()))();
@@ -32,7 +41,14 @@ export default function People() {
 
   <ul className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filtered.map(p => (
-          <li key={p.id} className="rounded-2xl bg-white/5 border border-white/10 p-4">
+          <li key={p.id} className="relative rounded-2xl bg-white/5 border border-white/10 p-4">
+    {rankedEnabled && p.rank && (
+      <img
+        src={rankIconSrc(p.rank)}
+        alt={p.rank}
+        className="absolute top-3 right-3 h-6 w-6 object-contain"
+      />
+    )}
     <Link to={`/person/${p.id}`} className="text-base font-medium hover:underline">{p.name}</Link>
     <div className="text-xs text-uconn-muted">{p.year}</div>
     {p.discord && <div className="text-xs text-uconn-muted">@{p.discord.replace(/^@/, '')}</div>}

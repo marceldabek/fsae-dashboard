@@ -1,7 +1,7 @@
 
 import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, User } from "firebase/auth";
 import { app } from "./firebase";
-import { ADMIN_UID } from "./admin";
+import { isAdminUid } from "./admin";
 
 const auth = getAuth(app);
 const provider = new GoogleAuthProvider();
@@ -24,5 +24,5 @@ export function getCurrentUser(): User | null {
 
 export function isCurrentUserAdmin(): boolean {
   const u = auth.currentUser;
-  return !!u && u.uid === ADMIN_UID;
+  return isAdminUid(u?.uid || null);
 }

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { fetchPeople, fetchProjects, fetchTasks, fetchSettings } from "../lib/firestore";
 import type { Person, Project, Task, RankLevel } from "../types";
+import { useRankedEnabled } from "../hooks/useRankedEnabled";
 
 export default function PersonDetail() {
   const { id } = useParams();
@@ -13,6 +14,7 @@ export default function PersonDetail() {
   const [tasks, setTasks] = useState<Task[]>([]); // tasks assigned to this person
   const [allTasks, setAllTasks] = useState<Task[]>([]); // all tasks (for leaderboard rank)
   const [settings, setSettings] = useState<{rulebook_url?: string; sharepoint_url?: string} | null>(null);
+  const [rankedEnabled] = useRankedEnabled();
 
   useEffect(() => {
     (async () => {
@@ -40,20 +42,13 @@ export default function PersonDetail() {
   const numTasks = tasks.length;
   const numTasksTodo = tasks.filter(t => t.status !== "Complete").length;
 
-  // Leaderboard rank (by completed tasks)
-  const completedByPerson = new Map<string, number>();
-  for (const t of allTasks) {
-    if (t.status === "Complete" && t.assignee_id) {
-      completedByPerson.set(t.assignee_id, (completedByPerson.get(t.assignee_id) || 0) + 1);
-    }
-  }
-  const sorted = [...completedByPerson.entries()].sort((a,b)=>b[1]-a[1]);
-  const myRank = id ? sorted.findIndex(([pid]) => pid === id) + 1 : undefined;
-  const myCompleted = completedByPerson.get(id || "") || 0;
+  // Remove old leaderboard rank on personal page per request
 
   function rankIcon(rank: RankLevel | undefined) {
+    const base = import.meta.env.BASE_URL || '/';
     const r = (rank || "Bronze").toLowerCase();
-    return `/icons/rank-${r}.svg`;
+    const ext = (r === 'bronze' || r === 'silver') ? 'png' : 'svg';
+    return `${base}icons/rank-${r}.${ext}`;
   }
 
   // Sort rank history newest first for display
@@ -66,7 +61,6 @@ export default function PersonDetail() {
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1 min-w-0">
             <div className="text-xl font-semibold leading-tight truncate flex items-center gap-2">
-              {person.rank && (<img src={rankIcon(person.rank)} alt={person.rank} className="h-5 w-5" />)}
               <span className="truncate">{person.name}</span>
             </div>
             {person.discord && (
@@ -74,16 +68,8 @@ export default function PersonDetail() {
             )}
             <div className="text-xs text-uconn-muted leading-snug">{person.year || person.role}</div>
           </div>
-          {myRank ? (
-            <div className="shrink-0 flex flex-col items-end text-right">
-              <div className="text-[10px] tracking-wide text-uconn-muted uppercase">Rank</div>
-              <div className="mt-0.5 px-2 py-1 rounded-md bg-gradient-to-r from-brand-teal/30 to-brand-lightTeal/30 border border-brand-teal/40 text-xs font-semibold">
-                #{myRank}
-              </div>
-              <div className="mt-1 text-[10px] text-uconn-muted">{myCompleted} done</div>
-            </div>
-          ) : (
-            <div className="shrink-0 text-[10px] text-uconn-muted mt-1">No rank yet</div>
+          {rankedEnabled && person.rank && (
+            <img src={rankIcon(person.rank)} alt={person.rank} className="shrink-0 h-8 w-8 object-contain" />
           )}
         </div>
         {person.skills && person.skills.length > 0 && (
@@ -167,8 +153,9 @@ export default function PersonDetail() {
         </ul>
       </div>
 
-      {/* Ranked History */}
-      <div className="rounded-2xl bg-white/5 border border-white/10 p-4">
+  {/* Ranked History (hidden when ranked disabled) */}
+  {rankedEnabled && (
+  <div className="rounded-2xl bg-white/5 border border-white/10 p-4">
         <h2 className="font-semibold mb-2">Ranked History</h2>
         {history.length === 0 ? (
           <div className="text-xs text-uconn-muted">No rank changes yet.</div>
@@ -178,12 +165,12 @@ export default function PersonDetail() {
               <li key={i} className="flex items-center gap-2">
                 <span className="text-xs text-uconn-muted w-28">{new Date(h.ts).toLocaleDateString('en-US')}</span>
                 <span className="inline-flex items-center gap-1">
-                  <img src={rankIcon(h.from)} alt={h.from} className="h-4 w-4" />
+                  <img src={rankIcon(h.from)} alt={h.from} className="h-4 w-4 object-contain" />
                   <span>{h.from}</span>
                 </span>
                 <span className="text-uconn-muted">→</span>
                 <span className="inline-flex items-center gap-1">
-                  <img src={rankIcon(h.to)} alt={h.to} className="h-4 w-4" />
+                  <img src={rankIcon(h.to)} alt={h.to} className="h-4 w-4 object-contain" />
                   <span>{h.to}</span>
                 </span>
               </li>
@@ -191,6 +178,7 @@ export default function PersonDetail() {
           </ul>
         )}
       </div>
+  )}
     </div>
   );
 }

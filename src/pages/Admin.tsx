@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../hooks/useAuth";
-import { ADMIN_UID } from "../admin";
+import { isAdminUid } from "../admin";
 import type { Person, Project, RankLevel, RankedSettings } from "../types";
 import {
   fetchPeople,
@@ -16,11 +16,12 @@ import {
   fetchTasks,
   fetchRankedSettings,
   applyRankedPromotionsDemotions,
+  addAttendance,
 } from "../lib/firestore";
 
 export default function Admin() {
   const user = useAuth();
-  const isAdmin = (user?.uid === ADMIN_UID);
+  const isAdmin = isAdminUid(user?.uid || null);
 
   // Data
   const [people, setPeople] = useState<Person[]>([]);
@@ -53,7 +54,8 @@ export default function Admin() {
   const [tDesc, setTDesc] = useState("");
   const [tStatus, setTStatus] = useState<"Todo" | "In Progress" | "Complete">("In Progress");
   const [tAssignee, setTAssignee] = useState<string>("");
-  const [tPoints, setTPoints] = useState<5|10|25|35|50|100|"">("");
+  const [tPoints, setTPoints] = useState<number|"">("");
+  const [attendeeId, setAttendeeId] = useState<string>("");
 
   // Admin UI helpers
   const [peopleSearch, setPeopleSearch] = useState("");
@@ -69,6 +71,15 @@ export default function Admin() {
   const [resetPassword, setResetPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [rankedApplying, setRankedApplying] = useState(false);
+  const [recentLogs, setRecentLogs] = useState<any[]>([]);
+  const [attendanceDate, setAttendanceDate] = useState<string>(() => new Date().toISOString().slice(0,10));
+  // Ranked settings edit buffer
+  const [promoEdit, setPromoEdit] = useState<{ bronze?: number; silver?: number; gold?: number; platinum?: number; diamond?: number }>({});
+  const [demoEdit, setDemoEdit] = useState<{ bronze?: number; silver?: number; gold?: number; platinum?: number; diamond?: number }>({});
+  const [rsDirty, setRsDirty] = useState(false);
+  // Apply modal
+  const [showApplyModal, setShowApplyModal] = useState(false);
+  const [applyPassword, setApplyPassword] = useState("");
   // Seed import state
   const [seedPreview, setSeedPreview] = useState<{
     people: { name: string; year?: string; role?: string; skills?: string; discord?: string }[];
@@ -82,13 +93,18 @@ export default function Admin() {
   useEffect(() => {
     (async () => {
       const { fetchRankedSettings } = await import("../lib/firestore");
-      const [pe, pr, st, rs] = await Promise.all([fetchPeople(), fetchProjects(), fetchSettings(), fetchRankedSettings()]);
+  const { fetchRecentLogs } = await import("../lib/firestore");
+  const [pe, pr, st, rs, logs] = await Promise.all([fetchPeople(), fetchProjects(), fetchSettings(), fetchRankedSettings(), fetchRecentLogs(50)]);
       setPeople(pe);
       setProjects(pr);
       setSettingsState(st);
       setRankedSettingsState(rs);
+  setRecentLogs(logs);
       setRuleUrl(st?.rulebook_url || "");
       setShareUrl(st?.sharepoint_url || "");
+  setPromoEdit({ ...(rs?.promotion_pct || {}) });
+  setDemoEdit({ ...(rs?.demotion_pct || {}) });
+  setRsDirty(false);
     })();
   }, []);
 
@@ -312,6 +328,40 @@ export default function Admin() {
                 <input className="px-3 py-2 rounded w-full" placeholder="Skills (comma-separated)" value={pSkills} onChange={(e) => setPSkills(e.target.value)} />
                 <input className="px-3 py-2 rounded w-full" placeholder="Discord (e.g., username)" value={pDiscord} onChange={(e) => setPDiscord(e.target.value)} />
                 <button onClick={handleCreatePerson} className="px-3 py-2 rounded bg-white/10 border border-uconn-border">Save Person</button>
+
+                {/* Quick attendance bar (always 10 points) */}
+                <div className="pt-3 border-t border-white/10 mt-3">
+                  <div className="text-xs text-uconn-muted mb-1">Quick attendance</div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="date"
+                      className="px-2.5 py-1.5 rounded text-sm bg-white/5 border border-white/10"
+                      value={attendanceDate}
+                      onChange={(e)=>setAttendanceDate(e.target.value)}
+                    />
+                    <select
+                      className="px-2.5 py-1.5 rounded dark-select text-sm flex-1"
+                      value={attendeeId}
+                      onChange={(e)=>setAttendeeId(e.target.value)}
+                    >
+                      <option value="">Select person…</option>
+                      {people.slice().sort((a,b)=>a.name.localeCompare(b.name)).map(p => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </select>
+                    <button
+                      className="px-2.5 py-1.5 rounded border border-uconn-border bg-white/10 text-xs whitespace-nowrap"
+                      onClick={async()=>{
+                        if(!attendeeId) return alert('Select a person');
+                        const date = attendanceDate || new Date().toISOString().slice(0,10);
+                        await addAttendance({ person_id: attendeeId, date, points: 10 });
+                        setAttendeeId('');
+                        setAttendanceDate(new Date().toISOString().slice(0,10));
+                        showToast('Attendance recorded (10 pts)');
+                      }}
+                    >Give 10 pts</button>
+                  </div>
+                </div>
               </div>
             </section>
             <section className="space-y-2">
@@ -365,9 +415,8 @@ export default function Admin() {
                                 checked={!!(p as any).ranked_opt_in}
                                 onChange={(e)=> setPeople(prev=>prev.map(x=>x.id===p.id?{...x, ranked_opt_in: e.target.checked}:x))}
                               />
-                              <span className="relative inline-flex h-6 w-11 items-center rounded-full bg-white/15 transition-colors peer-checked:bg-brand-teal/70">
-                                <span className="absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform duration-200 peer-checked:translate-x-5" />
-                              </span>
+                              <span className="relative inline-block h-6 w-11 rounded-full bg-white/15 transition-colors peer-checked:bg-brand-teal/70 
+                                after:content-[''] after:absolute after:left-0.5 after:top-0.5 after:h-5 after:w-5 after:rounded-full after:bg-white after:shadow after:transition-transform after:duration-200 peer-checked:after:translate-x-5" />
                               <span className="text-xs text-white/90">Opted in</span>
                             </label>
                           </div>
@@ -453,13 +502,16 @@ export default function Admin() {
                   <option>Complete</option>
                 </select>
                 <select className="px-3 py-2 rounded dark-select h-11 sm:w-auto sm:min-w-[200px]" value={(tPoints as any)} onChange={(e)=> setTPoints((e.target.value? Number(e.target.value) : "") as any)}>
-                  <option value="">Points (optional)</option>
-                  <option value="5">5 points ~ 30 mins</option>
-                  <option value="10">10 points ~ 1 hour</option>
-                  <option value="25">25 points ~ 2 hours</option>
-                  <option value="50">50 points ~ 3 hours</option>
-                  <option value="100">100 points ~ 6 hours</option>
-                  <option value="100">100 points ~ special task</option>
+                  <option value="">Points (by estimated hours)</option>
+                  <option value="1">1 pt ~ 30 mins</option>
+                  <option value="3">3 pts ~ 1 hour</option>
+                  <option value="6">6 pts ~ 2 hours</option>
+                  <option value="15">15 pts ~ 5 hours</option>
+                  <option value="40">40 pts ~ 10 hours</option>
+                  <option value="65">65 pts ~ 15 hours</option>
+                  <option value="98">98 pts ~ 20 hours</option>
+                  <option value="150">150 pts ~ 25 hours</option>
+                  <option value="200">200 pts ~ 30 hours</option>
                 </select>
                 <button
                   onClick={handleCreateTask}
@@ -771,49 +823,84 @@ export default function Admin() {
                 <p className="text-xs text-uconn-muted">When on, the app reveals the Ranked page and point indicators. Turning it off hides ranked UI and points, but nothing is deleted.</p>
                 <p className="text-xs text-uconn-muted">When on, promotions/relegations can be applied on a schedule. In this client-only build it’s a manual action or conceptual; see note below.</p>
               </div>
-              <div className="grid sm:grid-cols-2 gap-3">
-                <div>
-                  <div className="text-xs text-uconn-muted mb-1">Promotion %</div>
-                  {(["Bronze","Silver","Gold","Platinum","Diamond"] as const).map(r => {
-                    const key = r.toLowerCase() as "bronze"|"silver"|"gold"|"platinum"|"diamond";
-                    const val = rankedSettings?.promotion_pct?.[key] ?? 0;
-                    return (
-                      <div key={r} className="flex items-center gap-2 mb-1">
-                        <div className="w-24 text-xs">{r}</div>
-                        <input type="number" min={0} max={100} value={val}
-                          onChange={async (e)=>{
-                            const v = Math.max(0, Math.min(100, Number(e.target.value)));
-                            const next = { ...(rankedSettings||{}), promotion_pct: { ...(rankedSettings?.promotion_pct||{}), [key]: v } } as any;
-                            setRankedSettingsState(next);
-                            const { setRankedSettings } = await import("../lib/firestore"); await setRankedSettings({ promotion_pct: { [key]: v } as any });
-                          }}
-                          className="px-2 py-1 rounded w-20 bg-white/5 border border-white/10" />
-                        <span className="text-xs">%</span>
-                      </div>
-                    );
-                  })}
-                </div>
-                <div>
-                  <div className="text-xs text-uconn-muted mb-1">Relegation %</div>
-                  {(["Bronze","Silver","Gold","Platinum","Diamond"] as const).map(r => {
-                    const key = r.toLowerCase() as "bronze"|"silver"|"gold"|"platinum"|"diamond";
-                    const val = rankedSettings?.demotion_pct?.[key] ?? 0;
-                    return (
-                      <div key={r} className="flex items-center gap-2 mb-1">
-                        <div className="w-24 text-xs">{r}</div>
-                        <input type="number" min={0} max={100} value={val}
-                          onChange={async (e)=>{
-                            const v = Math.max(0, Math.min(100, Number(e.target.value)));
-                            const next = { ...(rankedSettings||{}), demotion_pct: { ...(rankedSettings?.demotion_pct||{}), [key]: v } } as any;
-                            setRankedSettingsState(next);
-                            const { setRankedSettings } = await import("../lib/firestore"); await setRankedSettings({ demotion_pct: { [key]: v } as any });
-                          }}
-                          className="px-2 py-1 rounded w-20 bg-white/5 border border-white/10" />
-                        <span className="text-xs">%</span>
-                      </div>
-                    );
-                  })}
-                </div>
+              <div className="mt-2 overflow-auto rounded border border-white/10">
+                <table className="w-full text-sm">
+                  <thead className="bg-white/5">
+                    <tr>
+                      <th className="text-left px-3 py-2 font-medium">Rank</th>
+                      <th className="text-left px-3 py-2 font-medium">Promote %</th>
+                      <th className="text-left px-3 py-2 font-medium">Relegate %</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(["Bronze","Silver","Gold","Platinum","Diamond"] as const).map(r => {
+                      const key = r.toLowerCase() as "bronze"|"silver"|"gold"|"platinum"|"diamond";
+                      const promo = (promoEdit as any)[key] ?? 0;
+                      const demo = (demoEdit as any)[key] ?? 0;
+                      const promoDisabled = r === "Diamond"; // no promotion from Diamond
+                      const demoDisabled = r === "Bronze"; // no demotion from Bronze
+                      return (
+                        <tr key={r} className="border-t border-white/10"> 
+                          <td className="px-3 py-2 text-xs">{r}</td>
+                          <td className="px-3 py-2">
+                            {promoDisabled ? (
+                              <span className="text-xs text-uconn-muted">N/A</span>
+                            ) : (
+                              <input
+                                type="number"
+                                min={0}
+                                max={100}
+                                value={promo}
+                                onChange={async (e)=>{
+                                  const v = Math.max(0, Math.min(100, Number(e.target.value)));
+                                  setPromoEdit(prev => ({ ...(prev||{}), [key]: v }));
+                                  setRsDirty(true);
+                                }}
+                                className="px-2 py-1 rounded w-24 bg-white/5 border border-white/10"
+                              />
+                            )}
+                          </td>
+                          <td className="px-3 py-2">
+                            {demoDisabled ? (
+                              <span className="text-xs text-uconn-muted">N/A</span>
+                            ) : (
+                              <input
+                                type="number"
+                                min={0}
+                                max={100}
+                                value={demo}
+                                onChange={async (e)=>{
+                                  const v = Math.max(0, Math.min(100, Number(e.target.value)));
+                                  setDemoEdit(prev => ({ ...(prev||{}), [key]: v }));
+                                  setRsDirty(true);
+                                }}
+                                className="px-2 py-1 rounded w-24 bg-white/5 border border-white/10"
+                              />
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div className="flex items-center justify-end">
+                <button
+                  disabled={!rsDirty}
+                  onClick={async ()=>{
+                    try {
+                      const { setRankedSettings } = await import("../lib/firestore");
+                      await setRankedSettings({ promotion_pct: promoEdit as any, demotion_pct: demoEdit as any });
+                      setRankedSettingsState(s => ({ ...(s||{}), promotion_pct: { ...(promoEdit as any) }, demotion_pct: { ...(demoEdit as any) } } as any));
+                      setRsDirty(false);
+                      showToast("Ranked settings saved");
+                    } catch (e) {
+                      console.error(e);
+                      showToast("Save failed");
+                    }
+                  }}
+                  className="mt-2 px-3 py-2 rounded bg-white/10 border border-uconn-border text-sm disabled:opacity-50"
+                >Save changes</button>
               </div>
               {/* Opt-in only and boundary rules are fixed by design; no extra toggles here. */}
               <div className="pt-4 mt-2 border-t border-white/10">
@@ -824,25 +911,101 @@ export default function Admin() {
                   </div>
                   <button
                     disabled={rankedApplying}
-                    onClick={async ()=>{
-                      try {
-                        setRankedApplying(true);
-                        const [pe, ts, rs] = await Promise.all([fetchPeople(), fetchTasks(), fetchRankedSettings()]);
-                        const moved = await applyRankedPromotionsDemotions(pe, ts, rs);
-                        showToast(`${moved} updates applied`);
-                      } catch (e) {
-                        console.error(e);
-                        showToast("Apply failed");
-                      } finally {
-                        setRankedApplying(false);
-                      }
-                    }}
+                    onClick={()=>{ setApplyPassword(""); setShowApplyModal(true); }}
                     className="px-3 py-2 rounded bg-brand-teal/40 hover:bg-brand-teal/60 border border-uconn-border text-sm font-medium disabled:opacity-50"
-                  >{rankedApplying ? 'Applying…' : 'Apply now'}</button>
+                  >Apply now</button>
                 </div>
+              </div>
+
+              {/* Recent ranked activity log */}
+              <div className="pt-4 mt-4 border-t border-white/10">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-sm font-medium">Recent ranked activity</div>
+                  <button
+                    className="text-xs px-2 py-1 rounded border border-uconn-border bg-white/5"
+                    onClick={async ()=>{
+                      const { fetchRecentLogs } = await import("../lib/firestore");
+                      setRecentLogs(await fetchRecentLogs(50));
+                    }}
+                  >Refresh</button>
+                </div>
+                <ul className="text-sm divide-y divide-white/10 rounded border border-white/10">
+                  {recentLogs.length === 0 && (
+                    <li className="px-3 py-2 text-uconn-muted">No activity yet</li>
+                  )}
+                  {recentLogs.map((e, i) => (
+                    <li key={e.id || i} className="px-3 py-2 flex items-start gap-3">
+                      <span className="text-xs text-uconn-muted w-40 shrink-0">
+                        {new Date(e.ts || 0).toLocaleString()}
+                      </span>
+                      <span className="font-mono text-xs uppercase tracking-wide px-1.5 py-0.5 rounded bg-white/10 border border-white/10">
+                        {e.type}
+                      </span>
+                      <span className="text-sm">
+                        {e.type === 'attendance' && (
+                          <>
+                            Attendance · {e.points} pts {e.person_id ? `→ ${people.find(p=>p.id===e.person_id)?.name || e.person_id}` : ''}
+                          </>
+                        )}
+                        {e.type === 'rank_change' && (
+                          <>
+                            Rank · {people.find(p=>p.id===e.person_id)?.name || e.person_id} {e.from_rank} → {e.to_rank}
+                          </>
+                        )}
+                        {e.type === 'task_points' && (
+                          <>
+                            Task · {e.points} pts {e.person_id ? `→ ${people.find(p=>p.id===e.person_id)?.name || e.person_id}` : ''} {e.note ? `· ${e.note}` : ''}
+                          </>
+                        )}
+                        {e.type !== 'attendance' && e.type !== 'rank_change' && (e.note || '')}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
               </div>
             </div>
           </section>
+        </div>
+      )}
+
+      {/* Apply modal */}
+      {showApplyModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/70" onClick={() => setShowApplyModal(false)} />
+          <div className="relative w-[95vw] max-w-md rounded-xl border border-white/15 bg-uconn-blue/95 shadow-2xl p-5">
+            <h4 className="text-lg font-semibold mb-2">Confirm ranked apply</h4>
+            <p className="text-sm text-uconn-muted">Enter the confirmation phrase to proceed.</p>
+            <input
+              autoFocus
+              className="mt-3 w-full px-3 py-2 rounded border border-white/10 bg-black/20"
+              placeholder="Enter confirmation phrase"
+              value={applyPassword}
+              onChange={(e)=>setApplyPassword(e.target.value)}
+            />
+            <div className="mt-4 flex items-center justify-end gap-2">
+              <button onClick={()=>setShowApplyModal(false)} className="px-3 py-2 rounded border border-uconn-border bg-white/10">Cancel</button>
+      <button
+                disabled={applyPassword !== 'UCONN FORMULA SAE' || rankedApplying}
+                className={`px-3 py-2 rounded border ${applyPassword === 'UCONN FORMULA SAE' ? 'border-brand-teal bg-brand-teal/30 hover:bg-brand-teal/40 text-white' : 'border-white/10 bg-white/5 text-uconn-muted cursor-not-allowed'}`}
+                onClick={async ()=>{
+                  try {
+                    setRankedApplying(true);
+        const [pe, ts, rs, att] = await Promise.all([fetchPeople(), fetchTasks(), fetchRankedSettings(), (await import("../lib/firestore")).fetchAttendance()]);
+        const moved = await applyRankedPromotionsDemotions(pe, ts, rs, att);
+                    showToast(`${moved} updates applied`);
+                    const { fetchRecentLogs } = await import("../lib/firestore");
+                    setRecentLogs(await fetchRecentLogs(50));
+                    setShowApplyModal(false);
+                  } catch (e) {
+                    console.error(e);
+                    showToast("Apply failed");
+                  } finally {
+                    setRankedApplying(false);
+                  }
+                }}
+              >Apply</button>
+            </div>
+          </div>
         </div>
       )}
     </div>

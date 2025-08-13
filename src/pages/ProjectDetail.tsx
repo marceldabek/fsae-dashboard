@@ -7,7 +7,7 @@ import PeoplePicker from "../components/PeoplePicker";
 import { fetchPeople, fetchProjects, fetchTasksForProject, addTask, updateTask, deleteTaskById, updateProjectOwners, fetchRankedSettings } from "../lib/firestore";
 import { useRankedEnabled } from "../hooks/useRankedEnabled";
 import { useAuth } from "../hooks/useAuth";
-import { ADMIN_UID } from "../admin";
+import { isAdminUid } from "../admin";
 import type { Person, Project, Task } from "../types";
 
 export default function ProjectDetail() {
@@ -19,7 +19,7 @@ export default function ProjectDetail() {
   const [rankedEnabled] = useRankedEnabled();
   
 const user = useAuth();
-const canEdit = (user?.uid === ADMIN_UID);
+const canEdit = isAdminUid(user?.uid || null);
 const [ownerIds, setOwnerIds] = useState<string[]>([]);
 
 
@@ -56,14 +56,16 @@ const [ownerIds, setOwnerIds] = useState<string[]>([]);
   // local edit helpers
   const [newDesc, setNewDesc] = useState("");
   const [newAssignee, setNewAssignee] = useState<string>("");
+  const [newPoints, setNewPoints] = useState<number | "">("");
   async function handleAddOwner(id: string){ if(!project) return; if(ownerIds.includes(id)) return; const next=[...ownerIds,id]; setOwnerIds(next); await updateProjectOwners(project.id, next); await reloadOwners(); }
   async function handleRemoveOwner(id: string){ if(!project) return; const next=ownerIds.filter(x=>x!==id); setOwnerIds(next); await updateProjectOwners(project.id, next); await reloadOwners(); }
   const [newStatus, setNewStatus] = useState<"Todo"|"In Progress"|"Complete">("In Progress");
 
   async function handleAdd() {
     if (!id || !newDesc.trim()) return;
-    await addTask({ project_id: id, description: newDesc.trim(), status: newStatus, assignee_id: newAssignee || undefined });
+  await addTask({ project_id: id, description: newDesc.trim(), status: newStatus, assignee_id: newAssignee || undefined, ranked_points: (newPoints || undefined) as any });
     setNewDesc(""); setNewStatus("In Progress"); setNewAssignee("");
+  setNewPoints("");
     await reloadTasks();
   }
 
@@ -143,68 +145,10 @@ const [ownerIds, setOwnerIds] = useState<string[]>([]);
         </div>
 
           <section className="space-y-2">
-            <div className="flex items-center justify-between">
-              <h2 className="font-semibold">Tasks</h2>
-              <label className="flex items-center gap-2 select-none cursor-pointer group">
-                <span className="text-xs font-medium text-uconn-muted">Hide completed</span>
-                <span className="relative inline-block w-10 h-6 align-middle select-none">
-                  <input
-                    type="checkbox"
-                    checked={hideCompleted}
-                    onChange={e=>setHideCompleted(e.target.checked)}
-                    className="peer absolute w-10 h-6 opacity-0 cursor-pointer z-10"
-                  />
-                  <span className="block w-10 h-6 rounded-full transition bg-uconn-surface border border-uconn-border peer-checked:bg-brand-teal/70" />
-                  <span className="absolute left-1 top-1 w-4 h-4 rounded-full bg-uconn-muted transition-all duration-200 peer-checked:translate-x-4 peer-checked:bg-brand-teal shadow" />
-                </span>
-              </label>
-            </div>
-            <ul className={canEdit ? "flex flex-wrap gap-4" : "space-y-2"}>
-              {(hideCompleted ? tasks.filter(t=>t.status!=="Complete") : tasks).map(t => {
-                const color = t.status === "Complete" ? "bg-green-500" : t.status === "In Progress" ? "bg-yellow-400" : "bg-red-500";
-                const assignee = allPeople.find(p=>p.id===t.assignee_id);
-                const pts = t.ranked_points ?? (t.status === "Complete" ? 35 : 10);
-                return (
-                <li key={t.id} className="relative flex flex-col justify-between gap-3 rounded bg-uconn-surface border border-uconn-border p-3 pr-10 flex-1 min-w-[260px] md:w-[calc(50%-1rem)] xl:w-[calc(33.333%-1rem)]">
-                  <div className="min-w-0">
-                    <div className="font-medium text-sm truncate" title={t.description}>{t.description}</div>
-                    <div className="text-[10px] text-uconn-muted flex gap-2 items-center mt-0.5">
-                      <span>{t.status}</span>
-                      <span>·</span>
-                      <span>{assignee ? `@${assignee.name}` : "Unassigned"}</span>
-                    </div>
-                  </div>
-                  {rankedEnabled && (
-                    <span className="absolute top-2 right-3 text-[11px] text-uconn-muted font-semibold">+{pts}</span>
-                  )}
-                  {canEdit && (
-                    <div className="flex flex-col items-end gap-2 text-xs">
-                      <select
-                        className="px-2 py-1 rounded bg-uconn-surface/60 border border-uconn-border text-xs text-uconn-text dark-select"
-                        value={t.assignee_id || ""}
-                        onChange={e=>handleAssign(t, e.target.value)}
-                      >
-                        <option value="">Unassigned</option>
-                        {allPeople.map(p=> <option key={p.id} value={p.id}>{p.name}</option>)}
-                      </select>
-                      <div className="flex gap-1 flex-wrap">
-                        <button onClick={() => handleUpdate(t, "Todo")} className="px-2 py-1 rounded border text-[11px] font-medium border-red-500/60 text-red-300 bg-red-500/10 hover:bg-red-500/20 transition">Todo</button>
-                        <button onClick={() => handleUpdate(t, "In Progress")} className="px-2 py-1 rounded border text-[11px] font-medium border-yellow-400/60 text-yellow-300 bg-yellow-400/10 hover:bg-yellow-400/20 transition whitespace-nowrap">In Progress</button>
-                        <button onClick={() => handleUpdate(t, "Complete")} className="px-2 py-1 rounded border text-[11px] font-medium border-green-500/60 text-green-300 bg-green-500/10 hover:bg-green-500/20 transition">Complete</button>
-                        <button onClick={() => handleDelete(t)} className="px-2 py-1 rounded border text-[11px] font-medium border-red-500 text-red-300 bg-red-500/10 hover:bg-red-500/20 transition">Delete</button>
-                      </div>
-                    </div>
-                  )}
-                  <span className={`absolute top-1/2 -translate-y-1/2 right-3 w-3.5 h-3.5 rounded-full ${color} shadow`} aria-hidden />
-                </li>
-                );
-              })}
-            </ul>
-
             {canEdit && (
-              <div className="mt-3 space-y-2">
+              <div className="space-y-2">
                 <h3 className="text-sm font-semibold">Add Task</h3>
-                <div className="flex flex-col sm:flex-row gap-2">
+                <div className="flex flex-col sm:flex-row flex-wrap gap-2">
                   <input
                     className="px-3 py-2 rounded"
                     placeholder="Description"
@@ -219,6 +163,23 @@ const [ownerIds, setOwnerIds] = useState<string[]>([]);
                     <option>Todo</option>
                     <option>In Progress</option>
                     <option>Complete</option>
+                  </select>
+                  <select
+                    className="px-3 py-2 rounded dark-select"
+                    value={(newPoints as any)}
+                    onChange={(e)=> setNewPoints((e.target.value? Number(e.target.value) : "") as any)}
+                  >
+                    <option value="">Points (by estimated hours)</option>
+                    <option value="1">1 pt ~ 0.5 hr</option>
+                    <option value="3">3 pts ~ 1 hr</option>
+                    <option value="10">10 pts ~ 3 hrs</option>
+                    <option value="6">6 pts ~ 2 hrs</option>
+                    <option value="15">15 pts ~ 5 hrs</option>
+                    <option value="40">40 pts ~ 10 hrs</option>
+                    <option value="65">65 pts ~ 15 hrs</option>
+                    <option value="98">98 pts ~ 20 hrs</option>
+                    <option value="150">150 pts ~ 25 hrs</option>
+                    <option value="200">200 pts ~ 30 hrs</option>
                   </select>
                   <select
                     className="px-3 py-2 rounded dark-select"
@@ -237,6 +198,104 @@ const [ownerIds, setOwnerIds] = useState<string[]>([]);
                 </div>
               </div>
             )}
+
+            <div className="flex items-center justify-between">
+              <h2 className="font-semibold">Tasks</h2>
+              <label className="flex items-center gap-2 select-none cursor-pointer group">
+                <span className="text-xs font-medium text-uconn-muted">Hide completed</span>
+                <span className="relative inline-block w-10 h-6 align-middle select-none">
+                  <input
+                    type="checkbox"
+                    checked={hideCompleted}
+                    onChange={e=>setHideCompleted(e.target.checked)}
+                    className="peer absolute w-10 h-6 opacity-0 cursor-pointer z-10"
+                  />
+                  <span className="block w-10 h-6 rounded-full transition bg-uconn-surface border border-uconn-border peer-checked:bg-brand-teal/70" />
+                  <span className="absolute left-1 top-1 w-4 h-4 rounded-full bg-uconn-muted transition-all duration-200 peer-checked:translate-x-4 peer-checked:bg-brand-teal shadow" />
+                </span>
+              </label>
+            </div>
+            <ul className={canEdit ? "flex flex-wrap gap-3" : "space-y-2"}>
+              {(hideCompleted ? tasks.filter(t=>t.status!=="Complete") : tasks).map(t => {
+                const color = t.status === "Complete" ? "bg-green-500" : t.status === "In Progress" ? "bg-yellow-400" : "bg-red-500";
+                const assignee = allPeople.find(p=>p.id===t.assignee_id);
+                const pts = t.ranked_points ?? (t.status === "Complete" ? 35 : 10);
+                const ptsToHours = (p: number) => {
+                  if (p === 1) return 0.5;
+                  if (p === 3) return 1;
+                  if (p === 10) return 3;
+                  if (p === 6) return 2;
+                  if (p === 15) return 5;
+                  if (p === 40) return 10;
+                  if (p === 65) return 15;
+                  if (p === 98) return 20;
+                  if (p === 150) return 25;
+                  if (p === 200) return 30;
+                  return Math.max(0, Math.round(p / 4));
+                };
+                return (
+                <li key={t.id} className="relative flex flex-col justify-between gap-3 rounded bg-uconn-surface border border-uconn-border p-3 pr-10 flex-1 min-w-[280px] md:w-[calc(50%-0.75rem)] xl:w-[calc(33.333%-0.75rem)]">
+                  <div className="min-w-0">
+                    <div className="font-medium text-sm truncate" title={t.description}>{t.description}</div>
+                    <div className="text-[10px] text-uconn-muted flex gap-2 items-center mt-0.5">
+                      <span>{t.status}</span>
+                      <span>·</span>
+                      <span>{assignee ? `@${assignee.name}` : "Unassigned"}</span>
+                    </div>
+                  </div>
+                  {rankedEnabled && (
+                    <span className="absolute top-2 right-3 text-[11px] text-uconn-muted font-semibold">+{pts} · {ptsToHours(pts)}h</span>
+                  )}
+                  {canEdit && (
+                    <div className="flex flex-col items-end gap-2 text-xs">
+                      <select
+                        className="px-2 py-1 rounded bg-uconn-surface/60 border border-uconn-border text-xs text-uconn-text dark-select"
+                        value={t.assignee_id || ""}
+                        onChange={e=>handleAssign(t, e.target.value)}
+                      >
+                        <option value="">Unassigned</option>
+                        {allPeople.map(p=> <option key={p.id} value={p.id}>{p.name}</option>)}
+                      </select>
+                      <div className="flex gap-1.5 flex-wrap justify-end">
+                        <button onClick={() => handleUpdate(t, "Todo")} className="inline-flex items-center gap-1 px-2.5 h-7 rounded border text-[11px] font-medium border-white/15 bg-white/5 hover:bg-white/10 transition">
+                          <span className="w-1.5 h-1.5 rounded-full bg-red-400"/> Todo
+                        </button>
+                        <button onClick={() => handleUpdate(t, "In Progress")} className="inline-flex items-center gap-1 px-2.5 h-7 rounded border text-[11px] font-medium border-white/15 bg-white/5 hover:bg-white/10 transition whitespace-nowrap">
+                          <span className="w-1.5 h-1.5 rounded-full bg-yellow-300"/> In Progress
+                        </button>
+                        <button onClick={() => handleUpdate(t, "Complete")} className="inline-flex items-center gap-1 px-2.5 h-7 rounded border text-[11px] font-medium border-white/15 bg-white/5 hover:bg-white/10 transition">
+                          <span className="w-1.5 h-1.5 rounded-full bg-green-400"/> Complete
+                        </button>
+                        {canEdit && (
+                          <select
+                            className="px-2 py-1 rounded bg-uconn-surface/60 border border-uconn-border text-xs text-uconn-text dark-select"
+                            value={t.ranked_points || ""}
+                            onChange={e=>updateTask(t.id, { ranked_points: e.target.value ? Number(e.target.value) : undefined }).then(reloadTasks)}
+                          >
+                            <option value="">Points…</option>
+                            <option value="1">1 pt ~ 0.5 hr</option>
+                            <option value="3">3 pts ~ 1 hr</option>
+                            <option value="10">10 pts ~ 3 hrs</option>
+                            <option value="6">6 pts ~ 2 hrs</option>
+                            <option value="15">15 pts ~ 5 hrs</option>
+                            <option value="40">40 pts ~ 10 hrs</option>
+                            <option value="65">65 pts ~ 15 hrs</option>
+                            <option value="98">98 pts ~ 20 hrs</option>
+                            <option value="150">150 pts ~ 25 hrs</option>
+                            <option value="200">200 pts ~ 30 hrs</option>
+                          </select>
+                        )}
+                        <button onClick={() => handleDelete(t)} className="inline-flex items-center gap-1 px-2.5 h-7 rounded border text-[11px] font-medium border-red-500/60 text-red-200 bg-red-500/10 hover:bg-red-500/20 transition">
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  <span className={`absolute top-1/2 -translate-y-1/2 right-3 w-3.5 h-3.5 rounded-full ${color} shadow`} aria-hidden />
+                </li>
+                );
+              })}
+            </ul>
           </section>
         </div>
     </>

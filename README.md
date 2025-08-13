@@ -28,3 +28,18 @@ Manifest + icons included. A simple service worker is registered for standalone 
 - Promotions and relegations are % based per tier. Defaults: promote more in lower tiers (funnel), promote fewer in higher tiers. Diamond doesn’t promote; Bronze doesn’t demote (by default).
 - Admin → Ranked Settings provides manual override, percentages, and auto-apply toggle (hourly by default).
 
+## Firebase config (fix auth/invalid-api-key)
+This app expects Firebase Web app config via Vite env vars. If you see auth/invalid-api-key:
+
+1) Copy .env.example to .env.local
+2) Fill the VITE_FIREBASE_* values from your Firebase project settings (Project settings → Your apps → SDK setup and configuration)
+3) Restart dev server
+
+Required keys:
+- VITE_FIREBASE_API_KEY
+- VITE_FIREBASE_AUTH_DOMAIN
+- VITE_FIREBASE_PROJECT_ID
+- VITE_FIREBASE_STORAGE_BUCKET
+- VITE_FIREBASE_MESSAGING_SENDER_ID
+- VITE_FIREBASE_APP_ID
+

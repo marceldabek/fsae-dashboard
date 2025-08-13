@@ -132,8 +132,8 @@ export default function Overview() {
     <>
       <h1 className="text-2xl font-semibold mb-4">Team Overview</h1>
 
-      {/* Top area: stats + completion on the left, leaderboard on the right (desktop only) */}
-      <div className="grid gap-4 lg:grid-cols-2 mb-8">
+  {/* Top area: stats + completion on the left, leaderboard on the right (desktop only) */}
+  <div className="grid gap-4 md:grid-cols-2 mb-6">
         {/* Left column: stats + progress */}
         <div className="min-w-0">
           {/* Top stats in one single row */}
@@ -155,28 +155,28 @@ export default function Overview() {
 
         {/* Right column: leaderboard */}
         <div className="min-w-0">
-          <div className="rounded-2xl bg-white/5 border border-white/10 p-4">
-            <h2 className="text-xl font-bold mb-2">Leaderboard</h2>
+          <div className="rounded-2xl bg-white/5 border border-white/10 p-2 md:p-3">
+            <h2 className="text-base md:text-lg font-bold mb-1">Leaderboard</h2>
             <div className="overflow-x-auto">
-              <table className="min-w-[320px] w-full text-xs sm:text-sm">
+              <table className="min-w-[320px] w-full text-[10px] sm:text-xs">
                 <thead>
                   <tr>
-                    <th className="w-10 py-2 px-2 text-center text-uconn-muted font-semibold">#</th>
-                    <th className="py-2 px-2 text-left text-uconn-muted font-semibold">Name</th>
-                    <th className="w-28 py-2 px-2 text-center text-uconn-muted font-semibold">Completed</th>
+                    <th className="w-8 py-1 px-2 text-center text-uconn-muted font-semibold">#</th>
+                    <th className="py-1 px-2 text-left text-uconn-muted font-semibold">Name</th>
+                    <th className="w-20 md:w-24 py-1 px-2 text-center text-uconn-muted font-semibold">Completed</th>
                   </tr>
                 </thead>
                 <tbody>
                   {leaderboard.map((person, idx) => (
                     <tr key={person.id} className={idx === 0 ? "bg-yellow-100/40" : ""}>
-                      <td className="py-2 px-2 text-center">{idx + 1}</td>
-                      <td className="py-2 px-2">
-                        <div className="truncate max-w-[180px] sm:max-w-[260px] flex items-center gap-1">
+                      <td className="py-1 px-2 text-center">{idx + 1}</td>
+                      <td className="py-1 px-2">
+                        <div className="truncate max-w-[170px] sm:max-w-[220px] flex items-center gap-1">
                           {person.name}
                           {idx === 0 && <TrophyIcon />}
                         </div>
                       </td>
-                      <td className="py-2 px-2 text-center">{person.completed}</td>
+                      <td className="py-1 px-2 text-center">{person.completed}</td>
                     </tr>
                   ))}
                 </tbody>

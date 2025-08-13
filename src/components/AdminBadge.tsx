@@ -1,10 +1,10 @@
 import { Link } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
-import { ADMIN_UID } from "../admin";
+import { isAdminUid } from "../admin";
 
 export default function AdminBadge() {
   const user = useAuth();
-  const isAdmin = (user?.uid === ADMIN_UID);
+  const isAdmin = isAdminUid(user?.uid || null);
 
   if (!isAdmin) return null;
 

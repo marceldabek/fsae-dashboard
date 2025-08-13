@@ -9,16 +9,30 @@ import {
 
 // If you later add App Check, import it here.
 
-export const app = getApps().length
-  ? getApp()
-  : initializeApp({
-      apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-      authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-      projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-      storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-      messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-      appId: import.meta.env.VITE_FIREBASE_APP_ID,
-    });
+const cfg = {
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+};
+
+// Helpful runtime guard: fail fast with clear message if env is missing/misnamed
+function assertFirebaseConfigPresent() {
+  const missing = Object.entries(cfg)
+    .filter(([_, v]) => !v)
+    .map(([k]) => k);
+  if (missing.length) {
+    const hint = `Missing Firebase env vars: ${missing.join(', ')}.\n` +
+      `Create .env.local and set VITE_FIREBASE_* variables. See .env.example.`;
+    throw new Error(hint);
+  }
+}
+
+assertFirebaseConfigPresent();
+
+export const app = getApps().length ? getApp() : initializeApp(cfg);
 
 // Initialize Firestore with persistent local cache + multi-tab sync
 // This dramatically reduces network reads by serving from IndexedDB

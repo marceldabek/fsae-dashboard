@@ -1,7 +1,7 @@
 
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
-import { ADMIN_UID } from "../admin";
+import { isAdminUid } from "../admin";
 import { signIn, signOutUser } from "../auth";
 import { useEffect, useState } from "react";
 import TeamLogo from "./TeamLogo";
@@ -10,7 +10,7 @@ import { useRankedEnabled } from "../hooks/useRankedEnabled";
 
 export default function Layout() {
   const user = useAuth();
-  const isAdminUser = user?.uid === ADMIN_UID;
+  const isAdminUser = isAdminUid(user?.uid || null);
   const isAdmin = isAdminUser; // admin view concept removed
   const [menuOpen, setMenuOpen] = useState(false);
   const [rankedEnabled, updateRankedEnabled] = useRankedEnabled();
@@ -95,7 +95,8 @@ export default function Layout() {
             <MenuLink to="/people" label="People" />
             <MenuLink to="/stats" label="Stats" />
             <MenuLink to="/timeline" label="Timeline" />
-            <MenuLink to="/ranked" label="Ranked" />
+            {/* Show Ranked entry only when Ranked mode is enabled */}
+            {rankedEnabled && <MenuLink to="/ranked" label="Ranked" />}
             {isAdminUser && <MenuLink to="/admin" label="Admin" />}
             <div className="my-3 border-t border-uconn-border/60" />
             <label className="flex items-center gap-2 px-3 py-2 text-sm select-none cursor-pointer">

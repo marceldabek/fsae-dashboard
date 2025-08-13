@@ -36,7 +36,7 @@ export type Task = {
   created_at?: number;
   completed_at?: number;
   // Optional ranked scoring override for this task (default handled in app logic)
-  ranked_points?: 5 | 10 | 25 | 35 | 50 | 100;
+  ranked_points?: number; // points can be any positive integer based on admin-defined scale
 };
 
 // Settings for Ranked mode (stored in Firestore: settings/ranked)
@@ -63,4 +63,26 @@ export type RankedSettings = {
   };
   // Default points when a task has no ranked_points set
   default_task_points?: 10 | 35 | 100 | number;
+};
+
+// Simple attendance record
+export type Attendance = {
+  id: string;
+  person_id: string;
+  date: string; // YYYY-MM-DD (local date)
+  points: number; // points awarded for attendance
+  created_at?: number;
+};
+
+// Lightweight audit log for ranked-related actions
+export type LogEvent = {
+  id: string;
+  ts: number; // timestamp (ms)
+  type: "attendance" | "rank_change" | "rank_apply" | "task_points" | string; // add more as needed
+  person_id?: string; // subject of the event (if any)
+  points?: number; // points affected (if any)
+  from_rank?: RankLevel;
+  to_rank?: RankLevel;
+  actor_uid?: string; // admin user who triggered the event (if available)
+  note?: string; // optional human-readable note
 };
