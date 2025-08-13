@@ -24,6 +24,7 @@ export type Project = {
   due_date?: string;
   // Subsystem this project belongs to (e.g. "Aero", "Business", etc.)
   subsystem?: string;
+  archived?: boolean; // soft-archive flag
 };
 
 export type Task = {

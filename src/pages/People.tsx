@@ -9,7 +9,7 @@ import { useRankedEnabled } from "../hooks/useRankedEnabled";
 function rankIconSrc(rank?: string) {
   const base = import.meta.env.BASE_URL || '/';
   const r = (rank || 'Bronze').toLowerCase();
-  const ext = (r === 'bronze' || r === 'silver' || r === 'gold') ? 'png' : 'svg';
+  const ext = 'png';
   return `${base}icons/rank-${r}.${ext}`;
 }
 
@@ -46,7 +46,7 @@ export default function People() {
       <img
         src={rankIconSrc(p.rank)}
         alt={p.rank}
-        className="absolute top-3 right-3 h-6 w-6 object-contain"
+        className="absolute top-2 right-2 h-12 w-12 md:h-16 md:w-16 object-contain opacity-90"
       />
     )}
     <Link to={`/person/${p.id}`} className="text-base font-medium hover:underline">{p.name}</Link>

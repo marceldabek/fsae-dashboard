@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { fetchPeople, fetchProjects, fetchTasks, fetchSettings } from "../lib/firestore";
-import type { Person, Project, Task, RankLevel } from "../types";
+import { fetchPeople, fetchProjects, fetchTasks, fetchSettings, fetchLogsForPerson } from "../lib/firestore";
+import type { Person, Project, Task, RankLevel, LogEvent } from "../types";
 import { useRankedEnabled } from "../hooks/useRankedEnabled";
 
 export default function PersonDetail() {
@@ -14,20 +14,23 @@ export default function PersonDetail() {
   const [tasks, setTasks] = useState<Task[]>([]); // tasks assigned to this person
   const [allTasks, setAllTasks] = useState<Task[]>([]); // all tasks (for leaderboard rank)
   const [settings, setSettings] = useState<{rulebook_url?: string; sharepoint_url?: string} | null>(null);
+  const [logs, setLogs] = useState<LogEvent[]>([]); // person-specific logs
   const [rankedEnabled] = useRankedEnabled();
 
   useEffect(() => {
     (async () => {
-  const [people, projects, allTasks, settings] = await Promise.all([
+      const [people, projects, allTasks, settings] = await Promise.all([
         fetchPeople(), fetchProjects(), fetchTasks(), fetchSettings()
       ]);
       const p = people.find(pp => pp.id === id) || null;
       setPerson(p);
-  // Keep all projects; we'll filter for display later (include ownership OR assigned tasks)
-  setProjects(projects);
-  setAllTasks(allTasks);
-  setTasks(allTasks.filter(t => t.assignee_id === id));
-  setSettings(settings);
+      setProjects(projects);
+      setAllTasks(allTasks);
+      setTasks(allTasks.filter(t => t.assignee_id === id));
+      setSettings(settings);
+      if (id) {
+        try { setLogs(await fetchLogsForPerson(id)); } catch {}
+      }
     })();
   }, [id]);
 
@@ -42,12 +45,28 @@ export default function PersonDetail() {
   const numTasks = tasks.length;
   const numTasksTodo = tasks.filter(t => t.status !== "Complete").length;
 
+  // Estimate total hours committed (completed tasks) using same mapping logic used elsewhere.
+  const ptsToHours = (p: number) => {
+    if (p === 1) return 0.5;
+    if (p === 3) return 1;
+    if (p === 6) return 2;
+    if (p === 10) return 3;
+    if (p === 15) return 5;
+    if (p === 40) return 10;
+    if (p === 65) return 15;
+    if (p === 98) return 20;
+    if (p === 150) return 25;
+    if (p === 200) return 30;
+    return Math.max(0, Math.round(p / 4));
+  };
+  const taskHours = Math.round(tasks.filter(t=> t.status === 'Complete').reduce((sum, t)=> sum + (typeof t.ranked_points === 'number' ? ptsToHours(t.ranked_points) : 2), 0));
+
   // Remove old leaderboard rank on personal page per request
 
   function rankIcon(rank: RankLevel | undefined) {
     const base = import.meta.env.BASE_URL || '/';
     const r = (rank || "Bronze").toLowerCase();
-    const ext = (r === 'bronze' || r === 'silver') ? 'png' : 'svg';
+    const ext = 'png';
     return `${base}icons/rank-${r}.${ext}`;
   }
 
@@ -69,7 +88,7 @@ export default function PersonDetail() {
             <div className="text-xs text-uconn-muted leading-snug">{person.year || person.role}</div>
           </div>
           {rankedEnabled && person.rank && (
-            <img src={rankIcon(person.rank)} alt={person.rank} className="shrink-0 h-8 w-8 object-contain" />
+            <img src={rankIcon(person.rank)} alt={person.rank} className="shrink-0 h-20 w-20 md:h-24 md:w-24 object-contain -mt-2" />
           )}
         </div>
         {person.skills && person.skills.length > 0 && (
@@ -89,6 +108,7 @@ export default function PersonDetail() {
             <div className="text-xs text-uconn-muted">To Do</div>
           </div>
         </div>
+  <span className="absolute bottom-4 right-6 text-sm text-uconn-muted/90 tracking-wide">{taskHours}hrs</span>
       </div>
 
       {/* Quick Links Card */}
@@ -153,9 +173,11 @@ export default function PersonDetail() {
         </ul>
       </div>
 
-  {/* Ranked History (hidden when ranked disabled) */}
-  {rankedEnabled && (
-  <div className="rounded-2xl bg-white/5 border border-white/10 p-4">
+  {/* Bottom two-column area: Ranked History (left) & Points History (right) */}
+  <div className="grid md:grid-cols-2 gap-6">
+    {/* Ranked History */}
+    {rankedEnabled && (
+      <div className="rounded-2xl bg-white/5 border border-white/10 p-4">
         <h2 className="font-semibold mb-2">Ranked History</h2>
         {history.length === 0 ? (
           <div className="text-xs text-uconn-muted">No rank changes yet.</div>
@@ -178,7 +200,32 @@ export default function PersonDetail() {
           </ul>
         )}
       </div>
-  )}
+    )}
+    {/* Points History */}
+    <div className="rounded-2xl bg-white/5 border border-white/10 p-4">
+      <h2 className="font-semibold mb-2">Points History</h2>
+      {logs.length === 0 ? (
+        <div className="text-xs text-uconn-muted">No point events yet.</div>
+      ) : (
+        <ul className="space-y-2 text-sm max-h-72 overflow-auto pr-1">
+          {logs
+            .filter(l => (l.type === 'attendance' || l.type === 'task_points'))
+            .slice(0, 100)
+            .map((l, i) => (
+              <li key={l.id || i} className="flex items-start gap-2">
+                <span className="text-[11px] text-uconn-muted w-24 shrink-0">
+                  {new Date(l.ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                </span>
+                <span className="flex-1">
+                  <span className="text-white/90">{l.note || l.type}</span>{' '}
+                  {typeof l.points === 'number' && <span className="text-brand-teal font-semibold">(+{l.points})</span>}
+                </span>
+              </li>
+            ))}
+        </ul>
+      )}
+    </div>
+  </div>
     </div>
   );
 }

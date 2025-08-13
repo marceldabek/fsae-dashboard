@@ -24,7 +24,13 @@ export default function ProjectCard({
   const percent = total > 0 ? (done / total) * 100 : 0;
   const percentLabel = `${Math.round(percent)}%`;
   const status = total === 0 ? "none" : done === 0 ? "todo" : done === total ? "done" : "progress";
-  const statusColor = status === "done" ? "bg-green-500" : status === "progress" ? "bg-yellow-400" : total === 0 ? "bg-white/30" : "bg-red-500";
+  // Use grey for to-do/not started (including no tasks), yellow for in-progress, green for complete
+  const statusColor =
+    status === "done"
+      ? "bg-green-500"
+      : status === "progress"
+      ? "bg-yellow-400"
+      : "bg-gray-400";
   const totalPoints = tasks.reduce((sum, t) => sum + (t.ranked_points ?? (t.status === "Complete" ? 35 : 10)), 0);
 
   const container = compact ? "rounded-xl bg-white/5 border border-white/10 p-2.5 space-y-2" : "rounded-2xl bg-white/5 border border-white/10 p-3 space-y-2.5";
@@ -60,8 +66,22 @@ export default function ProjectCard({
           {project.subsystem}
         </div>
       )}
-      <div className="flex items-center justify-between gap-2 text-[11px] text-uconn-muted">
-        <span className="truncate">Owners: {owners.map(o => o.name).join(", ") || "—"}</span>
+      {/* Owners wrap to multiple lines to prevent horizontal overflow */}
+      <div className="flex items-start justify-between gap-2 text-[11px] text-uconn-muted">
+        <div className="flex-1 min-w-0">
+          <div className="text-[10px] uppercase tracking-wide opacity-80 mb-1">Owners</div>
+          <div className="flex flex-wrap gap-1.5">
+            {owners.length ? (
+              owners.map(o => (
+                <span key={o.id} className="px-1.5 py-0.5 rounded bg-white/10 whitespace-normal break-words">
+                  {o.name}
+                </span>
+              ))
+            ) : (
+              <span className="opacity-60">—</span>
+            )}
+          </div>
+        </div>
         {project.due_date && (() => {
           let date: Date | null = null;
           const s = project.due_date;
@@ -77,7 +97,7 @@ export default function ProjectCard({
             const month = date.toLocaleString('en-US', { month: compact ? 'short' : 'long' });
             const day = date.getDate();
             const suffix = (n: number) => n === 1 || n === 21 || n === 31 ? 'st' : n === 2 || n === 22 ? 'nd' : n === 3 || n === 23 ? 'rd' : 'th';
-            return <span className="whitespace-nowrap ml-2">Due {weekday} {month} {day}{suffix(day)}</span>;
+            return <span className="whitespace-nowrap ml-2 shrink-0">Due {weekday} {month} {day}{suffix(day)}</span>;
           }
           return null;
         })()}

@@ -4,7 +4,7 @@ import { useParams, Link } from "react-router-dom";
 
 import ProgressBar from "../components/ProgressBar";
 import PeoplePicker from "../components/PeoplePicker";
-import { fetchPeople, fetchProjects, fetchTasksForProject, addTask, updateTask, deleteTaskById, updateProjectOwners, fetchRankedSettings } from "../lib/firestore";
+import { fetchPeople, fetchProjects, fetchTasksForProject, addTask, updateTask, deleteTaskById, updateProjectOwners, archiveProject } from "../lib/firestore";
 import { useRankedEnabled } from "../hooks/useRankedEnabled";
 import { useAuth } from "../hooks/useAuth";
 import { isAdminUid } from "../admin";
@@ -20,7 +20,9 @@ export default function ProjectDetail() {
   
 const user = useAuth();
 const canEdit = isAdminUid(user?.uid || null);
-const [ownerIds, setOwnerIds] = useState<string[]>([]);
+  const [ownerIds, setOwnerIds] = useState<string[]>([]);
+  const [showOwnerPicker, setShowOwnerPicker] = useState(false);
+  const [ownerSearch, setOwnerSearch] = useState("");
 
 
   // load project + people
@@ -100,9 +102,20 @@ const [ownerIds, setOwnerIds] = useState<string[]>([]);
               </div>
             )}
           </div>
-          {project.design_link && (
-            <a className="inline-flex items-center h-9 px-4 rounded bg-brand-blue/40 hover:bg-brand-blue/60 transition text-sm font-medium" href={project.design_link} target="_blank" rel="noreferrer">Design Docs</a>
-          )}
+          <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
+            {project.design_link && (
+              <a className="inline-flex items-center h-9 px-4 rounded bg-brand-blue/40 hover:bg-brand-blue/60 transition text-sm font-medium" href={project.design_link} target="_blank" rel="noreferrer">Design Docs</a>
+            )}
+            {canEdit && !((project as any).archived) && (
+              <button
+                onClick={async ()=> { if(!project) return; if(!confirm("Archive this project? You can re-enable by editing in Firestore.")) return; await archiveProject(project.id); setProject(p=> p ? ({...p, archived: true} as any) : p); }}
+                className="inline-flex items-center h-9 px-4 rounded bg-red-500/20 hover:bg-red-500/30 text-red-200 border border-red-500/40 text-sm font-medium"
+              >Archive Project</button>
+            )}
+            {canEdit && (project as any).archived && (
+              <span className="inline-flex items-center h-9 px-3 rounded border border-yellow-400/40 bg-yellow-400/10 text-xs text-yellow-300 font-semibold uppercase tracking-wide">Archived</span>
+            )}
+          </div>
         </div>
         <div className="text-sm text-uconn-muted">
           <div className="flex items-start justify-between gap-4">
@@ -128,14 +141,46 @@ const [ownerIds, setOwnerIds] = useState<string[]>([]);
             })()}
           </div>
           {canEdit && (
-            <div className="mt-3">
-              <h3 className="text-sm font-semibold mb-1">Manage Owners</h3>
-              <PeoplePicker
-                people={allPeople}
-                selectedIds={ownerIds}
-                onAdd={handleAddOwner}
-                onRemove={handleRemoveOwner}
-              />
+            <div className="mt-3 relative">
+              <h3 className="text-sm font-semibold mb-1 flex items-center gap-2">Manage Owners
+                <button
+                  onClick={()=> setShowOwnerPicker(s=>!s)}
+                  className="ml-auto text-[11px] px-2 py-1 rounded bg-white/10 border border-white/15 hover:bg-white/15"
+                >{showOwnerPicker ? 'Close' : 'Add/Remove'}</button>
+              </h3>
+              {showOwnerPicker && (
+                <div className="absolute z-20 mt-1 w-full rounded-lg border border-white/15 bg-black/70 backdrop-blur-sm p-2 space-y-2">
+                  <input
+                    value={ownerSearch}
+                    onChange={e=>setOwnerSearch(e.target.value)}
+                    className="w-full px-2 py-1 rounded bg-white/10 text-sm mb-1"
+                    placeholder="Search people…"
+                  />
+                  <ul className="space-y-1 text-sm">
+                    {allPeople
+                      .filter(p=> p.name.toLowerCase().includes(ownerSearch.toLowerCase()) || (p.skills||[]).join(' ').toLowerCase().includes(ownerSearch.toLowerCase()))
+                      .slice(0,5)
+                      .map(p=> {
+                      const selected = ownerIds.includes(p.id);
+                      return (
+                        <li key={p.id} className="flex items-center gap-2 justify-between px-2 py-1 rounded hover:bg-white/5">
+                          <div className="min-w-0">
+                            <div className="truncate text-sm font-medium">{p.name}</div>
+                            {p.skills && p.skills.length>0 && <div className="text-[10px] text-uconn-muted truncate">{p.skills.join(', ')}</div>}
+                          </div>
+                          <button
+                            onClick={()=> selected ? handleRemoveOwner(p.id) : handleAddOwner(p.id)}
+                            className={`px-2 py-1 rounded text-[11px] border ${selected ? 'bg-brand-teal/20 border-brand-teal/40 text-brand-teal' : 'bg-white/10 border-white/20 hover:bg-white/15'}`}
+                          >{selected ? 'Remove' : 'Add'}</button>
+                        </li>
+                      );
+                    })}
+                    {allPeople.length === 0 && (
+                      <li className="text-xs text-uconn-muted px-2 py-1">No people</li>
+                    )}
+                  </ul>
+                </div>
+              )}
             </div>
           )}
         </div>

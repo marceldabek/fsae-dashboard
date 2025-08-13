@@ -6,6 +6,35 @@
 
 html, body, #root { height: 100%; }
 
+/* Custom horizontal scrollbar (mobile) for Admin tab bar */
+.h-scroll-tabs {
+	scrollbar-color: #64C7C9 rgba(255,255,255,0.08);
+	scrollbar-width: thin;
+	position: relative;
+}
+
+.h-scroll-tabs::-webkit-scrollbar { height: 6px; }
+.h-scroll-tabs::-webkit-scrollbar-track { background: rgba(255,255,255,0.08); border-radius: 4px; }
+.h-scroll-tabs::-webkit-scrollbar-thumb { background: linear-gradient(90deg,#64C7C9,#98D7D8); border-radius: 4px; }
+.h-scroll-tabs::-webkit-scrollbar-thumb:hover { background: linear-gradient(90deg,#64C7C9,#64C7C9); }
+
+/* Edge fade indicators (use :before/:after via utility class wrapper) */
+.h-scroll-tabs:before,
+.h-scroll-tabs:after {
+	content: '';
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	width: 16px;
+	pointer-events: none;
+}
+.h-scroll-tabs:before { left: 0; background: linear-gradient(90deg, rgba(0,14,47,0.9), rgba(0,14,47,0)); }
+.h-scroll-tabs:after { right: 0; background: linear-gradient(270deg, rgba(0,14,47,0.9), rgba(0,14,47,0)); }
+
+@media (min-width: 640px) {
+	.h-scroll-tabs::-webkit-scrollbar { height: 8px; }
+}
+
 /* Optional: gradient backdrop if desired via a parent class */
 .bg-app-gradient {
 	background: radial-gradient(1200px 600px at 10% -10%, rgba(100,199,201,0.15), transparent 60%),

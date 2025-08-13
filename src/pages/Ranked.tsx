@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { fetchPeople, fetchTasks, fetchRankedSettings, refreshAllCaches, fetchAttendance } from "../lib/firestore";
+import { fetchPeople, fetchTasks, fetchRankedSettings, refreshAllCaches, fetchAttendance, computeRankedScores } from "../lib/firestore";
 import type { Person, Task, RankedSettings, RankLevel } from "../types";
 import { useRankedEnabled } from "../hooks/useRankedEnabled";
 
@@ -10,8 +10,8 @@ function rankIcon(rank: RankLevel) {
   // Use Vite base for correct pathing on GitHub Pages or subpaths
   const base = import.meta.env.BASE_URL || '/';
   const name = rank.toLowerCase();
-  // Use PNG for Bronze and Silver, SVG for others
-  const ext = (name === 'bronze' || name === 'silver') ? 'png' : 'svg';
+  // Use PNG for all tiers to ensure raster consistency and new assets
+  const ext = 'png';
   return `${base}icons/rank-${name}.${ext}`;
 }
 
@@ -57,20 +57,7 @@ export default function Ranked() {
 
   const scores = useMemo(() => {
     if (!settings) return new Map<string, number>();
-    const m = new Map<string, number>();
-    for (const p of participants) m.set(p.id, 0);
-    for (const t of tasks) {
-      if (!t.assignee_id || !m.has(t.assignee_id)) continue;
-      const pts = t.ranked_points ?? (t.status === "Complete" ? 35 : 10);
-      m.set(t.assignee_id, (m.get(t.assignee_id) || 0) + pts);
-    }
-    for (const a of attendance as any[]) {
-      if (!a.person_id || !m.has(a.person_id)) continue;
-      const pts = Math.max(0, Number(a.points || 0));
-      if (!pts) continue;
-      m.set(a.person_id, (m.get(a.person_id) || 0) + pts);
-    }
-    return m;
+    return computeRankedScores(participants, tasks, settings, attendance as any);
   }, [participants, tasks, attendance, settings]);
 
   const byRank = useMemo(() => {

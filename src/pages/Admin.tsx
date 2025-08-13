@@ -260,7 +260,7 @@ export default function Admin() {
   if (!isAdmin) return (<div><h1 className="text-2xl font-semibold">Admin</h1><p className="text-sm text-uconn-muted mt-2">You must be signed in as admin to access this page.</p></div>);
 
   return (
-    <div>
+    <div className="max-w-6xl mx-auto px-3 sm:px-4">
       {/* Title inline above a sleek tab bar */}
       <h1 className="text-2xl font-semibold mb-1">Admin</h1>
       {/* Tab bar without filled background; keeps underline across full width */}
@@ -271,8 +271,8 @@ export default function Admin() {
       )}
 
       {/* Tabs */}
-      <div className="sticky top-0 z-30 -mx-4 px-4 bg-transparent backdrop-blur-none border-b border-uconn-border/60">
-        <nav className="flex gap-3 h-11 items-end" role="tablist">
+  <div className="sticky top-0 z-30 -mx-3 sm:-mx-4 px-3 sm:px-4 bg-uconn-blue/60 backdrop-blur border-b border-uconn-border/60 overflow-x-auto h-scroll-tabs">
+        <nav className="flex gap-2 sm:gap-3 h-11 items-end min-w-max" role="tablist">
           <button
             role="tab"
             aria-selected={activeTab === 'people'}
@@ -310,12 +310,12 @@ export default function Admin() {
 
       {activeTab === 'people' && (
         <div role="tabpanel" className="mt-4">
-          <div className="grid lg:grid-cols-2 gap-6">
+          <div className="grid md:grid-cols-2 gap-6">
             <section className="space-y-2">
               <h2 className="font-semibold">Create Person</h2>
               <div className="form-section p-4 space-y-3">
                 <input className="px-3 py-2 rounded w-full" placeholder="Name" value={pName} onChange={(e) => setPName(e.target.value)} />
-                <div className="flex gap-3">
+                <div className="flex flex-col sm:flex-row gap-3">
                   <select className="px-3 py-2 rounded dark-select" value={pYear} onChange={(e) => setPYear(e.target.value)}>
                     <option>Freshman</option>
                     <option>Sophomore</option>
@@ -332,7 +332,7 @@ export default function Admin() {
                 {/* Quick attendance bar (always 10 points) */}
                 <div className="pt-3 border-t border-white/10 mt-3">
                   <div className="text-xs text-uconn-muted mb-1">Quick attendance</div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                     <input
                       type="date"
                       className="px-2.5 py-1.5 rounded text-sm bg-white/5 border border-white/10"
@@ -352,12 +352,26 @@ export default function Admin() {
                     <button
                       className="px-2.5 py-1.5 rounded border border-uconn-border bg-white/10 text-xs whitespace-nowrap"
                       onClick={async()=>{
-                        if(!attendeeId) return alert('Select a person');
+                        if(!attendeeId) { showToast('Select a person'); return; }
                         const date = attendanceDate || new Date().toISOString().slice(0,10);
-                        await addAttendance({ person_id: attendeeId, date, points: 10 });
-                        setAttendeeId('');
-                        setAttendanceDate(new Date().toISOString().slice(0,10));
-                        showToast('Attendance recorded (10 pts)');
+                        try {
+                          const personName = people.find(p=>p.id===attendeeId)?.name || 'Attendance';
+                          await addAttendance({ person_id: attendeeId, date, points: 10 });
+                          showToast(`${personName} marked present (+10 pts)`);
+                          // Reset after toast so message always shows for the previous selection
+                          setTimeout(()=>{
+                            setAttendeeId('');
+                            setAttendanceDate(new Date().toISOString().slice(0,10));
+                          }, 0);
+                        } catch (e:any) {
+                          if (e?.code === 'DUPLICATE_ATTENDANCE' || e?.message === 'DUPLICATE_ATTENDANCE') {
+                            const personName = people.find(p=>p.id===attendeeId)?.name || 'Person';
+                            showToast(`${personName} already marked for ${date}`);
+                          } else {
+                            console.error(e);
+                            showToast('Attendance failed');
+                          }
+                        }
                       }}
                     >Give 10 pts</button>
                   </div>
@@ -649,6 +663,8 @@ export default function Admin() {
               <input className="px-3 py-2 rounded w-full" placeholder="https://…sharepoint.com/sites/FSAE/…" value={shareUrl} onChange={(e) => setShareUrl(e.target.value)} />
               <button onClick={handleSaveSettings} className="mt-2 px-3 py-2 rounded bg-white/10 border border-uconn-border">Save Settings</button>
             </div>
+            {/* Retrieve archived project */}
+            <ArchivedProjectRestore />
             <div className="form-section wide p-4 mt-4 border border-red-500/30 bg-red-500/10 rounded-xl">
               <h3 className="font-semibold text-red-200">Danger zone</h3>
               <p className="text-sm text-red-200/80">This will permanently delete ALL people, projects, and tasks. This action cannot be undone.</p>
@@ -934,14 +950,19 @@ export default function Admin() {
                     <li className="px-3 py-2 text-uconn-muted">No activity yet</li>
                   )}
                   {recentLogs.map((e, i) => (
-                    <li key={e.id || i} className="px-3 py-2 flex items-start gap-3">
-                      <span className="text-xs text-uconn-muted w-40 shrink-0">
-                        {new Date(e.ts || 0).toLocaleString()}
-                      </span>
-                      <span className="font-mono text-xs uppercase tracking-wide px-1.5 py-0.5 rounded bg-white/10 border border-white/10">
-                        {e.type}
-                      </span>
-                      <span className="text-sm">
+                    <li
+                      key={e.id || i}
+                      className="px-3 py-2 flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-3 overflow-hidden"
+                    >
+                      <div className="flex items-center gap-2 text-xs text-uconn-muted leading-snug">
+                        <span className="shrink-0 sm:w-40 sm:inline block">
+                          {new Date(e.ts || 0).toLocaleString()}
+                        </span>
+                        <span className="font-mono text-[10px] sm:text-xs uppercase tracking-wide px-1.5 py-0.5 rounded bg-white/10 border border-white/10">
+                          {e.type}
+                        </span>
+                      </div>
+                      <span className="text-sm break-words whitespace-pre-wrap leading-snug">
                         {e.type === 'attendance' && (
                           <>
                             Attendance · {e.points} pts {e.person_id ? `→ ${people.find(p=>p.id===e.person_id)?.name || e.person_id}` : ''}
@@ -1007,6 +1028,64 @@ export default function Admin() {
             </div>
           </div>
         </div>
+      )}
+    </div>
+  );
+}
+
+function ArchivedProjectRestore() {
+  const [all, setAll] = useState<any[]>([]);
+  const [q, setQ] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [restoring, setRestoring] = useState<string | null>(null);
+  useEffect(() => { (async () => { try { setLoading(true); const { fetchProjects } = await import("../lib/firestore"); setAll(await fetchProjects()); } finally { setLoading(false); } })(); }, []);
+  const archived = all.filter(p=> (p as any).archived);
+  const filtered = archived.filter(p => p.name.toLowerCase().includes(q.toLowerCase()));
+  return (
+    <div className="form-section wide p-4 mt-6 space-y-3">
+      <h3 className="text-sm font-semibold">Retrieve archived project</h3>
+      <p className="text-xs text-uconn-muted">Restore a previously archived project (brings it back into lists).</p>
+      {archived.length === 0 ? (
+        <p className="text-xs text-uconn-muted italic">No archived projects yet.</p>
+      ) : (
+        <input
+          className="px-3 py-2 rounded w-full"
+          placeholder="Search archived projects…"
+          value={q}
+          onChange={e=>setQ(e.target.value)}
+        />
+      )}
+      {loading && <div className="text-xs text-uconn-muted">Loading…</div>}
+      {archived.length > 0 && (
+        <ul className="space-y-2 max-h-64 overflow-auto pr-1">
+          {filtered.slice(0,25).map(p => (
+            <li key={p.id} className="flex items-center gap-3 text-sm px-2 py-2 rounded bg-white/5 border border-white/10">
+              <span className="truncate flex-1">{p.name}</span>
+              <button
+                disabled={restoring === p.id}
+                onClick={async ()=> {
+                  try {
+                    setRestoring(p.id);
+                    const { updateProject } = await import("../lib/firestore");
+                    await updateProject(p.id, { archived: false } as any);
+                    setAll(prev => prev.map(x=> x.id===p.id ? { ...x, archived: false } : x));
+                    // Use alert fallback here since top-level showToast is out of scope
+                    (window as any).alert?.("Project restored");
+                  } catch (e) {
+                    console.error(e);
+                    (window as any).alert?.("Restore failed");
+                  } finally {
+                    setRestoring(null);
+                  }
+                }}
+                className="px-3 py-1.5 rounded text-xs font-medium border border-brand-teal/50 bg-brand-teal/20 hover:bg-brand-teal/30 disabled:opacity-50"
+              >Restore</button>
+            </li>
+          ))}
+          {filtered.length === 0 && !loading && (
+            <li className="text-xs text-uconn-muted px-2 py-1">No archived projects match.</li>
+          )}
+        </ul>
       )}
     </div>
   );

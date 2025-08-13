@@ -186,6 +186,20 @@ export async function deleteTaskById(id: string) {
 // Attendance helpers
 export async function addAttendance(a: Omit<Attendance, "id">) {
   const now = Date.now();
+  // Prevent duplicate attendance for the same person and date (best-effort client check)
+  if (a.person_id && a.date) {
+    const qDup = query(
+      collection(db, "attendance"),
+      where("person_id", "==", a.person_id),
+      where("date", "==", a.date)
+    );
+    const dupSnap = await getDocs(qDup);
+    if (!dupSnap.empty) {
+      const err: any = new Error("DUPLICATE_ATTENDANCE");
+      err.code = "DUPLICATE_ATTENDANCE";
+      throw err;
+    }
+  }
   const payload: Omit<Attendance, "id"> = { ...a, created_at: a.created_at ?? now };
   const ref = await addDoc(collection(db, "attendance"), pruneUndefined(payload as any));
   await updateDoc(ref, { id: ref.id });
@@ -219,6 +233,16 @@ export async function fetchRecentLogs(limit: number = 50): Promise<LogEvent[]> {
   const snap = await getDocs(collection(db, "logs"));
   const rows = snap.docs.map(d => d.data() as LogEvent).sort((a, b) => (b.ts || 0) - (a.ts || 0));
   return rows.slice(0, Math.max(1, limit));
+}
+
+// Fetch all log events for a specific person (no limit) and sort newest first.
+// This is client-filtered; for large datasets consider adding a Firestore index + query.
+export async function fetchLogsForPerson(personId: string): Promise<LogEvent[]> {
+  const snap = await getDocs(collection(db, "logs"));
+  return snap.docs
+    .map(d => d.data() as LogEvent)
+    .filter(l => l.person_id === personId)
+    .sort((a, b) => (b.ts || 0) - (a.ts || 0));
 }
 
 // Simple color palette for charts
@@ -273,6 +297,13 @@ export async function updatePerson(id: string, patch: Partial<Person>) {
 export async function updateProject(id: string, patch: Partial<Project>) {
   const ref = doc(db, "projects", id);
   await updateDoc(ref, pruneUndefined(patch as any));
+  bustCache(["projects"]);
+}
+
+// Soft archive a project (sets archived: true). UI should hide archived projects unless explicitly requested.
+export async function archiveProject(id: string) {
+  const ref = doc(db, "projects", id);
+  await updateDoc(ref, { archived: true } as any);
   bustCache(["projects"]);
 }
 
@@ -361,6 +392,7 @@ export function taskPoints(t: Task, settings?: RankedSettings): number {
 export function computeRankedScores(people: Person[], tasks: Task[], settings: RankedSettings, attendance?: Attendance[]): Map<string, number> {
   const scores = new Map<string, number>();
   const optIn = (p: Person) => !!p.ranked_opt_in; // opt-in only
+  const boundary = settings.last_reset_at || 0; // only count activity on/after boundary
   for (const p of people) {
     if (!optIn(p)) continue;
     scores.set(p.id, 0);
@@ -368,6 +400,8 @@ export function computeRankedScores(people: Person[], tasks: Task[], settings: R
   for (const t of tasks) {
     if (!t.assignee_id) continue;
     if (!scores.has(t.assignee_id)) continue;
+    const ts = (t.completed_at || t.created_at || 0);
+    if (ts < boundary) continue; // outside current period
     const pts = taskPoints(t, settings);
     scores.set(t.assignee_id, (scores.get(t.assignee_id) || 0) + pts);
   }
@@ -375,6 +409,8 @@ export function computeRankedScores(people: Person[], tasks: Task[], settings: R
     for (const a of attendance) {
       if (!a.person_id) continue;
       if (!scores.has(a.person_id)) continue;
+      const ats = (a as any).created_at || 0;
+      if (ats < boundary) continue;
       const pts = Math.max(0, Number(a.points || 0));
       if (!pts) continue;
       scores.set(a.person_id, (scores.get(a.person_id) || 0) + pts);

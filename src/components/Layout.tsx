@@ -139,9 +139,11 @@ function MenuLink({ to, label }: { to: string; label: string }) {
     <NavLink
       to={to}
       className={({ isActive }) =>
-        `group flex items-center gap-2 px-3 py-2 rounded-md transition ${
-          isActive ? "bg-black/25" : "hover:bg-black/15"
-        }`
+        `group flex items-center gap-2 px-3 py-2 rounded-md transition border ${
+          isActive
+            ? 'bg-brand-teal/30 border-brand-teal/60 text-white shadow-sm hover:bg-brand-teal/40'
+            : 'border-transparent hover:bg-black/15'
+        } focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-teal/60`
       }
     >
       <span className="relative">

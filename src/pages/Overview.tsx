@@ -1,11 +1,13 @@
 
-import { useEffect, useMemo, useState } from "react";
-import { fetchPeople, fetchProjects, fetchTasks } from "../lib/firestore";
-import type { Person, Project, Task } from "../types";
+import { useEffect, useMemo, useState, useRef } from "react";
+import { fetchPeople, fetchProjects, fetchTasks, fetchAttendance } from "../lib/firestore";
+import type { Person, Project, Task, Attendance } from "../types";
 import { useAuth } from "../hooks/useAuth";
 import ProjectCard from "../components/ProjectCard";
 import TrophyIcon from "../components/TrophyIcon";
 import ProgressBar from "../components/ProgressBar";
+import SwipeCarousel from "../components/SwipeCarousel";
+import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, Area } from "recharts";
 
 function StatCard({ label, value }: { label: string; value: string | number }) {
   return (
@@ -25,6 +27,7 @@ export default function Overview() {
   const [people, setPeople] = useState<Person[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [attendance, setAttendance] = useState<Attendance[]>([]);
   // Subsystem multi-select with search
   const [selectedSubsystems, setSelectedSubsystems] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState<"subsystem" | "name" | "due" | "progress">("subsystem");
@@ -34,8 +37,13 @@ export default function Overview() {
 
   useEffect(() => {
     (async () => {
-      const [pe, pr, ta] = await Promise.all([fetchPeople(), fetchProjects(), fetchTasks()]);
-      setPeople(pe); setProjects(pr); setTasks(ta);
+      const [pe, pr, ta, at] = await Promise.all([
+        fetchPeople(),
+        fetchProjects(),
+        fetchTasks(),
+        fetchAttendance(),
+      ]);
+      setPeople(pe); setProjects(pr); setTasks(ta); setAttendance(at);
     })();
   }, []);
 
@@ -64,7 +72,7 @@ export default function Overview() {
       t => t.assignee_id === person.id && t.status === "Complete"
     ).length;
     return { ...person, completed };
-  }).sort((a, b) => b.completed - a.completed).slice(0,3);
+  }).sort((a, b) => b.completed - a.completed).slice(0,5);
 
   // Owners map for ProjectCard
   const ownersMap = new Map(people.map(p => [p.id, p]));
@@ -81,6 +89,29 @@ export default function Overview() {
   };
 
   const user = useAuth();
+
+  // Build attendance series for recent days; include only Tue/Thu/Sat
+  const attendanceSeries = useMemo(() => {
+    const days = 21; // 3 weeks to ensure enough Tue/Thu/Sat points
+    const today = new Date();
+    const byDate = new Map<string, number>();
+    for (const a of attendance) {
+      const d = a.date; // YYYY-MM-DD
+      byDate.set(d, (byDate.get(d) || 0) + 1);
+    }
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const points: { date: string; count: number }[] = [];
+    for (let i = days - 1; i >= 0; i--) {
+      const dt = new Date(today);
+      dt.setDate(today.getDate() - i);
+      const dow = dt.getDay(); // 0=Sun ... 6=Sat
+      if (!(dow === 2 || dow === 4 || dow === 6)) continue; // Tue/Thu/Sat only
+      const key = `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`;
+      const label = dt.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+      points.push({ date: label, count: byDate.get(key) || 0 });
+    }
+    return points;
+  }, [attendance]);
 
   // derive list of subsystems present
   const subsystems = useMemo(() => {
@@ -153,43 +184,83 @@ export default function Overview() {
           </div>
         </div>
 
-        {/* Right column: leaderboard */}
+        {/* Right column: stacked widgets with swipe + dots */}
         <div className="min-w-0">
-          <div className="rounded-2xl bg-white/5 border border-white/10 p-2 md:p-3">
-            <h2 className="text-base md:text-lg font-bold mb-1">Leaderboard</h2>
-            <div className="overflow-x-auto">
-              <table className="min-w-[320px] w-full text-[10px] sm:text-xs">
-                <thead>
-                  <tr>
-                    <th className="w-8 py-1 px-2 text-center text-uconn-muted font-semibold">#</th>
-                    <th className="py-1 px-2 text-left text-uconn-muted font-semibold">Name</th>
-                    <th className="w-20 md:w-24 py-1 px-2 text-center text-uconn-muted font-semibold">Completed</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {leaderboard.map((person, idx) => (
-                    <tr key={person.id} className={idx === 0 ? "bg-yellow-100/40" : ""}>
-                      <td className="py-1 px-2 text-center">{idx + 1}</td>
-                      <td className="py-1 px-2">
-                        <div className="truncate max-w-[170px] sm:max-w-[220px] flex items-center gap-1">
-                          {person.name}
-                          {idx === 0 && <TrophyIcon />}
-                        </div>
-                      </td>
-                      <td className="py-1 px-2 text-center">{person.completed}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          <SwipeCarousel
+            slideIndexInitial={0}
+            onIndexChange={() => { /* no-op for now */ }}
+            dots
+          >
+            {/* Slide 0: Attendance chart */}
+            <div className="rounded-2xl bg-white/5 border border-white/10 p-3 md:p-4">
+              <h2 className="text-base md:text-lg font-bold mb-2">Meeting Attendance</h2>
+              <div className="h-48 sm:h-56">
+                {attendanceSeries.length ? (
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={attendanceSeries} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                      <defs>
+                        <linearGradient id="attLine" x1="0" y1="0" x2="1" y2="0">
+                          <stop offset="0%" stopColor="#64C7C9" />
+                          <stop offset="100%" stopColor="#98D7D8" />
+                        </linearGradient>
+                        <linearGradient id="attFill" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#64C7C9" stopOpacity={0.35} />
+                          <stop offset="100%" stopColor="#98D7D8" stopOpacity={0.05} />
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
+                      <XAxis dataKey="date" tick={{ fill: "#9CA3AF", fontSize: 10 }} axisLine={false} tickLine={false} />
+                      <YAxis allowDecimals={false} tick={{ fill: "#9CA3AF", fontSize: 10 }} axisLine={false} tickLine={false} width={24} />
+                      <Tooltip contentStyle={{ background: "#0b132b", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8 }} labelStyle={{ color: "#cbd5e1" }} />
+                      <Area type="monotone" dataKey="count" stroke="none" fill="url(#attFill)" />
+                      <Line type="monotone" dataKey="count" stroke="url(#attLine)" strokeWidth={3} dot={{ r: 2, stroke: "#98D7D8" }} activeDot={{ r: 4 }} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-full flex items-center justify-center text-sm text-uconn-muted">No attendance yet</div>
+                )}
+              </div>
             </div>
-          </div>
+
+            {/* Slide 1: Leaderboard */}
+            <div className="rounded-2xl bg-white/5 border border-white/10 p-3 md:p-4">
+              <h2 className="text-base md:text-lg font-bold mb-2">Leaderboard</h2>
+              <div className="h-48 sm:h-56 overflow-hidden">
+                <table className="w-full table-fixed text-xs sm:text-sm">
+                  <thead>
+                    <tr>
+                      <th className="w-8 py-1.5 px-2 text-center text-uconn-muted font-semibold">#</th>
+                      <th className="py-1.5 px-2 text-left text-uconn-muted font-semibold">Name</th>
+                      <th className="w-24 md:w-28 py-1.5 px-2 text-center text-uconn-muted font-semibold">Completed</th>
+                    </tr>
+                  </thead>
+                  <tbody className="align-middle">
+                    {leaderboard.map((person, idx) => (
+                      <tr key={person.id} className={idx === 0 ? "bg-yellow-100/40" : ""}>
+                        <td className="py-1.5 px-2 text-center">{idx + 1}</td>
+                        <td className="py-1.5 px-2">
+                          <div className="truncate flex items-center gap-1">
+                            {person.name}
+                            {idx === 0 && <TrophyIcon />}
+                          </div>
+                        </td>
+                        <td className="py-1.5 px-2 text-center">{person.completed}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </SwipeCarousel>
         </div>
       </div>
 
   {/* Project cards section */}
       <h2 className="text-lg font-semibold mt-6 mb-2">Projects</h2>
       <div className="flex items-center gap-4 text-xs text-uconn-muted mb-1">
-        <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500" /> Todo</div>
+        <div className="flex items-center gap-1" title="Grey = To-do / Not started">
+          <span className="w-2 h-2 rounded-full bg-gray-400" /> To-do / Not started
+        </div>
         <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-yellow-400" /> In Progress</div>
         <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500" /> Complete</div>
       </div>
