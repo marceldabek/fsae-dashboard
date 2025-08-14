@@ -39,7 +39,7 @@ export default function PeoplePicker({
             <li key={p.id} className="p-2 flex items-center justify-between">
               <div className="text-sm">
                 <div className="font-medium">{p.name}</div>
-                <div className="text-xs text-uconn-muted">{p.skills?.join(", ")}</div>
+                <div className="text-xs text-muted uppercase tracking-caps">{p.skills?.join(", ")}</div>
               </div>
               {isSelected ? (
                 <button onClick={()=>onRemove(p.id)} className="text-xs px-2 py-1 rounded border border-red-400 text-red-300">
@@ -53,7 +53,7 @@ export default function PeoplePicker({
             </li>
           );
         })}
-        {filtered.length===0 && <li className="p-2 text-xs text-uconn-muted">No matches</li>}
+  {filtered.length===0 && <li className="p-2 text-xs text-muted uppercase tracking-caps">No matches</li>}
       </ul>
     </div>
   );

@@ -12,9 +12,10 @@ import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianG
 function StatCard({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="rounded-xl bg-white/5 border border-white/10 p-3 text-center flex flex-col items-center justify-center min-w-0">
-      <div className="text-xl font-semibold leading-tight">{value}</div>
+    {/* Keep number large for prominence */}
+    <div className="text-xl font-semibold leading-tight">{value}</div>
       <div
-        className="text-[10px] sm:text-[11px] mt-1 tracking-wide text-uconn-muted uppercase whitespace-nowrap overflow-hidden text-ellipsis leading-snug"
+  className="text-[10px] mt-1 tracking-caps text-muted uppercase whitespace-nowrap overflow-hidden text-ellipsis leading-snug"
         title={label}
       >
         {label}
@@ -114,22 +115,25 @@ export default function Overview() {
   }, [attendance]);
 
   // derive list of subsystems present
+  // Only consider non-archived (open) projects for the Overview lists/filters
+  const openProjects = useMemo(() => projects.filter(p => !(p as any).archived), [projects]);
+
   const subsystems = useMemo(() => {
     const set = new Set<string>();
-    for (const p of projects) if (p.subsystem) set.add(p.subsystem);
+    for (const p of openProjects) if (p.subsystem) set.add(p.subsystem);
     return Array.from(set).sort();
-  }, [projects]);
+  }, [openProjects]);
 
-  // counts per subsystem for nicer dropdown badges
+  // counts per subsystem for nicer dropdown badges (only open projects)
   const subsystemCounts = useMemo(() => {
     const m = new Map<string, number>();
-    for (const p of projects) if (p.subsystem) m.set(p.subsystem, (m.get(p.subsystem) || 0) + 1);
+    for (const p of openProjects) if (p.subsystem) m.set(p.subsystem, (m.get(p.subsystem) || 0) + 1);
     return m;
-  }, [projects]);
+  }, [openProjects]);
 
   const filteredProjects = selectedSubsystems.length
-    ? projects.filter(p => p.subsystem && selectedSubsystems.includes(p.subsystem))
-    : projects;
+    ? openProjects.filter(p => p.subsystem && selectedSubsystems.includes(p.subsystem))
+    : openProjects;
   const projectsToShow = [...filteredProjects].sort((a, b) => {
     let cmp = 0;
     if (sortBy === "name") {
@@ -175,9 +179,10 @@ export default function Overview() {
           </div>
 
           {/* Progress bar with matching stat typography */}
-          <div className="rounded-xl bg-white/5 border border-white/10 p-4 pb-6">
+      <div className="rounded-xl bg-white/5 border border-white/10 p-4 pb-6">
             <div className="flex items-center justify-between mb-2">
-              <div className="text-[10px] sm:text-[11px] tracking-wide text-uconn-muted uppercase">Total Task Completion</div>
+              <div className="text-xs tracking-caps text-muted uppercase">Total Task Completion</div>
+              {/* Keep completion percentage prominent */}
               <div className="text-xl font-semibold leading-tight">{completion}%</div>
             </div>
             <ProgressBar value={completion} heightClass="h-3" />
@@ -217,7 +222,7 @@ export default function Overview() {
                     </LineChart>
                   </ResponsiveContainer>
                 ) : (
-                  <div className="h-full flex items-center justify-center text-sm text-uconn-muted">No attendance yet</div>
+                  <div className="h-full flex items-center justify-center text-sm text-muted">No attendance yet</div>
                 )}
               </div>
             </div>
@@ -229,9 +234,9 @@ export default function Overview() {
                 <table className="w-full table-fixed text-xs sm:text-sm">
                   <thead>
                     <tr>
-                      <th className="w-8 py-1.5 px-2 text-center text-uconn-muted font-semibold">#</th>
-                      <th className="py-1.5 px-2 text-left text-uconn-muted font-semibold">Name</th>
-                      <th className="w-24 md:w-28 py-1.5 px-2 text-center text-uconn-muted font-semibold">Completed</th>
+                      <th className="w-8 py-1.5 px-2 text-center text-muted font-semibold uppercase tracking-caps">#</th>
+                      <th className="py-1.5 px-2 text-left text-muted font-semibold uppercase tracking-caps">Name</th>
+                      <th className="w-24 md:w-28 py-1.5 px-2 text-center text-muted font-semibold uppercase tracking-caps">Completed</th>
                     </tr>
                   </thead>
                   <tbody className="align-middle">
@@ -257,7 +262,7 @@ export default function Overview() {
 
   {/* Project cards section */}
       <h2 className="text-lg font-semibold mt-6 mb-2">Projects</h2>
-      <div className="flex items-center gap-4 text-xs text-uconn-muted mb-1">
+  <div className="flex items-center gap-4 text-[10px] text-muted mb-1 uppercase tracking-caps">
         <div className="flex items-center gap-1" title="Grey = To-do / Not started">
           <span className="w-2 h-2 rounded-full bg-gray-400" /> To-do / Not started
         </div>
@@ -265,16 +270,16 @@ export default function Overview() {
         <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500" /> Complete</div>
       </div>
       {/* Toolbar: Subsystem multi-select + Sort dropdown */}
-      <div className="relative flex flex-wrap items-center gap-2 mb-3">
-        <div className="relative">
+      <div className="grid grid-cols-2 gap-2 mb-3 w-full">
+        <div className="relative min-w-0">
           <button
             onClick={() => { setShowSubsystemMenu(v=>!v); setShowSortMenu(false); }}
-            className="px-3 py-1.5 rounded-md text-xs font-medium border border-white/10 bg-white/5 hover:bg-white/10"
+            className="px-3 py-1.5 rounded-md text-xs font-medium border border-white/10 bg-white/5 hover:bg-white/10 w-full"
           >
             Subsystems: <span className="font-semibold">{selectedSubsystems.length ? `${selectedSubsystems.length} selected` : "All"}</span>
           </button>
           {/* Subsystem popover: searchable multi-select with checkboxes */}
-          <div className={`absolute z-20 mt-1 w-64 rounded-md border border-white/10 bg-uconn-blue/95 shadow-xl overflow-hidden transition transform origin-top ${showSubsystemMenu ? "opacity-100 scale-100" : "opacity-0 scale-95 pointer-events-none"}`}>
+          <div className={`absolute z-20 mt-1 w-64 rounded-md border border-overlay-10 bg-bg/95 shadow-xl overflow-hidden transition transform origin-top ${showSubsystemMenu ? "opacity-100 scale-100" : "opacity-0 scale-95 pointer-events-none"}`}>
             <div className="px-3 py-2 border-b border-white/10">
               <button
                 className="w-full px-3 py-2 rounded-md text-xs sm:text-sm font-semibold bg-red-500/15 hover:bg-red-500/25 text-red-200 focus:outline-none focus-visible:outline-none"
@@ -285,7 +290,7 @@ export default function Overview() {
             </div>
             <div className="max-h-60 overflow-auto p-1">
               {subsystems.length === 0 && (
-                <div className="px-3 py-2 text-xs text-uconn-muted">No subsystems</div>
+                <div className="px-3 py-2 text-xs text-muted uppercase tracking-caps">No subsystems</div>
               )}
               {subsystems.map(s => {
                 const checked = selectedSubsystems.includes(s);
@@ -294,7 +299,7 @@ export default function Overview() {
                   <label key={s} className="flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-white/10 cursor-pointer focus:outline-none focus-visible:outline-none">
                     <input
                       type="checkbox"
-                      className="accent-brand-teal focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0"
+                      className="accent-accent focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0"
                       checked={checked}
                       onChange={() => {
                         setSelectedSubsystems(prev => checked ? prev.filter(x=>x!==s) : [...prev, s]);
@@ -309,15 +314,15 @@ export default function Overview() {
           </div>
         </div>
 
-        <div className="relative">
+    <div className="relative min-w-0">
           <button
             onClick={() => { setShowSortMenu(v=>!v); setShowSubsystemMenu(false); }}
-            className="px-3 py-1.5 rounded-md text-xs font-medium border border-white/10 bg-white/5 hover:bg-white/10"
+      className="px-3 py-1.5 rounded-md text-xs font-medium border border-white/10 bg-white/5 hover:bg-white/10 w-full"
           >
             Sort: <span className="font-semibold">{sortLabel(sortBy)} {dirSymbol}</span>
           </button>
           {/* Sort popover */}
-          <div className={`absolute z-20 mt-1 w-48 rounded-md border border-white/10 bg-uconn-blue/95 shadow-xl overflow-hidden transition transform origin-top ${showSortMenu ? "opacity-100 scale-100" : "opacity-0 scale-95 pointer-events-none"}`}>
+          <div className={`absolute z-20 mt-1 w-48 rounded-md border border-overlay-10 bg-bg/95 shadow-xl overflow-hidden transition transform origin-top ${showSortMenu ? "opacity-100 scale-100" : "opacity-0 scale-95 pointer-events-none"}`}>
             {(["subsystem","name","due","progress"] as const).map(v => (
               <button
                 key={v}

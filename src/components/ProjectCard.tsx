@@ -62,12 +62,12 @@ export default function ProjectCard({
         )}
       </div>
       {project.subsystem && (
-        <div className="text-[10px] uppercase tracking-wide font-medium text-brand-teal/70">
+  <div className="text-xs uppercase tracking-caps font-medium text-accent/70">
           {project.subsystem}
         </div>
       )}
       {/* Owners wrap to multiple lines to prevent horizontal overflow */}
-      <div className="flex items-start justify-between gap-2 text-[11px] text-uconn-muted">
+  <div className="flex items-start justify-between gap-2 text-tick text-muted">
         <div className="flex-1 min-w-0">
           <div className="text-[10px] uppercase tracking-wide opacity-80 mb-1">Owners</div>
           <div className="flex flex-wrap gap-1.5">
@@ -104,7 +104,7 @@ export default function ProjectCard({
       </div>
       <div className="flex items-center justify-between gap-2 mt-1">
         <div className="text-[11px] font-semibold">{percentLabel}</div>
-        <div className="text-[10px] text-uconn-muted flex items-center gap-2">
+  <div className="text-tick text-muted flex items-center gap-2">
           <span>{total>0? `${done}/${total} tasks` : "No tasks"}</span>
           {rankedEnabled && <span className="opacity-80">·</span>}
           {rankedEnabled && <span className="font-semibold text-[10px]">Σ +{totalPoints}</span>}

@@ -8,13 +8,13 @@ html, body, #root { height: 100%; }
 
 /* Custom horizontal scrollbar (mobile) for Admin tab bar */
 .h-scroll-tabs {
-	scrollbar-color: #64C7C9 rgba(255,255,255,0.08);
+	scrollbar-color: #64C7C9 rgba(255,255,255,0.06);
 	scrollbar-width: thin;
 	position: relative;
 }
 
 .h-scroll-tabs::-webkit-scrollbar { height: 6px; }
-.h-scroll-tabs::-webkit-scrollbar-track { background: rgba(255,255,255,0.08); border-radius: 4px; }
+.h-scroll-tabs::-webkit-scrollbar-track { background: rgba(255,255,255,0.06); border-radius: 4px; }
 .h-scroll-tabs::-webkit-scrollbar-thumb { background: linear-gradient(90deg,#64C7C9,#98D7D8); border-radius: 4px; }
 .h-scroll-tabs::-webkit-scrollbar-thumb:hover { background: linear-gradient(90deg,#64C7C9,#64C7C9); }
 
@@ -28,50 +28,46 @@ html, body, #root { height: 100%; }
 	width: 16px;
 	pointer-events: none;
 }
-.h-scroll-tabs:before { left: 0; background: linear-gradient(90deg, rgba(0,14,47,0.9), rgba(0,14,47,0)); }
-.h-scroll-tabs:after { right: 0; background: linear-gradient(270deg, rgba(0,14,47,0.9), rgba(0,14,47,0)); }
+.h-scroll-tabs:before { left: 0; background: linear-gradient(90deg, rgba(0,14,47,0.85), rgba(0,14,47,0)); }
+.h-scroll-tabs:after { right: 0; background: linear-gradient(270deg, rgba(0,14,47,0.85), rgba(0,14,47,0)); }
+
+/* Disable fades when parent has .no-fade */
+.no-fade.h-scroll-tabs:before,
+.no-fade.h-scroll-tabs:after { display: none; }
 
 @media (min-width: 640px) {
 	.h-scroll-tabs::-webkit-scrollbar { height: 8px; }
 }
 
 /* Optional: gradient backdrop if desired via a parent class */
-.bg-app-gradient {
-	background: radial-gradient(1200px 600px at 10% -10%, rgba(100,199,201,0.15), transparent 60%),
-							radial-gradient(1000px 600px at 90% 10%, rgba(0,67,105,0.25), transparent 60%),
-							#000E2F;
-}
+/* App background can remain a subtle radial using accent; removed extra brand blue */
+.bg-app-gradient { background: radial-gradient(1200px 600px at 10% -10%, rgba(100,199,201,0.15), transparent 60%), #000E2F; }
 
 /* Dark input styling */
 input[type="text"], input[type="date"], textarea, select, input:not([type]) {
-	background-color: rgba(255,255,255,0.06);
-	color: #FFFFFF;
-	border: 1px solid #2e3a55;
+	background-color: rgba(255,255,255,0.06); /* overlay-06 */
+	color: #FFFFFF; /* text */
+	border: 1px solid rgba(255,255,255,0.10); /* overlay-10 */
 	font-size: 0.875rem;
 	border-radius: 6px;
 }
-input::placeholder, textarea::placeholder { color: #7e868C; opacity: 1; }
-input:focus, textarea:focus, select:focus { outline: 2px solid #64C7C9; outline-offset: 0; background-color: rgba(255,255,255,0.1); }
+input::placeholder, textarea::placeholder { color: #BDC0C3; opacity: 1; }
+input:focus, textarea:focus, select:focus { outline: 2px solid #64C7C9; outline-offset: 0; background-color: rgba(255,255,255,0.10); }
 
 /* Consistent dark dropdown styling (apply class 'dark-select') */
 .dark-select {
 	background-color: rgba(255,255,255,0.06);
 	color: #fff;
-	border: 1px solid #2e3a55;
+	border: 1px solid rgba(255,255,255,0.10);
 	font-size: 0.875rem;
 	border-radius: 6px;
 }
-.dark-select:focus { outline: 2px solid #64C7C9; background-color: rgba(255,255,255,0.1); }
-.dark-select option { background:#06152e; color:#fff; }
+.dark-select:focus { outline: 2px solid #64C7C9; background-color: rgba(255,255,255,0.10); }
+.dark-select option { background:#0F1B3A; color:#fff; }
 .dark-select option:checked { background:#64C7C9; color:#000; }
-.dark-select option:hover { background:#1a2a48; }
+.dark-select option:hover { background:#24304F; }
 
-.form-section {
-	background: rgba(255,255,255,0.04);
-	border: 1px solid #24304f;
-	border-radius: 16px;
-	width: 100%;
-}
+.form-section { background: rgba(255,255,255,0.04); border: 1px solid #24304F; border-radius: 16px; width: 100%; }
 .form-section.wide { max-width: none; }
 .form-section.relaxed { padding: 1.25rem; }
 
@@ -102,3 +98,76 @@ input:focus, textarea:focus, select:focus { outline: 2px solid #64C7C9; outline-
 	.admin-dense .grid { gap: 1rem; }
 	.admin-dense .grid .form-section { padding: calc(var(--adm-pad) + 0.25rem); }
 }
+
+/* Scoped Admin typography & control sizing
+	 - Ensure all controls (buttons/inputs/selects) inside the Admin area share the same font-size and min-height
+	 - Titles stand out (slightly darker/stronger); body / field text is muted
+*/
+.admin-typography input,
+.admin-typography select,
+.admin-typography textarea,
+.admin-typography button {
+	font-size: 0.9375rem; /* 15px, consistent across controls */
+	padding-top: 0.5rem;
+	padding-bottom: 0.5rem;
+	padding-left: 0.75rem;
+	padding-right: 0.75rem;
+	line-height: 1.2;
+	display: inline-flex;
+	align-items: center;
+	gap: 0.5rem;
+	min-height: 40px; /* unify heights */
+}
+
+.admin-typography button {
+	/* keep buttons visually consistent */
+	min-height: 40px;
+}
+
+/* Toolbar buttons in Admin should match the compact Overview toolbar sizing */
+.admin-typography .toolbar-btn {
+	font-size: 0.75rem; /* 12px, same compact size as Overview toolbar */
+	padding-top: 0.35rem;
+	padding-bottom: 0.35rem;
+	padding-left: 0.6rem;
+	padding-right: 0.6rem;
+	min-height: 30px;
+}
+
+.admin-typography .toolbar-input {
+	font-size: 0.75rem; /* 12px */
+	padding-top: 0.35rem;
+	padding-bottom: 0.35rem;
+	padding-left: 0.6rem;
+	padding-right: 0.6rem;
+	min-height: 30px;
+}
+
+.admin-typography button {
+	justify-content: center; /* center inline-flex content */
+	text-align: center;
+}
+
+/* Titles: slightly stronger/darker */
+/* Headings */
+.admin-typography h1,
+.admin-typography h2,
+.admin-typography h3,
+.admin-typography .font-semibold { color: #FFFFFF; font-weight: 600; }
+
+/* Muted body/field text within admin area */
+.admin-typography label,
+.admin-typography p,
+.admin-typography .text-xs,
+.admin-typography .text-sm,
+.admin-typography input,
+.admin-typography textarea,
+.admin-typography select,
+.admin-typography .form-section { color: #BDC0C3; }
+
+/* Keep explicit utility classes (like text-white) able to override by using normal specificity */
+
+/* Force card titles inside form-section to full white (higher specificity than .text-sm) */
+.admin-typography .form-section > .text-sm.font-semibold,
+.admin-typography .form-section > h2,
+.admin-typography .form-section > .text-sm.font-semibold * { color: #FFFFFF !important; }

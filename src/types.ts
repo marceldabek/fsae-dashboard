@@ -87,3 +87,9 @@ export type LogEvent = {
   actor_uid?: string; // admin user who triggered the event (if available)
   note?: string; // optional human-readable note
 };
+
+// Lightweight daily analytics doc (anonymous). Stored at collection: analytics_daily/{YYYY-MM-DD}
+export type DailyAnalytics = {
+  date: string; // YYYY-MM-DD
+  visits?: number; // total visits (deduped by client heuristic)
+};

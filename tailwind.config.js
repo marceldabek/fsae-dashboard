@@ -1,36 +1,61 @@
 
-/** @type {import('tailwindcss').Config} */
+/**
+ * Lean design token Tailwind config (hard reset to minimal system).
+ * Old color classes (uconn-*, brand.*) removed intentionally.
+ */
 export default {
   content: ["./index.html", "./src/**/*.{ts,tsx}"],
   theme: {
     extend: {
       fontFamily: {
-        sans: ["Inter", "ui-sans-serif", "system-ui", "Segoe UI", "Roboto", "Helvetica", "Arial", "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji"],
+        sans: [
+          "Inter",
+          "ui-sans-serif",
+          "system-ui",
+          "Segoe UI",
+          "Roboto",
+          "Helvetica",
+          "Arial",
+          "Noto Sans"
+        ],
+        mono: [
+          "ui-monospace",
+          "SFMono-Regular",
+          "Menlo",
+          "Monaco",
+          "Consolas",
+          "Liberation Mono",
+          "Courier New",
+          "monospace"
+        ]
       },
       colors: {
-        // Core UI tokens
-        'uconn-blue': '#000E2F',      // Navy blue background
-        'uconn-surface': '#0f1b3a',   // Slightly lighter surface on dark
-        'uconn-text': '#FFFFFF',      // primary text
-        'uconn-muted': '#BDC0C3',     // secondary text
-        'uconn-border': '#24304f',    // borders/dividers
-
-        // Extended palette from user brief
-        brand: {
-          navy: '#000E2F',
-          blue: '#004369',
-          tealGrey: '#79AFBA',
-          teal: '#64C7C9',
-          lightTeal: '#98D7D8',
-          yellow: '#FFDA30',
-          orange: '#EE6921',
-          red: '#BE2D2D',
-          darkGrey: '#7e868C',
-          lightGrey: '#BDC0C3',
-          black: '#000000',
+        bg: '#000E2F',
+        surface: '#0F1B3A',
+        border: '#24304F',
+        text: '#FFFFFF',
+        muted: '#BDC0C3',
+        accent: '#64C7C9',
+        'accent-weak': '#98D7D8',
+        success: '#34D399',
+        warning: '#FACC15',
+        danger: '#BE2D2D',
+        overlay: {
+          6: 'rgba(255,255,255,0.06)',
+          10: 'rgba(255,255,255,0.10)'
         }
+      },
+      fontSize: {
+        xs: ['12px', '18px'],
+        sm: ['14px', '22px'],
+        lg: ['18px', '28px'],
+        '2xl': ['24px', '32px'],
+        tick: ['11px', '14px'] // chart ticks ONLY
+      },
+      letterSpacing: {
+        caps: '0.08em'
       }
-    },
+    }
   },
-  plugins: [],
+  plugins: []
 }

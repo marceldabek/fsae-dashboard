@@ -45,9 +45,9 @@ export default function Dashboard() {
             <table className="min-w-[320px] w-full text-sm">
               <thead>
                 <tr>
-                  <th className="py-2 px-4 text-left text-uconn-muted font-semibold">Rank</th>
-                  <th className="py-2 px-4 text-left text-uconn-muted font-semibold">Name</th>
-                  <th className="py-2 px-4 text-left text-uconn-muted font-semibold">Completed Tasks</th>
+                  <th className="py-2 px-4 text-left text-muted font-semibold uppercase tracking-caps">Rank</th>
+                  <th className="py-2 px-4 text-left text-muted font-semibold uppercase tracking-caps">Name</th>
+                  <th className="py-2 px-4 text-left text-muted font-semibold uppercase tracking-caps">Completed Tasks</th>
                 </tr>
               </thead>
               <tbody>

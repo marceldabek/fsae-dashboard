@@ -33,10 +33,10 @@ export default function Layout() {
   // Load ranked setting once
   // rankedEnabled managed by hook; no manual effect needed
   return (
-  <div className="min-h-[100dvh] bg-uconn-blue bg-app-gradient text-uconn-text">
+  <div className="min-h-[100dvh] bg-bg bg-app-gradient text-text">
       {/* iOS PWA safe area top spacer to avoid visual gap under the status bar */}
   <div style={{ height: 'env(safe-area-inset-top)' }} className="bg-black" />
-  <header className="sticky top-0 z-40 bg-uconn-blue/90 backdrop-blur border-b border-uconn-border">
+  <header className="sticky top-0 z-40 bg-bg/90 backdrop-blur border-b border-border">
         <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
           <Link to="/" className="flex items-center h-10">
             <TeamLogo className="h-8 w-auto" />
@@ -46,7 +46,7 @@ export default function Layout() {
             aria-label={menuOpen ? "Close menu" : "Open menu"}
             aria-expanded={menuOpen}
             onClick={() => setMenuOpen(v => !v)}
-            className="relative inline-flex h-10 w-10 items-center justify-center rounded-md border border-uconn-border/60 bg-black/10 hover:bg-black/20 transition focus:outline-none focus:ring-2 focus:ring-brand-teal/60"
+            className="relative inline-flex h-10 w-10 items-center justify-center rounded-md border border-border/60 bg-overlay-6 hover:bg-overlay-10 transition focus:outline-none focus:ring-2 focus:ring-accent/60"
           >
             {/* Icon */}
             <span className="sr-only">Menu</span>
@@ -74,10 +74,10 @@ export default function Layout() {
         />
         {/* Panel */}
         <aside
-          className={`absolute right-0 top-0 h-full w-[18rem] max-w-[85vw] bg-uconn-blue/95 border-l border-uconn-border shadow-xl transition-transform duration-300 ease-out ${menuOpen ? "translate-x-0" : "translate-x-full"}`}
+          className={`absolute right-0 top-0 h-full w-[18rem] max-w-[85vw] bg-bg/95 border-l border-border shadow-xl transition-transform duration-300 ease-out ${menuOpen ? "translate-x-0" : "translate-x-full"}`}
         >
-          <div className="h-14 px-4 flex items-center justify-between border-b border-uconn-border/60">
-            <span className="text-sm font-medium text-uconn-muted">Menu</span>
+          <div className="h-14 px-4 flex items-center justify-between border-b border-border/60">
+            <span className="text-sm font-medium text-muted uppercase tracking-caps">Menu</span>
             <button
               aria-label="Close menu"
               onClick={() => setMenuOpen(false)}
@@ -98,9 +98,9 @@ export default function Layout() {
             {/* Show Ranked entry only when Ranked mode is enabled */}
             {rankedEnabled && <MenuLink to="/ranked" label="Ranked" />}
             {isAdminUser && <MenuLink to="/admin" label="Admin" />}
-            <div className="my-3 border-t border-uconn-border/60" />
+            <div className="my-3 border-t border-border/60" />
             <label className="flex items-center gap-2 px-3 py-2 text-sm select-none cursor-pointer">
-              <span className="text-uconn-muted">Ranked mode</span>
+              <span className="text-muted uppercase tracking-caps">Ranked mode</span>
               <span className="relative inline-block w-10 h-6 align-middle select-none ml-auto">
                 <input
                   type="checkbox"
@@ -108,8 +108,8 @@ export default function Layout() {
                   onChange={(e)=>updateRankedEnabled(e.target.checked)}
                   className="peer absolute w-10 h-6 opacity-0 cursor-pointer z-10"
                 />
-                <span className="block w-10 h-6 rounded-full transition-colors bg-uconn-surface border border-uconn-border peer-checked:bg-brand-teal/70" />
-                <span className="absolute left-1 top-1 w-4 h-4 rounded-full bg-uconn-muted transition-transform duration-200 peer-checked:translate-x-4 peer-checked:bg-brand-teal shadow" />
+                <span className="block w-10 h-6 rounded-full transition-colors bg-surface border border-border peer-checked:bg-accent/70" />
+                <span className="absolute left-1 top-1 w-4 h-4 rounded-full bg-muted transition-transform duration-200 peer-checked:translate-x-4 peer-checked:bg-accent shadow" />
               </span>
             </label>
             {user ? (
@@ -117,18 +117,18 @@ export default function Layout() {
                 Sign out
               </button>
             ) : (
-              <button onClick={signIn} className="w-full text-left px-3 py-2 rounded-md bg-brand-teal/30 hover:bg-brand-teal/50 transition text-sm">
+              <button onClick={signIn} className="w-full text-left px-3 py-2 rounded-md bg-accent/30 hover:bg-accent/50 transition text-sm text-black">
                 Sign in
               </button>
             )}
           </nav>
-          <div className="mt-auto p-3 text-[11px] text-uconn-muted/80 border-t border-uconn-border/60">
+          <div className="mt-auto p-3 text-tick text-muted/80 border-t border-border/60">
             © UConn FSAE
           </div>
         </aside>
       </div>
     <main className="max-w-6xl mx-auto px-4 py-6"><Outlet /></main>
-      <footer className="py-6 text-center text-xs text-uconn-muted">© UConn FSAE</footer>
+  <footer className="py-6 text-center text-xs text-muted uppercase tracking-caps">© UConn FSAE</footer>
     </div>
   );
 }
@@ -141,9 +141,10 @@ function MenuLink({ to, label }: { to: string; label: string }) {
       className={({ isActive }) =>
         `group flex items-center gap-2 px-3 py-2 rounded-md transition border ${
           isActive
-            ? 'bg-brand-teal/30 border-brand-teal/60 text-white shadow-sm hover:bg-brand-teal/40'
+            // Keep active text white (avoid black on accent background)
+            ? 'bg-accent/30 border-accent/60 text-white shadow-sm hover:bg-accent/40'
             : 'border-transparent hover:bg-black/15'
-        } focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-teal/60`
+  } focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60`
       }
     >
       <span className="relative">

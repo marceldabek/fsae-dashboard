@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { fetchPeople, fetchProjects, fetchTasks, fetchAttendance, palette } from "../lib/firestore";
+import { fetchPeople, fetchProjects, fetchTasks, fetchAttendance, palette, fetchDailyAnalyticsRange } from "../lib/firestore";
 import type { Person, Project, Task, Attendance } from "../types";
 
 // Lazy import Recharts pieces to keep bundle light if page not visited
@@ -22,23 +22,26 @@ export default function Stats() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [attendance, setAttendance] = useState<Attendance[]>([]);
+  const [dailyAnalytics, setDailyAnalytics] = useState<{ date: string; visits?: number }[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let alive = true;
     (async () => {
       try {
-        const [ppl, projs, tks, att] = await Promise.all([
+        const [ppl, projs, tks, att, analytics] = await Promise.all([
           fetchPeople(),
           fetchProjects(),
           fetchTasks(),
           fetchAttendance(),
+          fetchDailyAnalyticsRange(30).catch(() => []),
         ]);
         if (!alive) return;
         setPeople(ppl);
         setProjects(projs);
         setTasks(tks);
         setAttendance(att);
+        setDailyAnalytics(analytics);
       } finally {
         if (alive) setLoading(false);
       }
@@ -47,8 +50,14 @@ export default function Stats() {
   }, []);
 
   const totals = useMemo(() => {
+    // Exclude tasks that belong to archived projects from the general "byStatus" totals
+    const projByIdAll = new Map(projects.map(p => [p.id, p] as const));
     const byStatus = { Todo: 0, "In Progress": 0, Complete: 0 } as Record<Task["status"], number>;
-    for (const t of tasks) byStatus[t.status]++;
+    for (const t of tasks) {
+      const proj = projByIdAll.get(t.project_id);
+      if (proj && (proj as any).archived) continue; // ignore tasks from archived projects for these totals
+      byStatus[t.status]++;
+    }
     return {
       totalTasks: tasks.length,
       byStatus,
@@ -126,11 +135,13 @@ export default function Stats() {
   }, [tasks]);
 
   // Subsystem segmented bars: proportions of Todo / In Progress / Complete across all tasks in the subsystem
+  // Subsystem segmented bars: exclude archived projects so subsystem status reflects active work only
   const subsystemSegments = useMemo(() => {
     const bySubsystem = new Map<string, { todo: number; progress: number; done: number }>();
     const projById = new Map(projects.map(p => [p.id, p] as const));
     for (const t of tasks) {
       const proj = projById.get(t.project_id);
+      if (proj && (proj as any).archived) continue; // ignore archived project tasks for subsystem status
       const key = proj?.subsystem || "Unassigned";
       const entry = bySubsystem.get(key) || { todo: 0, progress: 0, done: 0 };
       if (t.status === "Complete") entry.done += 1;
@@ -211,27 +222,32 @@ export default function Stats() {
     });
   }, [projects, tasks]);
 
-  if (loading) return <div className="text-sm text-uconn-muted">Loading stats…</div>;
+  // Exponential smoothing (alpha=0.3) to soften single-day spikes; one-line update per key
+  const dailyHoursBySubsystemSmooth = useMemo(() => { const rows=dailyHoursBySubsystem; if(!rows.length) return []; const keys=Object.keys(rows[0]).filter(k=>k!=='day'); const alpha=0.3; const prev:Record<string,number>={}; return rows.map(r=>{const o:any={day:r.day}; keys.forEach(k=>o[k]=prev[k]=prev[k]==null?r[k]:alpha*r[k]+(1-alpha)*prev[k]); return o;}); }, [dailyHoursBySubsystem]);
+
+  if (loading) return <div className="text-sm text-muted">Loading stats…</div>;
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">Stats</h1>
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+  {/* Responsive heading: shrink on very small screens */}
+  <h1 className="text-xl sm:text-2xl font-bold uppercase tracking-caps">Stats</h1>
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <StatCard label="Projects" value={totals.totalProjects} />
         <StatCard label="People" value={totals.totalPeople} />
         <StatCard label="Tasks" value={totals.totalTasks} />
         <StatCard label="Tasks Done" value={totals.byStatus["Complete"]} />
         <StatCard label="Unassigned Work" value={`${unassignedHours} ${unassignedHours === 1 ? 'hour' : 'hours'}`} />
+        <StatCard label="Visits Today" value={(dailyAnalytics.find(d => d.date === new Date().toISOString().slice(0,10))?.visits) ?? 0} />
       </div>
 
       <Section title="Tasks completed past 14 days">
         <div className="h-56">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={last14Days} margin={{ left: 8, right: 8, top: 8, bottom: 8 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.10)" />
               <XAxis
                 dataKey="day"
-                tick={{ fill: "#9ca3af", fontSize: 12 }}
+                tick={{ fill: "#BDC0C3", fontSize: 11 }}
                 interval={1}
                 angle={-30}
                 textAnchor="end"
@@ -242,24 +258,25 @@ export default function Stats() {
                   return `${m}/${d}`;
                 }}
               />
-              <YAxis allowDecimals={false} tick={{ fill: "#9ca3af", fontSize: 12 }} />
-              <Tooltip contentStyle={{ background: "#0b1220", border: "1px solid #273042" }} />
-              <Line type="monotone" dataKey="completed" stroke="#34d399" strokeWidth={2} dot={false} />
+              <YAxis allowDecimals={false} tick={{ fill: "#BDC0C3", fontSize: 11 }} />
+              <Tooltip contentStyle={{ background: "#0F1B3A", border: "1px solid rgba(255,255,255,0.10)", borderRadius: 8 }} />
+              <Line type="monotone" dataKey="completed" stroke="#34D399" strokeWidth={2} dot={false} />
             </LineChart>
           </ResponsiveContainer>
         </div>
       </Section>
 
-      <Section title="Completions per week">
+  <Section title="Completions per week">
         <div className="h-56">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={weekly} margin={{ left: 8, right: 8, top: 8, bottom: 8 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
-              <XAxis dataKey="week" hide={weekly.length > 20} tick={{ fill: "#9ca3af", fontSize: 12 }} />
-              <YAxis allowDecimals={false} tick={{ fill: "#9ca3af", fontSize: 12 }} />
-              <Tooltip contentStyle={{ background: "#0b1220", border: "1px solid #273042" }} />
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.10)" />
+              <XAxis dataKey="week" hide={weekly.length > 20} tick={{ fill: "#BDC0C3", fontSize: 11 }} />
+              <YAxis allowDecimals={false} tick={{ fill: "#BDC0C3", fontSize: 11 }} />
+              <Tooltip contentStyle={{ background: "#0F1B3A", border: "1px solid rgba(255,255,255,0.10)", borderRadius: 8 }} />
               <Legend />
-              <Line type="monotone" dataKey="completed" stroke="#34d399" strokeWidth={2} dot={false} />
+      {/* Use accent for weekly, differentiating from daily (success) */}
+      <Line type="monotone" dataKey="completed" stroke="#64C7C9" strokeWidth={2} dot={false} />
             </LineChart>
           </ResponsiveContainer>
         </div>
@@ -269,28 +286,27 @@ export default function Stats() {
 
       <Section title="Subsystem status (task counts)">
         <div className="space-y-2">
-          <div className="text-xs text-uconn-muted flex flex-wrap items-center gap-3">
-            <span className="font-medium text-white/80">Legend (tasks):</span>
-            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-[#34d399] inline-block" /> <span>Complete</span></span>
-            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-[#facc15] inline-block" /> <span>In&nbsp;Progress</span></span>
-            <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-sm bg-[#64748b] inline-block" /> <span>Todo</span></span>
-            <span className="text-[10px] text-uconn-muted/70 ml-auto md:ml-4">Left→Right: Complete · In Progress · Todo</span>
+          <div className="text-xs text-muted flex flex-wrap items-center gap-3 uppercase tracking-caps">
+            <span className="font-semibold text-white">Legend</span>
+            <span className="flex items-center gap-1 normal-case"><span className="w-3 h-3 rounded-sm bg-success inline-block" /> <span className="text-[11px]">Complete</span></span>
+            <span className="flex items-center gap-1 normal-case"><span className="w-3 h-3 rounded-sm bg-warning inline-block" /> <span className="text-[11px]">In&nbsp;Progress</span></span>
+            <span className="flex items-center gap-1 normal-case"><span className="w-3 h-3 rounded-sm bg-muted/40 inline-block" /> <span className="text-[11px]">Todo</span></span>
+            <span className="text-[11px] text-muted/70 ml-auto md:ml-4 normal-case font-normal tracking-normal">Left→Right: Complete · In Progress · Todo</span>
           </div>
           <ul className="space-y-2">
             {subsystemSegments.map(row => (
               <li key={row.subsystem} className="flex items-center gap-3">
                 <div className="w-32 md:w-40 text-sm truncate">{row.subsystem}</div>
-                <div className="flex-1 h-3 rounded bg-white/10 overflow-hidden flex">
-                  {/* Order: green (done) → yellow (in progress) → gray (todo) */}
-                  <div className="h-full" style={{ flexGrow: row.done, flexBasis: 0, background: '#34d399' }} />
-                  <div className="h-full" style={{ flexGrow: row.progress, flexBasis: 0, background: '#facc15' }} />
-                  <div className="h-full" style={{ flexGrow: row.todo, flexBasis: 0, background: '#64748b' }} />
+                <div className="flex-1 h-3 rounded bg-overlay-6 overflow-hidden flex">
+                  <div className="h-full" style={{ flexGrow: row.done, flexBasis: 0, background: '#34D399' }} />
+                  <div className="h-full" style={{ flexGrow: row.progress, flexBasis: 0, background: '#FACC15' }} />
+                  <div className="h-full" style={{ flexGrow: row.todo, flexBasis: 0, background: 'rgba(255,255,255,0.25)' }} />
                 </div>
-                <div className="hidden md:block w-28 text-right text-xs text-uconn-muted">{row.done}/{row.total} done</div>
+                <div className="hidden md:block w-28 text-right text-xs text-muted">{row.done}/{row.total} done</div>
               </li>
             ))}
             {subsystemSegments.length === 0 && (
-              <li className="text-sm text-uconn-muted">No subsystem data</li>
+              <li className="text-sm text-muted">No subsystem data</li>
             )}
           </ul>
         </div>
@@ -302,15 +318,15 @@ export default function Stats() {
         </div>
       </Section>
 
-      <Section title="Daily hours by subsystem (last 30 days)">
+  <Section title="Daily hours by subsystem (last 30 days)">
         <div className="h-72">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={dailyHoursBySubsystem} margin={{ left: 8, right: 8, top: 8, bottom: 8 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.10)" />
               <XAxis
                 dataKey="day"
                 interval={2}
-                tick={{ fill: "#9ca3af", fontSize: 11 }}
+                tick={{ fill: "#BDC0C3", fontSize: 11 }}
                 angle={-30}
                 textAnchor="end"
                 height={60}
@@ -319,12 +335,70 @@ export default function Stats() {
                   return `${m}/${d}`;
                 }}
               />
-              <YAxis allowDecimals={false} tick={{ fill: "#9ca3af", fontSize: 12 }} label={{ value: "Hours", angle: -90, position: 'insideLeft', fill: '#9ca3af', fontSize: 12 }} />
-              <Tooltip contentStyle={{ background: "#0b1220", border: "1px solid #273042" }} />
+              <YAxis allowDecimals={false} tick={{ fill: "#BDC0C3", fontSize: 11 }} label={{ value: "Hours", angle: -90, position: 'insideLeft', fill: '#BDC0C3', fontSize: 11 }} />
+              <Tooltip contentStyle={{ background: "#0F1B3A", border: "1px solid rgba(255,255,255,0.10)", borderRadius: 8 }} />
               <Legend />
-              {Array.from(new Set(projects.map(p => p.subsystem || "Unassigned")).values()).sort().map((sub, i) => (
-                <Line key={sub} type="monotone" dataKey={sub} stroke={palette(i)} strokeWidth={2} dot={false} />
-              ))}
+              {Array.from(new Set(projects.map(p => p.subsystem || "Unassigned")).values()).sort().map((sub, i) => {
+                // Extended deterministic palette derived from accent + success + warning variants
+                const cycle = ['#64C7C9', '#98D7D8', '#34D399', '#FACC15', '#3BA7A9', '#2E7D7F'];
+                return <Line key={sub} type="monotone" dataKey={sub} stroke={cycle[i % cycle.length]} strokeWidth={2} dot={false} />;
+              })}
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      </Section>
+
+  <Section title="Daily hours by subsystem (smoothed)">
+        <div className="h-72">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={dailyHoursBySubsystemSmooth} margin={{ left: 8, right: 8, top: 8, bottom: 8 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.10)" />
+              <XAxis
+                dataKey="day"
+                interval={2}
+                tick={{ fill: "#BDC0C3", fontSize: 11 }}
+                angle={-30}
+                textAnchor="end"
+                height={60}
+                tickFormatter={(v: string) => {
+                  const [y,m,d] = v.split('-');
+                  return `${m}/${d}`;
+                }}
+              />
+              <YAxis allowDecimals={false} tick={{ fill: "#BDC0C3", fontSize: 11 }} label={{ value: "Smoothed Hours", angle: -90, position: 'insideLeft', fill: '#BDC0C3', fontSize: 11 }} />
+              <Tooltip contentStyle={{ background: "#0F1B3A", border: "1px solid rgba(255,255,255,0.10)", borderRadius: 8 }} />
+              <Legend />
+              {Object.keys(dailyHoursBySubsystemSmooth[0] || {}).filter(k => k !== 'day').map((sub, i) => {
+                const cycle = ['#64C7C9', '#98D7D8', '#34D399', '#FACC15', '#3BA7A9', '#2E7D7F'];
+                return <Line key={sub} type="monotone" dataKey={sub} stroke={cycle[i % cycle.length]} strokeWidth={2} dot={false} />;
+              })}
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+  <p className="mt-2 text-tick text-muted">Exponential smoothing (α=0.3) dampens spikes from large task completions while keeping trends clear. Raw totals (previous chart) remain the authoritative sum.</p>
+      </Section>
+
+  <Section title="Daily visits (last 30 days)">
+        <div className="h-56">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={dailyAnalytics} margin={{ left: 8, right: 8, top: 8, bottom: 8 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.10)" />
+              <XAxis
+                dataKey="date"
+                interval={3}
+                tick={{ fill: "#BDC0C3", fontSize: 11 }}
+                angle={-30}
+                textAnchor="end"
+                height={60}
+                tickFormatter={(v: string) => {
+                  const [y,m,d] = v.split('-');
+                  return `${m}/${d}`;
+                }}
+              />
+              <YAxis allowDecimals={false} tick={{ fill: "#BDC0C3", fontSize: 11 }} />
+              <Tooltip contentStyle={{ background: "#0F1B3A", border: "1px solid rgba(255,255,255,0.10)", borderRadius: 8 }} />
+              {/* Use accent-weak to differentiate from weekly completions */}
+              <Line type="monotone" dataKey="visits" stroke="#98D7D8" strokeWidth={2} dot={false} />
             </LineChart>
           </ResponsiveContainer>
         </div>
@@ -335,8 +409,9 @@ export default function Stats() {
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-lg border border-uconn-border bg-black/10 p-4">
-      <h2 className="text-lg font-medium mb-3">{title}</h2>
+    <section className="rounded-lg border border-border bg-overlay-6 p-4">
+      {/* Section title shrinks on narrow phones */}
+      <h2 className="text-base sm:text-lg font-semibold mb-3 uppercase tracking-caps">{title}</h2>
       {children}
     </section>
   );
@@ -344,9 +419,10 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 function StatCard({ label, value }: { label: string; value: number | string }) {
   return (
-    <div className="rounded-md border border-uconn-border bg-black/20 p-3 h-full flex flex-col justify-between">
-      <div className="text-xs text-uconn-muted uppercase tracking-wide">{label}</div>
-      <div className="text-2xl font-semibold text-center leading-tight">{value}</div>
+    <div className="rounded-md border border-border bg-overlay-6 p-3 h-full flex flex-col justify-between">
+      <div className="text-[11px] sm:text-xs text-muted uppercase tracking-caps font-semibold">{label}</div>
+      {/* Value size responsive: smaller on very small screens */}
+      <div className="text-lg sm:text-2xl font-bold text-center leading-tight">{value}</div>
     </div>
   );
 }

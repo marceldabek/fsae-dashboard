@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { fetchPeople, fetchProjects, fetchTasks, fetchSettings, fetchLogsForPerson } from "../lib/firestore";
-import type { Person, Project, Task, RankLevel, LogEvent } from "../types";
+import { fetchPeople, fetchProjects, fetchTasks, fetchSettings, fetchLogsForPerson, fetchAttendance } from "../lib/firestore";
+import type { Person, Project, Task, RankLevel, LogEvent, Attendance } from "../types";
 import { useRankedEnabled } from "../hooks/useRankedEnabled";
 
 export default function PersonDetail() {
@@ -11,36 +11,64 @@ export default function PersonDetail() {
   const [person, setPerson] = useState<Person | null>(null);
   // All projects (we'll derive which to show)
   const [projects, setProjects] = useState<Project[]>([]);
+  const [people, setPeople] = useState<Person[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]); // tasks assigned to this person
   const [allTasks, setAllTasks] = useState<Task[]>([]); // all tasks (for leaderboard rank)
   const [settings, setSettings] = useState<{rulebook_url?: string; sharepoint_url?: string} | null>(null);
   const [logs, setLogs] = useState<LogEvent[]>([]); // person-specific logs
+  const [attendance, setAttendance] = useState<Attendance[]>([]);
+  const [streak, setStreak] = useState<number>(0);
   const [rankedEnabled] = useRankedEnabled();
 
   useEffect(() => {
     (async () => {
-      const [people, projects, allTasks, settings] = await Promise.all([
-        fetchPeople(), fetchProjects(), fetchTasks(), fetchSettings()
+      const [people, projects, allTasks, settings, attendance] = await Promise.all([
+        fetchPeople(), fetchProjects(), fetchTasks(), fetchSettings(), fetchAttendance()
       ]);
+      setPeople(people);
       const p = people.find(pp => pp.id === id) || null;
       setPerson(p);
       setProjects(projects);
       setAllTasks(allTasks);
       setTasks(allTasks.filter(t => t.assignee_id === id));
       setSettings(settings);
+      setAttendance(attendance);
       if (id) {
         try { setLogs(await fetchLogsForPerson(id)); } catch {}
       }
     })();
   }, [id]);
 
+  // Compute attendance streak (consecutive meeting days with attendance, counting today if applicable)
+  useEffect(() => {
+    if (!person) return;
+    const meetingDays = new Set([2,4,6]); // Tue/Thu/Sat
+    const datesForPerson = new Set(attendance.filter(a => a.person_id === person.id).map(a => a.date));
+    // Walk backwards from today; if today not meeting day skip to previous day; count consecutive meeting days present.
+    let streakCount = 0;
+    const cursor = new Date();
+    for (let i = 0; i < 120; i++) { // safety cap
+      const dayOfWeek = cursor.getDay();
+      const iso = cursor.toISOString().slice(0,10);
+      if (meetingDays.has(dayOfWeek)) {
+        if (datesForPerson.has(iso)) streakCount++;
+        else break; // gap
+      }
+      cursor.setDate(cursor.getDate() - 1);
+    }
+    setStreak(streakCount);
+  }, [attendance, person]);
+
   if (!person) return <div className="text-sm">Loading…</div>;
 
   // Stats
-  // Derive list of projects to display: owned OR has at least one task assigned to this person
-  const displayProjects = projects.filter(pr =>
-    pr.owner_ids?.includes(id!) || allTasks.some(t => t.project_id === pr.id && t.assignee_id === id)
-  );
+  // Derive list of projects to display: show if the person is an owner OR they have at least one non-complete task
+  // assigned to them for the project. If all their assigned tasks on a project are complete, hide it.
+  const displayProjects = projects.filter(pr => {
+    if (pr.owner_ids?.includes(id!)) return true;
+    const assignedTasks = allTasks.filter(t => t.project_id === pr.id && t.assignee_id === id);
+    return assignedTasks.some(t => t.status !== 'Complete');
+  });
   const numProjects = displayProjects.length;
   const numTasks = tasks.length;
   const numTasksTodo = tasks.filter(t => t.status !== "Complete").length;
@@ -83,32 +111,41 @@ export default function PersonDetail() {
               <span className="truncate">{person.name}</span>
             </div>
             {person.discord && (
-              <div className="text-xs text-uconn-muted leading-snug truncate">@{person.discord.replace(/^@/, '')}</div>
+              <div className="text-xs text-muted leading-snug truncate uppercase tracking-caps">@{person.discord.replace(/^@/, '')}</div>
             )}
-            <div className="text-xs text-uconn-muted leading-snug">{person.year || person.role}</div>
+            <div className="text-xs text-muted leading-snug uppercase tracking-caps">{person.year || person.role}</div>
           </div>
           {rankedEnabled && person.rank && (
             <img src={rankIcon(person.rank)} alt={person.rank} className="shrink-0 h-20 w-20 md:h-24 md:w-24 object-contain -mt-2" />
           )}
         </div>
-        {person.skills && person.skills.length > 0 && (
-          <div className="text-sm">Skills: {person.skills.join(", ")}</div>
-        )}
+  {/* role/year shown above; badges are displayed below Projects per request */}
         <div className="flex gap-4 mt-1">
           <div className="text-center">
             <div className="text-lg font-semibold">{numProjects}</div>
-            <div className="text-xs text-uconn-muted">Projects</div>
+            <div className="text-xs text-muted uppercase tracking-caps">Projects</div>
           </div>
           <div className="text-center">
             <div className="text-lg font-semibold">{numTasks}</div>
-            <div className="text-xs text-uconn-muted">Tasks</div>
+            <div className="text-xs text-muted uppercase tracking-caps">Tasks</div>
           </div>
           <div className="text-center">
             <div className="text-lg font-semibold">{numTasksTodo}</div>
-            <div className="text-xs text-uconn-muted">To Do</div>
+            <div className="text-xs text-muted uppercase tracking-caps">To Do</div>
+          </div>
+          <div className="text-center flex flex-col items-center">
+            <div className="text-lg font-semibold flex items-center gap-1">
+              {streak}
+              {streak > 0 && (
+                <svg className="h-4 w-4 text-orange-400" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                  <path d="M12 2c.7 2.4 2.1 4.2 4.2 5.5 2 .3 3.3 1.5 3.8 3.6.5 2.1-.2 4-2.1 5.7-.6-1.6-1.5-2.8-2.9-3.6.3 2.2-.5 4-2.4 5.4-1.9 1.4-3.9 1.5-6 .4-2.1-1.1-3.1-2.9-3.1-5.3 0-1.5.5-2.8 1.6-3.9 1.1-1.1 2.4-1.7 3.9-1.7-.4 1.3-.2 2.4.5 3.5.7 1 1.6 1.4 2.7 1.2 1.1-.2 1.8-.9 2-2 .2-1.1-.2-2.1-1.1-3-.9-.9-1.5-2-1.6-3.2-.1-1.2.3-2.4 1.1-3.7Z" />
+                </svg>
+              )}
+            </div>
+            <div className="text-xs text-muted uppercase tracking-caps">Streak</div>
           </div>
         </div>
-  <span className="absolute bottom-4 right-6 text-sm text-uconn-muted/90 tracking-wide">{taskHours}hrs</span>
+  <span className="absolute bottom-4 right-6 text-sm text-muted/90 tracking-caps">{taskHours}hrs</span>
       </div>
 
       {/* Quick Links Card */}
@@ -156,21 +193,53 @@ export default function PersonDetail() {
               <li key={p.id} className="rounded-xl bg-white/10 border border-white/10 p-3">
                 <div className="flex items-center justify-between">
                   <Link className="underline font-semibold" to={`/project/${p.id}`}>{p.name}</Link>
-                  <div className="text-xs text-uconn-muted">{done}/{total} · {percent}%</div>
+                  <div className="text-xs text-muted uppercase tracking-caps">{done}/{total} · {percent}%</div>
                 </div>
-                <div className="text-xs text-uconn-muted">
-                  {p.description || "—"}
-                  {p.due_date && <> · Due {due}</>}
+                <div className="text-xs text-muted uppercase tracking-caps">
+                  {p.description ? p.description : null}
                 </div>
-                {ptasksAll.length>0 && (
-                  <ul className="mt-2 list-disc pl-5 text-sm">
-                    {ptasksAll.map(t => <li key={t.id}>{t.description} <span className="text-uconn-muted">({t.status})</span></li>)}
+                {p.due_date && (
+                  <div className="text-xs text-muted mt-1 uppercase tracking-caps">Due {due}</div>
+                )}
+                {/* Show only open tasks (not Complete) and style them similar to ProjectDetail */}
+                {ptasksAll.filter(t => t.status !== 'Complete').length > 0 && (
+                  <ul className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {ptasksAll.filter(t => t.status !== 'Complete').map(t => {
+                      const color = t.status === "In Progress" ? "bg-yellow-400" : "bg-red-500";
+                      return (
+                        <li key={t.id} className="relative flex flex-col justify-between gap-2 rounded bg-surface border border-border p-3">
+                          <div className="min-w-0">
+                            <div className="font-medium text-sm truncate" title={t.description}>{t.description}</div>
+                            <div className="text-tick text-muted flex gap-2 items-center mt-0.5">
+                              <span className="capitalize">{t.status}</span>
+                              <span>·</span>
+                              <span>{t.assignee_id ? `@${(people.find(pp => pp.id === t.assignee_id)?.name) || 'Assignee'}` : 'Unassigned'}</span>
+                            </div>
+                          </div>
+                          <span className={`absolute top-3 right-3 w-3.5 h-3.5 rounded-full ${color} shadow`} aria-hidden />
+                        </li>
+                      );
+                    })}
                   </ul>
                 )}
               </li>
             );
           })}
         </ul>
+      </div>
+
+      {/* Badges Card (placed under Projects and above Ranked History) */}
+      <div className="rounded-2xl bg-white/5 border border-white/10 p-4">
+        <h2 className="font-semibold mb-2">Badges</h2>
+        {person.skills && person.skills.length > 0 ? (
+          <div className="flex flex-wrap gap-2">
+            {person.skills.map((s, i) => (
+              <span key={i} className="text-xs px-3 py-1 rounded bg-accent/10 border border-accent/30 text-accent font-medium uppercase tracking-caps">{s}</span>
+            ))}
+          </div>
+        ) : (
+          <div className="text-xs text-muted uppercase tracking-caps">No badges yet.</div>
+        )}
       </div>
 
   {/* Bottom two-column area: Ranked History (left) & Points History (right) */}
@@ -180,17 +249,17 @@ export default function PersonDetail() {
       <div className="rounded-2xl bg-white/5 border border-white/10 p-4">
         <h2 className="font-semibold mb-2">Ranked History</h2>
         {history.length === 0 ? (
-          <div className="text-xs text-uconn-muted">No rank changes yet.</div>
+          <div className="text-xs text-muted uppercase tracking-caps">No rank changes yet.</div>
         ) : (
           <ul className="space-y-2 text-sm">
             {history.map((h, i) => (
               <li key={i} className="flex items-center gap-2">
-                <span className="text-xs text-uconn-muted w-28">{new Date(h.ts).toLocaleDateString('en-US')}</span>
+                <span className="text-xs text-muted w-28 uppercase tracking-caps">{new Date(h.ts).toLocaleDateString('en-US')}</span>
                 <span className="inline-flex items-center gap-1">
                   <img src={rankIcon(h.from)} alt={h.from} className="h-4 w-4 object-contain" />
                   <span>{h.from}</span>
                 </span>
-                <span className="text-uconn-muted">→</span>
+                <span className="text-muted">→</span>
                 <span className="inline-flex items-center gap-1">
                   <img src={rankIcon(h.to)} alt={h.to} className="h-4 w-4 object-contain" />
                   <span>{h.to}</span>
@@ -205,7 +274,7 @@ export default function PersonDetail() {
     <div className="rounded-2xl bg-white/5 border border-white/10 p-4">
       <h2 className="font-semibold mb-2">Points History</h2>
       {logs.length === 0 ? (
-        <div className="text-xs text-uconn-muted">No point events yet.</div>
+  <div className="text-xs text-muted uppercase tracking-caps">No point events yet.</div>
       ) : (
         <ul className="space-y-2 text-sm max-h-72 overflow-auto pr-1">
           {logs
@@ -213,12 +282,12 @@ export default function PersonDetail() {
             .slice(0, 100)
             .map((l, i) => (
               <li key={l.id || i} className="flex items-start gap-2">
-                <span className="text-[11px] text-uconn-muted w-24 shrink-0">
+                <span className="text-tick text-muted w-24 shrink-0">
                   {new Date(l.ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                 </span>
                 <span className="flex-1">
                   <span className="text-white/90">{l.note || l.type}</span>{' '}
-                  {typeof l.points === 'number' && <span className="text-brand-teal font-semibold">(+{l.points})</span>}
+                  {typeof l.points === 'number' && <span className="text-accent font-semibold">(+{l.points})</span>}
                 </span>
               </li>
             ))}

@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
+import PersonSelectPopover from "../components/PersonSelectPopover";
+import TaskCreateCard from "../components/TaskCreateCard";
 import { useAuth } from "../hooks/useAuth";
-import { isAdminUid } from "../admin";
+import { isAdminUid, isLeadUid, canViewAdminTab, AdminTab } from "../admin";
 import type { Person, Project, RankLevel, RankedSettings } from "../types";
 import {
   fetchPeople,
@@ -21,7 +23,9 @@ import {
 
 export default function Admin() {
   const user = useAuth();
-  const isAdmin = isAdminUid(user?.uid || null);
+  const uid = user?.uid || null;
+  const isAdmin = isAdminUid(uid);
+  const isLead = isLeadUid(uid) && !isAdmin; // lead but not full admin
 
   // Data
   const [people, setPeople] = useState<Person[]>([]);
@@ -55,7 +59,7 @@ export default function Admin() {
   const [tStatus, setTStatus] = useState<"Todo" | "In Progress" | "Complete">("In Progress");
   const [tAssignee, setTAssignee] = useState<string>("");
   const [tPoints, setTPoints] = useState<number|"">("");
-  const [attendeeId, setAttendeeId] = useState<string>("");
+  const [attendeeIds, setAttendeeIds] = useState<string[]>([]);
 
   // Admin UI helpers
   const [peopleSearch, setPeopleSearch] = useState("");
@@ -66,7 +70,7 @@ export default function Admin() {
   const [admSortDir, setAdmSortDir] = useState<"asc"|"desc">("asc");
   const [admShowSubsystemMenu, setAdmShowSubsystemMenu] = useState(false);
   const [admShowSortMenu, setAdmShowSortMenu] = useState(false);
-  const [activeTab, setActiveTab] = useState<"people" | "projects" | "settings" | "ranked">("people");
+  const [activeTab, setActiveTab] = useState<AdminTab>("people");
   const [showResetModal, setShowResetModal] = useState(false);
   const [resetPassword, setResetPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -138,6 +142,17 @@ export default function Admin() {
     }
   }
 
+  // Generic reload for people/projects after creating a task
+  async function reloadAll() {
+    try {
+      const [pe, pr] = await Promise.all([fetchPeople(), fetchProjects()]);
+      setPeople(pe);
+      setProjects(pr);
+    } catch (e) {
+      console.error("Reload failed", e);
+    }
+  }
+
   async function handleFullReset() {
     try {
       await fullSystemReset();
@@ -152,18 +167,12 @@ export default function Admin() {
 
   async function handleCreatePerson() {
     try {
-  const id = await addPerson({
+      const id = await addPerson({
         name: pName.trim(),
-        year: pYear,
-        role: pRole.trim() || undefined,
-        skills: pSkills.split(",").map((s) => s.trim()).filter(Boolean),
         discord: pDiscord.trim() || undefined,
       } as any);
       setPeople(await fetchPeople());
       setPName("");
-      setPYear("Senior");
-      setPRole("");
-      setPSkills("");
       setPDiscord("");
   showToast("Person saved");
     } catch (e: any) {
@@ -257,120 +266,131 @@ export default function Admin() {
     return () => window.removeEventListener("keydown", handleKey);
   }, []);
 
-  if (!isAdmin) return (<div><h1 className="text-2xl font-semibold">Admin</h1><p className="text-sm text-uconn-muted mt-2">You must be signed in as admin to access this page.</p></div>);
+  // Ensure activeTab always permitted for current role
+  useEffect(() => {
+    if (!canViewAdminTab(uid, activeTab)) {
+      setActiveTab("people");
+    }
+  }, [uid, activeTab]);
+
+  // Gate entire page: allow leads (limited) & full admins
+  if (!isLeadUid(uid)) return (<div><h1 className="text-2xl font-bold uppercase tracking-caps">Admin</h1><p className="text-sm text-muted mt-2">You must be signed in as an admin or lead to access this page.</p></div>);
 
   return (
-    <div className="max-w-6xl mx-auto px-3 sm:px-4">
+  <div className="max-w-6xl mx-auto px-3 sm:px-4 overflow-x-hidden admin-typography">
       {/* Title inline above a sleek tab bar */}
       <h1 className="text-2xl font-semibold mb-1">Admin</h1>
       {/* Tab bar without filled background; keeps underline across full width */}
       {toast && (
-        <div className="fixed bottom-4 right-4 z-50 px-4 py-2 rounded bg-brand-teal text-black shadow-lg text-sm font-medium animate-fade-in">
+  <div className="fixed bottom-4 left-4 z-50 px-4 py-2 rounded bg-accent text-black shadow-lg text-sm font-medium animate-fade-in">
           {toast}
         </div>
       )}
 
       {/* Tabs */}
-  <div className="sticky top-0 z-30 -mx-3 sm:-mx-4 px-3 sm:px-4 bg-uconn-blue/60 backdrop-blur border-b border-uconn-border/60 overflow-x-auto h-scroll-tabs">
-        <nav className="flex gap-2 sm:gap-3 h-11 items-end min-w-max" role="tablist">
-          <button
-            role="tab"
-            aria-selected={activeTab === 'people'}
-            onClick={() => setActiveTab('people')}
-            className={`px-3 pb-2 pt-2 border-b-2 ${activeTab==='people' ? 'border-brand-teal text-white' : 'border-transparent text-uconn-muted hover:text-white'}`}
-          >
-            People
-          </button>
-          <button
-            role="tab"
-            aria-selected={activeTab === 'projects'}
-            onClick={() => setActiveTab('projects')}
-            className={`px-3 pb-2 pt-2 border-b-2 ${activeTab==='projects' ? 'border-brand-teal text-white' : 'border-transparent text-uconn-muted hover:text-white'}`}
-          >
-            Projects & Tasks
-          </button>
-          <button
-            role="tab"
-            aria-selected={activeTab === 'settings'}
-            onClick={() => setActiveTab('settings')}
-            className={`px-3 pb-2 pt-2 border-b-2 ${activeTab==='settings' ? 'border-brand-teal text-white' : 'border-transparent text-uconn-muted hover:text-white'}`}
-          >
-            Global Settings
-          </button>
-          <button
-            role="tab"
-            aria-selected={activeTab === 'ranked'}
-            onClick={() => setActiveTab('ranked')}
-            className={`px-3 pb-2 pt-2 border-b-2 ${activeTab==='ranked' ? 'border-brand-teal text-white' : 'border-transparent text-uconn-muted hover:text-white'}`}
-          >
-            Ranked Settings
-          </button>
+  <div className="sticky top-0 z-30 px-3 sm:px-4 pt-1 bg-bg/70 backdrop-blur border-b border-border/60 overflow-x-auto h-scroll-tabs no-fade">
+        <nav className="flex gap-2 sm:gap-3 h-11 items-end min-w-max whitespace-nowrap" role="tablist">
+          {(["people","projects","settings","ranked"] as AdminTab[])
+            .filter(tab => canViewAdminTab(uid, tab))
+            .map(tab => {
+              const label = tab === "people" ? "People" : tab === "projects" ? "Projects & Tasks" : tab === "settings" ? "Global Settings" : "Ranked Settings";
+              return (
+                <button
+                  key={tab}
+                  role="tab"
+                  aria-selected={activeTab === tab}
+                  onClick={() => setActiveTab(tab)}
+                  className={`px-3 pb-2 pt-2 border-b-2 ${activeTab===tab ? 'border-accent text-white' : 'border-transparent text-muted hover:text-white'}`}
+                >
+                  {label}
+                </button>
+              );
+            })}
         </nav>
       </div>
+
+      {/* Auto-correct activeTab if role changes (e.g., demoted while viewing restricted tab) */}
+      { !canViewAdminTab(uid, activeTab) && (
+        <div className="mt-4 text-xs text-red-300">You no longer have access to the {activeTab} tab. Showing People tab.</div>
+      ) }
 
       {activeTab === 'people' && (
         <div role="tabpanel" className="mt-4">
           <div className="grid md:grid-cols-2 gap-6">
             <section className="space-y-2">
-              <h2 className="font-semibold">Create Person</h2>
+              {/* Create profile card */}
               <div className="form-section p-4 space-y-3">
+                <div className="text-sm font-semibold text-white">Create profile</div>
                 <input className="px-3 py-2 rounded w-full" placeholder="Name" value={pName} onChange={(e) => setPName(e.target.value)} />
-                <div className="flex flex-col sm:flex-row gap-3">
-                  <select className="px-3 py-2 rounded dark-select" value={pYear} onChange={(e) => setPYear(e.target.value)}>
-                    <option>Freshman</option>
-                    <option>Sophomore</option>
-                    <option>Junior</option>
-                    <option>Senior</option>
-                    <option>Graduate</option>
-                  </select>
-                  <input className="px-3 py-2 rounded flex-1" placeholder="Role (optional)" value={pRole} onChange={(e) => setPRole(e.target.value)} />
-                </div>
-                <input className="px-3 py-2 rounded w-full" placeholder="Skills (comma-separated)" value={pSkills} onChange={(e) => setPSkills(e.target.value)} />
                 <input className="px-3 py-2 rounded w-full" placeholder="Discord (e.g., username)" value={pDiscord} onChange={(e) => setPDiscord(e.target.value)} />
-                <button onClick={handleCreatePerson} className="px-3 py-2 rounded bg-white/10 border border-uconn-border">Save Person</button>
+                <button
+                  onClick={async()=>{
+                    if(!pName.trim()) { showToast('Enter a name'); return; }
+                    await handleCreatePerson();
+                  }}
+                  disabled={!pName.trim()}
+                  className={`px-3 py-2 rounded w-full border border-border text-sm text-center ${pName.trim() ? 'bg-overlay-6' : 'bg-overlay-6 opacity-50 cursor-not-allowed'}`}>
+                  Create profile
+                </button>
+              </div>
 
-                {/* Quick attendance bar (always 10 points) */}
-                <div className="pt-3 border-t border-white/10 mt-3">
-                  <div className="text-xs text-uconn-muted mb-1">Quick attendance</div>
-                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                    <input
-                      type="date"
-                      className="px-2.5 py-1.5 rounded text-sm bg-white/5 border border-white/10"
-                      value={attendanceDate}
-                      onChange={(e)=>setAttendanceDate(e.target.value)}
+              {/* Quick attendance card */}
+              <div className="form-section p-4 space-y-3">
+                <div className="text-sm font-semibold text-white">Quick attendance</div>
+
+                <input
+                  type="date"
+                  className="px-2.5 py-1.5 rounded text-sm bg-white/5 border border-white/10 w-full"
+                  value={attendanceDate}
+                  onChange={(e)=>setAttendanceDate(e.target.value)}
+                />
+
+                <div className="grid grid-cols-2 gap-2 items-stretch">
+                  <div>
+                    <PersonSelectPopover
+                      people={people}
+                      mode="multi"
+                      selectedIds={attendeeIds}
+                      onAdd={(id) => setAttendeeIds(prev => prev.includes(id) ? prev : [...prev, id])}
+                      onRemove={(id) => setAttendeeIds(prev => prev.filter(x => x !== id))}
+                      triggerLabel={attendeeIds.length ? `${attendeeIds.length} selected` : 'Select person…'}
+                      buttonClassName="w-full px-2.5 py-1.5 rounded dark-select text-sm"
+                      maxItems={50}
+                      allowScroll={true}
                     />
-                    <select
-                      className="px-2.5 py-1.5 rounded dark-select text-sm flex-1"
-                      value={attendeeId}
-                      onChange={(e)=>setAttendeeId(e.target.value)}
-                    >
-                      <option value="">Select person…</option>
-                      {people.slice().sort((a,b)=>a.name.localeCompare(b.name)).map(p => (
-                        <option key={p.id} value={p.id}>{p.name}</option>
-                      ))}
-                    </select>
+                  </div>
+                  <div>
                     <button
-                      className="px-2.5 py-1.5 rounded border border-uconn-border bg-white/10 text-xs whitespace-nowrap"
+                      className={`w-full px-2.5 py-1.5 rounded border border-border text-sm text-center ${attendeeIds.length ? 'bg-overlay-6' : 'bg-overlay-6 opacity-50 cursor-not-allowed'}`}
+                      disabled={attendeeIds.length === 0}
                       onClick={async()=>{
-                        if(!attendeeId) { showToast('Select a person'); return; }
+                        if(!attendeeIds || attendeeIds.length === 0) { showToast('Select at least one person'); return; }
                         const date = attendanceDate || new Date().toISOString().slice(0,10);
                         try {
-                          const personName = people.find(p=>p.id===attendeeId)?.name || 'Attendance';
-                          await addAttendance({ person_id: attendeeId, date, points: 10 });
-                          showToast(`${personName} marked present (+10 pts)`);
-                          // Reset after toast so message always shows for the previous selection
+                          const results = await Promise.allSettled(attendeeIds.map(id => addAttendance({ person_id: id, date, points: 10 })));
+                          const successNames: string[] = [];
+                          const duplicateNames: string[] = [];
+                          const errorNames: string[] = [];
+                          results.forEach((r, i) => {
+                            const id = attendeeIds[i];
+                            const name = people.find(p=>p.id===id)?.name || id;
+                            if (r.status === 'fulfilled') successNames.push(name);
+                            else {
+                              const err: any = r.reason;
+                              if (err?.code === 'DUPLICATE_ATTENDANCE' || err?.message === 'DUPLICATE_ATTENDANCE') duplicateNames.push(name);
+                              else errorNames.push(name);
+                            }
+                          });
+                          if (successNames.length > 0) showToast(`${successNames.length} marked present (+10 pts)`);
+                          if (duplicateNames.length > 0) showToast(`${duplicateNames.join(', ')} already marked for ${date}`);
+                          if (errorNames.length > 0) showToast(`Failed for: ${errorNames.join(', ')}`);
                           setTimeout(()=>{
-                            setAttendeeId('');
+                            setAttendeeIds([]);
                             setAttendanceDate(new Date().toISOString().slice(0,10));
                           }, 0);
                         } catch (e:any) {
-                          if (e?.code === 'DUPLICATE_ATTENDANCE' || e?.message === 'DUPLICATE_ATTENDANCE') {
-                            const personName = people.find(p=>p.id===attendeeId)?.name || 'Person';
-                            showToast(`${personName} already marked for ${date}`);
-                          } else {
-                            console.error(e);
-                            showToast('Attendance failed');
-                          }
+                          console.error(e);
+                          showToast('Attendance failed');
                         }
                       }}
                     >Give 10 pts</button>
@@ -380,8 +400,10 @@ export default function Admin() {
             </section>
             <section className="space-y-2">
               <div className="flex items-center justify-between mb-2">
-                <h2 className="font-semibold">People</h2>
-                <input className="px-3 py-2 rounded text-sm w-56" placeholder="Search people…" value={peopleSearch} onChange={(e)=>setPeopleSearch(e.target.value)} />
+                <h2 className="font-semibold truncate">Edit profiles</h2>
+                <div className="ml-4">
+                  <input className="px-3 py-2 rounded text-sm w-44 sm:w-56" placeholder="Search people…" value={peopleSearch} onChange={(e)=>setPeopleSearch(e.target.value)} />
+                </div>
               </div>
               <div className="space-y-4">
                 {people
@@ -393,9 +415,10 @@ export default function Admin() {
                   .sort((a,b)=>a.name.localeCompare(b.name))
                   .map((p) => (
                     <details key={p.id} className="rounded-xl bg-white/5 border border-white/10">
-                      <summary className="cursor-pointer font-medium px-3 py-2 flex items-center justify-between">
+                      <summary className="cursor-pointer font-medium px-3 py-2 flex items-center justify-between gap-2">
                         <span className="truncate">{p.name}</span>
-                        <span className="text-xs text-uconn-muted ml-2 truncate">{p.role || p.year || ""}</span>
+                        {/* Constrain role text so long roles don't widen card */}
+                        <span className="text-xs text-muted ml-2 max-w-[8rem] md:max-w-[10rem] min-w-0 truncate uppercase tracking-caps">{p.role || p.year || ""}</span>
                       </summary>
                       <div className="px-3 pb-3 mt-1 grid sm:grid-cols-2 gap-4">
                         <input className="px-3 py-2 rounded" value={p.name} onChange={(e) => setPeople((prev) => prev.map((x) => (x.id === p.id ? { ...x, name: e.target.value } : x)))} />
@@ -411,7 +434,7 @@ export default function Admin() {
                         <input className="px-3 py-2 rounded sm:col-span-2" placeholder="Skills (comma-separated)" value={(p.skills || []).join(", ")} onChange={(e) => setPeople((prev) => prev.map((x) => x.id === p.id ? { ...x, skills: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) } : x))} />
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:col-span-2 items-end">
                           <div>
-                            <label className="text-xs text-uconn-muted">Rank</label>
+                            <label className="text-xs text-muted uppercase tracking-caps">Rank</label>
                             <select className="mt-1 px-3 py-2 rounded w-full dark-select" value={(p as any).rank || "Bronze"} onChange={(e)=> setPeople(prev=>prev.map(x=>x.id===p.id?{...x, rank: e.target.value as any}:x))}>
                               <option>Bronze</option>
                               <option>Silver</option>
@@ -421,7 +444,7 @@ export default function Admin() {
                             </select>
                           </div>
                           <div>
-                            <label className="text-xs text-uconn-muted">Ranked pool</label>
+                            <label className="text-xs text-muted uppercase tracking-caps">Ranked pool</label>
                             <label className="mt-1 flex items-center gap-3 select-none">
                               <input
                                 type="checkbox"
@@ -429,13 +452,13 @@ export default function Admin() {
                                 checked={!!(p as any).ranked_opt_in}
                                 onChange={(e)=> setPeople(prev=>prev.map(x=>x.id===p.id?{...x, ranked_opt_in: e.target.checked}:x))}
                               />
-                              <span className="relative inline-block h-6 w-11 rounded-full bg-white/15 transition-colors peer-checked:bg-brand-teal/70 
+                              <span className="relative inline-block h-6 w-11 rounded-full bg-white/15 transition-colors peer-checked:bg-accent/70 
                                 after:content-[''] after:absolute after:left-0.5 after:top-0.5 after:h-5 after:w-5 after:rounded-full after:bg-white after:shadow after:transition-transform after:duration-200 peer-checked:after:translate-x-5" />
                               <span className="text-xs text-white/90">Opted in</span>
                             </label>
                           </div>
                         </div>
-                        <button className="px-3 py-2 rounded bg-white/10 border border-uconn-border sm:col-span-2" onClick={async () => { await updatePerson(p.id, p as any); showToast("Person updated"); }}>Save Changes</button>
+                        <button className="px-3 py-2 rounded bg-accent text-black border border-accent hover:bg-accent/90 sm:col-span-2" onClick={async () => { await updatePerson(p.id, p as any); showToast("Person updated"); }}>Save Changes</button>
                       </div>
                     </details>
                 ))}
@@ -473,145 +496,119 @@ export default function Admin() {
                 </select>
                 <input type="date" className="px-3 py-2 rounded w-full" value={prDue} onChange={(e) => setPrDue(e.target.value)} />
               </div>
-              <div className="text-sm text-uconn-muted">Owners</div>
-              <input className="px-3 py-2 rounded w-full mb-1" placeholder="Search people…" value={ownerSearch} onChange={(e)=>setOwnerSearch(e.target.value)} />
-              <div className="grid sm:grid-cols-2 gap-2 max-h-48 overflow-auto border border-uconn-border rounded p-2">
-                {people.filter(p => {
-                  if(!ownerSearch.trim()) return true;
-                  const q = ownerSearch.toLowerCase();
-                  return p.name.toLowerCase().includes(q) || (p.skills||[]).some(s=>s.toLowerCase().includes(q));
-                }).map((p) => {
-                  const selected = prOwners.includes(p.id);
-                  return (
-                    <button key={p.id} onClick={() => toggleOwner(p.id)} className={"text-left px-2 py-1 rounded border " + (selected ? "bg-white/20" : "") }>
-                      <div className="font-medium text-sm">{p.name}</div>
-                      <div className="text-xs text-uconn-muted">{p.skills?.join(", ")}</div>
-                    </button>
-                  );
-                })}
+              <div className="flex items-center gap-2">
+                <div className="text-sm text-muted uppercase tracking-caps">Owners</div>
+                <PersonSelectPopover
+                  mode="multi"
+                  people={people}
+                  selectedIds={prOwners}
+                  onAdd={(id)=> toggleOwner(id)}
+                  onRemove={(id)=> toggleOwner(id)}
+                  triggerLabel={prOwners.length ? `${prOwners.length} selected` : 'Add/Remove'}
+                  buttonClassName="ml-auto text-[11px] px-2 py-1 rounded bg-white/10 border border-white/20"
+                  maxItems={8}
+                />
               </div>
-              <button onClick={handleCreateProject} className="px-3 py-2 rounded bg-white/10 border border-uconn-border">Save Project</button>
+              <button
+                onClick={async () => {
+                  if (!prName.trim()) { showToast('Give the project a name'); return; }
+                  await handleCreateProject();
+                }}
+                disabled={!prName.trim()}
+                className={`w-full px-3 py-2 rounded border border-border text-sm text-center ${prName.trim() ? 'bg-overlay-6' : 'bg-overlay-6 opacity-50 cursor-not-allowed'}`}>
+                Save Project
+              </button>
             </div>
             </section>
             <section className="space-y-2">
-            <h2 className="font-semibold">Create Task</h2>
-            <div className="form-section p-4 space-y-3">
-              <select className="px-3 py-2 rounded w-full dark-select" value={tProject} onChange={(e) => setTProject(e.target.value)}>
-                <option value="">Select project…</option>
-                {projects.map((p) => (<option key={p.id} value={p.id}>{p.name}</option>))}
-              </select>
-              <input className="px-3 py-2 rounded w-full" placeholder="Task description" value={tDesc} onChange={(e) => setTDesc(e.target.value)} />
-              <select className="px-3 py-2 rounded w-full dark-select" value={tAssignee} onChange={(e)=>setTAssignee(e.target.value)}>
-                <option value="">Assign to…</option>
-                {people.map(p => (<option key={p.id} value={p.id}>{p.name}</option>))}
-              </select>
-              <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch gap-3">
-                <select
-                  className="px-3 py-2 rounded dark-select h-11 sm:w-auto sm:min-w-[160px]"
-                  value={tStatus}
-                  onChange={(e) => setTStatus(e.target.value as any)}
-                >
-                  <option>Todo</option>
-                  <option>In Progress</option>
-                  <option>Complete</option>
-                </select>
-                <select className="px-3 py-2 rounded dark-select h-11 sm:w-auto sm:min-w-[200px]" value={(tPoints as any)} onChange={(e)=> setTPoints((e.target.value? Number(e.target.value) : "") as any)}>
-                  <option value="">Points (by estimated hours)</option>
-                  <option value="1">1 pt ~ 30 mins</option>
-                  <option value="3">3 pts ~ 1 hour</option>
-                  <option value="6">6 pts ~ 2 hours</option>
-                  <option value="15">15 pts ~ 5 hours</option>
-                  <option value="40">40 pts ~ 10 hours</option>
-                  <option value="65">65 pts ~ 15 hours</option>
-                  <option value="98">98 pts ~ 20 hours</option>
-                  <option value="150">150 pts ~ 25 hours</option>
-                  <option value="200">200 pts ~ 30 hours</option>
-                </select>
-                <button
-                  onClick={handleCreateTask}
-                  className="px-4 rounded bg-white/10 border border-uconn-border h-11 whitespace-nowrap sm:max-w-full"
-                >
-                  Save Task
-                </button>
-              </div>
-            </div>
+              <h2 className="font-semibold">Create Task</h2>
+              <TaskCreateCard
+                people={people}
+                projects={projects}
+                onCreated={reloadAll}
+              />
             </section>
           </div>
 
           <section className="mt-2">
-            <div className="flex flex-wrap items-center gap-2 mb-2 relative">
-              <h2 className="font-semibold mr-auto">Projects</h2>
-              <input
-                className="px-3 py-1.5 rounded-md text-xs font-medium border border-white/10 bg-white/5 w-56 placeholder:text-uconn-muted focus:outline-none focus-visible:outline-none"
-                placeholder="Search projects…"
-                value={projectsSearch}
-                onChange={(e)=>setProjectsSearch(e.target.value)}
-              />
-
-              {/* Subsystem multi-select popover */}
-              <div className="relative">
-                <button
-                  onClick={() => { setAdmShowSubsystemMenu(v=>!v); setAdmShowSortMenu(false); }}
-                  className="px-3 py-1.5 rounded-md text-xs font-medium border border-white/10 bg-white/5 hover:bg-white/10"
-                >
-                  Subsystems: <span className="font-semibold">{admSelectedSubsystems.length ? `${admSelectedSubsystems.length} selected` : "All"}</span>
-                </button>
-                <div className={`absolute right-0 z-20 mt-1 w-64 rounded-md border border-white/10 bg-uconn-blue/95 shadow-xl overflow-hidden transition transform origin-top ${admShowSubsystemMenu ? "opacity-100 scale-100" : "opacity-0 scale-95 pointer-events-none"}`}>
-                  <div className="px-3 py-2 border-b border-white/10">
+            <div className="mb-2">
+              <div className="flex items-center justify-between">
+                <h2 className="font-semibold">Projects</h2>
+                <input
+                  className="toolbar-input px-3 py-1.5 rounded-md text-xs font-medium border border-overlay-10 bg-overlay-6 w-28 sm:w-44 placeholder:text-muted focus:outline-none focus-visible:outline-none"
+                  placeholder="Search projects…"
+                  value={projectsSearch}
+                  onChange={(e)=>setProjectsSearch(e.target.value)}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2 mt-2">
+                <div className="">
+                  {/* Subsystem multi-select popover (left column) */}
+                  <div className="relative w-full">
                     <button
-                      className="w-full px-3 py-2 rounded-md text-xs sm:text-sm font-semibold bg-red-500/15 hover:bg-red-500/25 text-red-200 focus:outline-none focus-visible:outline-none"
-                      onClick={() => setAdmSelectedSubsystems([])}
+                      onClick={() => { setAdmShowSubsystemMenu(v=>!v); setAdmShowSortMenu(false); }}
+                      className="toolbar-btn px-3 py-1.5 rounded-md text-xs font-medium border border-white/10 bg-white/5 hover:bg-white/10 w-full text-left"
                     >
-                      Clear selection
+                      Subsystems: <span className="font-semibold">{admSelectedSubsystems.length ? `${admSelectedSubsystems.length} selected` : "All"}</span>
                     </button>
-                  </div>
-                  <div className="max-h-60 overflow-auto p-1">
-                    {subsystems.length === 0 && (
-                      <div className="px-3 py-2 text-xs text-uconn-muted">No subsystems</div>
-                    )}
-                    {subsystems.map(s => {
-                      const checked = admSelectedSubsystems.includes(s);
-                      const count = subsystemCounts.get(s) ?? 0;
-                      return (
-                        <label key={s} className="flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-white/10 cursor-pointer">
-                          <input
-                            type="checkbox"
-                            className="accent-brand-teal"
-                            checked={checked}
-                            onChange={() => setAdmSelectedSubsystems(prev => checked ? prev.filter(x=>x!==s) : [...prev, s])}
-                          />
-                          <span className="truncate">{s}</span>
-                          <span className="ml-auto inline-flex items-center justify-center rounded-full bg-white/10 px-2 py-0.5 text-[10px]">{count}</span>
-                        </label>
-                      );
-                    })}
+                    <div className={`absolute left-0 z-20 mt-1 w-64 rounded-md border border-overlay-10 bg-bg/95 shadow-xl overflow-hidden transition transform origin-top ${admShowSubsystemMenu ? "opacity-100 scale-100" : "opacity-0 scale-95 pointer-events-none"}`}>
+                      <div className="px-3 py-2 border-b border-white/10">
+                        <button
+                          className="w-full px-3 py-2 rounded-md text-xs sm:text-sm font-semibold bg-red-500/15 hover:bg-red-500/25 text-red-200 focus:outline-none focus-visible:outline-none"
+                          onClick={() => setAdmSelectedSubsystems([])}
+                        >
+                          Clear selection
+                        </button>
+                      </div>
+                      <div className="max-h-60 overflow-auto p-1">
+                        {subsystems.length === 0 && (
+                          <div className="px-3 py-2 text-xs text-muted uppercase tracking-caps">No subsystems</div>
+                        )}
+                        {subsystems.map(s => {
+                          const checked = admSelectedSubsystems.includes(s);
+                          const count = subsystemCounts.get(s) ?? 0;
+                          return (
+                            <label key={s} className="flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-white/10 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                className="accent-accent"
+                                checked={checked}
+                                onChange={() => setAdmSelectedSubsystems(prev => checked ? prev.filter(x=>x!==s) : [...prev, s])}
+                              />
+                              <span className="truncate">{s}</span>
+                              <span className="ml-auto inline-flex items-center justify-center rounded-full bg-white/10 px-2 py-0.5 text-[10px]">{count}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
-
-              {/* Sort popover */}
-              <div className="relative">
-                <button
-                  onClick={() => { setAdmShowSortMenu(v=>!v); setAdmShowSubsystemMenu(false); }}
-                  className="px-3 py-1.5 rounded-md text-xs font-medium border border-white/10 bg-white/5 hover:bg-white/10"
-                >
-                  Sort: <span className="font-semibold">{sortLabel(admSortBy)} {dirSymbol}</span>
-                </button>
-                <div className={`absolute right-0 z-20 mt-1 w-48 rounded-md border border-white/10 bg-uconn-blue/95 shadow-xl overflow-hidden transition transform origin-top ${admShowSortMenu ? "opacity-100 scale-100" : "opacity-0 scale-95 pointer-events-none"}`}>
-                  {(["subsystem","name","due"] as const).map(v => (
+                <div className="flex items-center justify-end">
+                  {/* Sort popover (right column) */}
+                  <div className="relative w-full">
                     <button
-                      key={v}
-                      className={`w-full text-left px-3 py-2 text-xs hover:bg-white/10 ${admSortBy === v ? "bg-white/10" : ""}`}
-                      onClick={() => {
-                        if (admSortBy === v) setAdmSortDir(d => d === "asc" ? "desc" : "asc");
-                        else setAdmSortBy(v);
-                        setAdmShowSortMenu(false);
-                      }}
-                    >{sortLabel(v)} {admSortBy === v ? dirSymbol : ""}</button>
-                  ))}
+                      onClick={() => { setAdmShowSortMenu(v=>!v); setAdmShowSubsystemMenu(false); }}
+                      className="toolbar-btn px-3 py-1.5 rounded-md text-xs font-medium border border-white/10 bg-white/5 hover:bg-white/10 w-full text-left"
+                    >
+                      Sort: <span className="font-semibold">{sortLabel(admSortBy)} {dirSymbol}</span>
+                    </button>
+                    <div className={`absolute right-0 z-20 mt-1 w-48 rounded-md border border-overlay-10 bg-bg/95 shadow-xl overflow-hidden transition transform origin-top ${admShowSortMenu ? "opacity-100 scale-100" : "opacity-0 scale-95 pointer-events-none"}`}>
+                      {(["subsystem","name","due"] as const).map(v => (
+                        <button
+                          key={v}
+                          className={`w-full text-left px-3 py-2 text-xs hover:bg-white/10 ${admSortBy === v ? "bg-white/10" : ""}`}
+                          onClick={() => {
+                            if (admSortBy === v) setAdmSortDir(d => d === "asc" ? "desc" : "asc");
+                            else setAdmSortBy(v);
+                            setAdmShowSortMenu(false);
+                          }}
+                        >{sortLabel(v)} {admSortBy === v ? dirSymbol : ""}</button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               </div>
-
               {(admShowSubsystemMenu || admShowSortMenu) && (
                 <div className="fixed inset-0 z-10" onClick={() => { setAdmShowSubsystemMenu(false); setAdmShowSortMenu(false); }} />
               )}
@@ -643,7 +640,7 @@ export default function Admin() {
                         </select>
                         <input type="date" className="px-3 py-2 rounded w-full" value={p.due_date || ""} onChange={(e) => setProjects((prev) => prev.map((x) => (x.id === p.id ? { ...x, due_date: e.target.value } : x)))} />
                       </div>
-                      <button className="px-3 py-2 rounded bg-white/10 border border-uconn-border w-full" onClick={async () => { await updateProject(p.id, p); showToast("Project updated"); }}>Save Changes</button>
+                      <button className="px-3 py-2 rounded bg-accent text-black border border-accent hover:bg-accent/90 w-full" onClick={async () => { await updateProject(p.id, p); showToast("Project updated"); }}>Save Changes</button>
                     </div>
                   </details>
                 ))}
@@ -652,7 +649,7 @@ export default function Admin() {
         </div>
       )}
 
-      {activeTab === 'settings' && (
+  {activeTab === 'settings' && canViewAdminTab(uid,'settings') && (
         <div role="tabpanel" className="mt-4">
           <section className="space-y-2">
             <h2 className="font-semibold">Global Settings</h2>
@@ -661,7 +658,7 @@ export default function Admin() {
               <input className="px-3 py-2 rounded w-full" placeholder="https://…/rulebook.pdf" value={ruleUrl} onChange={(e) => setRuleUrl(e.target.value)} />
               <label className="text-sm block">Team SharePoint URL</label>
               <input className="px-3 py-2 rounded w-full" placeholder="https://…sharepoint.com/sites/FSAE/…" value={shareUrl} onChange={(e) => setShareUrl(e.target.value)} />
-              <button onClick={handleSaveSettings} className="mt-2 px-3 py-2 rounded bg-white/10 border border-uconn-border">Save Settings</button>
+              <button onClick={handleSaveSettings} className="mt-2 px-3 py-2 rounded bg-accent text-black border border-accent hover:bg-accent/90">Save Settings</button>
             </div>
             {/* Retrieve archived project */}
             <ArchivedProjectRestore />
@@ -681,7 +678,7 @@ export default function Admin() {
           <section className="space-y-2 mt-6">
             <h2 className="font-semibold">Seed data (Excel)</h2>
             <div className="form-section wide p-4 space-y-3">
-              <p className="text-sm text-uconn-muted">
+              <p className="text-sm text-muted">
                 Provide an Excel file with sheets named "People", "Projects", and "Tasks". Columns:
                 <br />People: Name, Year, Role, Skills, Discord
                 <br />Projects: Name, Subsystem, Due Date (YYYY-MM-DD), Description, Design Link, Owners (comma-separated names)
@@ -719,7 +716,7 @@ export default function Admin() {
                   <div className="mt-2 flex gap-2">
                     <button
                       disabled={seedImporting}
-                      className="px-3 py-2 rounded border border-uconn-border bg-white/10 disabled:opacity-50"
+                      className="px-3 py-2 rounded border border-border bg-overlay-6 disabled:opacity-50"
                       onClick={async () => {
                         if (!seedPreview) return;
                         setSeedImporting(true); setSeedMessage("Importing…");
@@ -763,9 +760,9 @@ export default function Admin() {
                         }
                       }}
                     >Import</button>
-                    <button className="px-3 py-2 rounded border border-uconn-border bg-white/10" onClick={()=>{ setSeedPreview(null); setSeedMessage(""); }}>Clear</button>
+                    <button className="px-3 py-2 rounded border border-border bg-overlay-6" onClick={()=>{ setSeedPreview(null); setSeedMessage(""); }}>Clear</button>
                   </div>
-                  {seedMessage && <div className="mt-2 text-xs text-uconn-muted">{seedMessage}</div>}
+                  {seedMessage && <div className="mt-2 text-xs text-muted uppercase tracking-caps">{seedMessage}</div>}
                 </div>
               )}
             </div>
@@ -774,9 +771,9 @@ export default function Admin() {
           {showResetModal && (
             <div className="fixed inset-0 z-50 flex items-center justify-center">
               <div className="absolute inset-0 bg-black/70" onClick={() => setShowResetModal(false)} />
-              <div className="relative w-[95vw] max-w-md rounded-xl border border-white/15 bg-uconn-blue/95 shadow-2xl p-5">
+              <div className="relative w-[95vw] max-w-md rounded-xl border border-overlay-10 bg-bg/95 shadow-2xl p-5">
                 <h4 className="text-lg font-semibold mb-2">Confirm full system reset</h4>
-                <p className="text-sm text-uconn-muted">Enter the reset password to proceed. Contact the team lead if you don’t know it.</p>
+                <p className="text-sm text-muted">Enter the reset password to proceed. Contact the team lead if you don’t know it.</p>
                 <div className="mt-3 relative">
                   <input
                     autoFocus
@@ -799,11 +796,11 @@ export default function Admin() {
                   </button>
                 </div>
                 <div className="mt-4 flex items-center justify-end gap-2">
-                  <button onClick={()=>setShowResetModal(false)} className="px-3 py-2 rounded border border-uconn-border bg-white/10">Cancel</button>
+                  <button onClick={()=>setShowResetModal(false)} className="px-3 py-2 rounded border border-border bg-overlay-6">Cancel</button>
                   <button
                     onClick={async ()=>{ await handleFullReset(); setShowResetModal(false); }}
                     disabled={resetPassword !== 'UCONN FORMULA SAE'}
-                    className={`px-3 py-2 rounded border ${resetPassword === 'UCONN FORMULA SAE' ? 'border-red-500 bg-red-600/30 hover:bg-red-600/40 text-red-100' : 'border-white/10 bg-white/5 text-uconn-muted cursor-not-allowed'}`}
+                    className={`px-3 py-2 rounded border ${resetPassword === 'UCONN FORMULA SAE' ? 'border-danger bg-danger/30 hover:bg-danger/40 text-danger/90' : 'border-overlay-10 bg-overlay-6 text-muted cursor-not-allowed'}`}
                   >
                     Permanently delete everything
                   </button>
@@ -814,21 +811,21 @@ export default function Admin() {
         </div>
       )}
 
-      {activeTab === 'ranked' && (
+  {activeTab === 'ranked' && canViewAdminTab(uid,'ranked') && (
         <div role="tabpanel" className="mt-4">
           <section className="space-y-2">
             <h2 className="font-semibold">Ranked Settings</h2>
             <div className="form-section wide p-5 space-y-4">
               <div className="grid sm:grid-cols-2 gap-3">
                 <label className="inline-flex items-center gap-2 text-sm">
-                  <input type="checkbox" className="accent-brand-teal" checked={!!rankedSettings?.enabled} onChange={async (e) => {
+                  <input type="checkbox" className="accent-accent" checked={!!rankedSettings?.enabled} onChange={async (e) => {
                     const enabled = e.target.checked; setRankedSettingsState(s=>s?{...s, enabled}: { enabled });
                     const { setRankedSettings } = await import("../lib/firestore"); await setRankedSettings({ enabled });
                   }} />
                   Enable ranked mode
                 </label>
                 <label className="inline-flex items-center gap-2 text-sm">
-                  <input type="checkbox" className="accent-brand-teal" checked={!!rankedSettings?.autoApply} onChange={async (e) => {
+                  <input type="checkbox" className="accent-accent" checked={!!rankedSettings?.autoApply} onChange={async (e) => {
                     const autoApply = e.target.checked; setRankedSettingsState(s=>s?{...s, autoApply}: { autoApply });
                     const { setRankedSettings } = await import("../lib/firestore"); await setRankedSettings({ autoApply });
                   }} />
@@ -836,8 +833,8 @@ export default function Admin() {
                 </label>
               </div>
               <div className="grid sm:grid-cols-2 gap-3 -mt-2">
-                <p className="text-xs text-uconn-muted">When on, the app reveals the Ranked page and point indicators. Turning it off hides ranked UI and points, but nothing is deleted.</p>
-                <p className="text-xs text-uconn-muted">When on, promotions/relegations can be applied on a schedule. In this client-only build it’s a manual action or conceptual; see note below.</p>
+                <p className="text-xs text-muted uppercase tracking-caps">When on, the app reveals the Ranked page and point indicators. Turning it off hides ranked UI and points, but nothing is deleted.</p>
+                <p className="text-xs text-muted uppercase tracking-caps">When on, promotions/relegations can be applied on a schedule. In this client-only build it’s a manual action or conceptual; see note below.</p>
               </div>
               <div className="mt-2 overflow-auto rounded border border-white/10">
                 <table className="w-full text-sm">
@@ -860,7 +857,7 @@ export default function Admin() {
                           <td className="px-3 py-2 text-xs">{r}</td>
                           <td className="px-3 py-2">
                             {promoDisabled ? (
-                              <span className="text-xs text-uconn-muted">N/A</span>
+                              <span className="text-xs text-muted uppercase tracking-caps">N/A</span>
                             ) : (
                               <input
                                 type="number"
@@ -878,7 +875,7 @@ export default function Admin() {
                           </td>
                           <td className="px-3 py-2">
                             {demoDisabled ? (
-                              <span className="text-xs text-uconn-muted">N/A</span>
+                              <span className="text-xs text-muted uppercase tracking-caps">N/A</span>
                             ) : (
                               <input
                                 type="number"
@@ -915,7 +912,7 @@ export default function Admin() {
                       showToast("Save failed");
                     }
                   }}
-                  className="mt-2 px-3 py-2 rounded bg-white/10 border border-uconn-border text-sm disabled:opacity-50"
+                  className="mt-2 px-3 py-2 rounded bg-overlay-6 border border-border text-sm disabled:opacity-50"
                 >Save changes</button>
               </div>
               {/* Opt-in only and boundary rules are fixed by design; no extra toggles here. */}
@@ -923,12 +920,12 @@ export default function Admin() {
                 <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 justify-between">
                   <div>
                     <div className="text-sm font-medium">Manual override</div>
-                    <p className="text-xs text-uconn-muted">Apply promotions and relegations immediately using the current week’s points.</p>
+                    <p className="text-xs text-muted uppercase tracking-caps">Apply promotions and relegations immediately using the current week’s points.</p>
                   </div>
                   <button
                     disabled={rankedApplying}
                     onClick={()=>{ setApplyPassword(""); setShowApplyModal(true); }}
-                    className="px-3 py-2 rounded bg-brand-teal/40 hover:bg-brand-teal/60 border border-uconn-border text-sm font-medium disabled:opacity-50"
+                    className="px-3 py-2 rounded bg-accent/40 hover:bg-accent/60 border border-border text-sm font-medium disabled:opacity-50"
                   >Apply now</button>
                 </div>
               </div>
@@ -938,7 +935,7 @@ export default function Admin() {
                 <div className="flex items-center justify-between mb-2">
                   <div className="text-sm font-medium">Recent ranked activity</div>
                   <button
-                    className="text-xs px-2 py-1 rounded border border-uconn-border bg-white/5"
+                    className="text-xs px-2 py-1 rounded border border-border bg-overlay-6 uppercase tracking-caps"
                     onClick={async ()=>{
                       const { fetchRecentLogs } = await import("../lib/firestore");
                       setRecentLogs(await fetchRecentLogs(50));
@@ -947,14 +944,14 @@ export default function Admin() {
                 </div>
                 <ul className="text-sm divide-y divide-white/10 rounded border border-white/10">
                   {recentLogs.length === 0 && (
-                    <li className="px-3 py-2 text-uconn-muted">No activity yet</li>
+                    <li className="px-3 py-2 text-muted uppercase tracking-caps">No activity yet</li>
                   )}
                   {recentLogs.map((e, i) => (
                     <li
                       key={e.id || i}
                       className="px-3 py-2 flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-3 overflow-hidden"
                     >
-                      <div className="flex items-center gap-2 text-xs text-uconn-muted leading-snug">
+                      <div className="flex items-center gap-2 text-xs text-muted leading-snug uppercase tracking-caps">
                         <span className="shrink-0 sm:w-40 sm:inline block">
                           {new Date(e.ts || 0).toLocaleString()}
                         </span>
@@ -973,11 +970,32 @@ export default function Admin() {
                             Rank · {people.find(p=>p.id===e.person_id)?.name || e.person_id} {e.from_rank} → {e.to_rank}
                           </>
                         )}
-                        {e.type === 'task_points' && (
-                          <>
-                            Task · {e.points} pts {e.person_id ? `→ ${people.find(p=>p.id===e.person_id)?.name || e.person_id}` : ''} {e.note ? `· ${e.note}` : ''}
-                          </>
-                        )}
+                        {e.type === 'task_points' && (()=>{
+                          // Sanitize duplicate concatenated notes (e.g., duplicated "Task complete:" strings)
+                          let note: string | undefined = e.note;
+                          if (note) {
+                            // If perfect duplicate halves, collapse
+                            if (note.length % 2 === 0) {
+                              const half = note.length/2;
+                              const a = note.slice(0, half);
+                              const b = note.slice(half);
+                              if (a === b) note = a;
+                            }
+                            // If 'Task complete:' appears multiple times with same tail, dedupe
+                            if ((note.match(/Task complete:/g) || []).length > 1) {
+                              const parts = note.split('Task complete:').filter(Boolean).map(s=>s.trim());
+                              if (parts.length >= 2 && parts.every(p=>p === parts[0])) {
+                                note = 'Task complete: ' + parts[0];
+                              } else {
+                                // keep only first occurrence
+                                note = 'Task complete: ' + parts[0];
+                              }
+                            }
+                          }
+                          return (
+                            <>Task · {e.points} pts {e.person_id ? `→ ${people.find(p=>p.id===e.person_id)?.name || e.person_id}` : ''}{note ? ` · ${note}` : ''}</>
+                          );
+                        })()}
                         {e.type !== 'attendance' && e.type !== 'rank_change' && (e.note || '')}
                       </span>
                     </li>
@@ -993,9 +1011,9 @@ export default function Admin() {
       {showApplyModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           <div className="absolute inset-0 bg-black/70" onClick={() => setShowApplyModal(false)} />
-          <div className="relative w-[95vw] max-w-md rounded-xl border border-white/15 bg-uconn-blue/95 shadow-2xl p-5">
+          <div className="relative w-[95vw] max-w-md rounded-xl border border-overlay-10 bg-bg/95 shadow-2xl p-5">
             <h4 className="text-lg font-semibold mb-2">Confirm ranked apply</h4>
-            <p className="text-sm text-uconn-muted">Enter the confirmation phrase to proceed.</p>
+            <p className="text-sm text-muted">Enter the confirmation phrase to proceed.</p>
             <input
               autoFocus
               className="mt-3 w-full px-3 py-2 rounded border border-white/10 bg-black/20"
@@ -1004,10 +1022,10 @@ export default function Admin() {
               onChange={(e)=>setApplyPassword(e.target.value)}
             />
             <div className="mt-4 flex items-center justify-end gap-2">
-              <button onClick={()=>setShowApplyModal(false)} className="px-3 py-2 rounded border border-uconn-border bg-white/10">Cancel</button>
+              <button onClick={()=>setShowApplyModal(false)} className="px-3 py-2 rounded border border-border bg-overlay-6">Cancel</button>
       <button
                 disabled={applyPassword !== 'UCONN FORMULA SAE' || rankedApplying}
-                className={`px-3 py-2 rounded border ${applyPassword === 'UCONN FORMULA SAE' ? 'border-brand-teal bg-brand-teal/30 hover:bg-brand-teal/40 text-white' : 'border-white/10 bg-white/5 text-uconn-muted cursor-not-allowed'}`}
+                className={`px-3 py-2 rounded border ${applyPassword === 'UCONN FORMULA SAE' ? 'border-accent bg-accent/30 hover:bg-accent/40 text-black' : 'border-overlay-10 bg-overlay-6 text-muted cursor-not-allowed'}`}
                 onClick={async ()=>{
                   try {
                     setRankedApplying(true);
@@ -1044,9 +1062,9 @@ function ArchivedProjectRestore() {
   return (
     <div className="form-section wide p-4 mt-6 space-y-3">
       <h3 className="text-sm font-semibold">Retrieve archived project</h3>
-      <p className="text-xs text-uconn-muted">Restore a previously archived project (brings it back into lists).</p>
+  <p className="text-xs text-muted uppercase tracking-caps">Restore a previously archived project (brings it back into lists).</p>
       {archived.length === 0 ? (
-        <p className="text-xs text-uconn-muted italic">No archived projects yet.</p>
+  <p className="text-xs text-muted italic uppercase tracking-caps">No archived projects yet.</p>
       ) : (
         <input
           className="px-3 py-2 rounded w-full"
@@ -1055,7 +1073,7 @@ function ArchivedProjectRestore() {
           onChange={e=>setQ(e.target.value)}
         />
       )}
-      {loading && <div className="text-xs text-uconn-muted">Loading…</div>}
+  {loading && <div className="text-xs text-muted uppercase tracking-caps">Loading…</div>}
       {archived.length > 0 && (
         <ul className="space-y-2 max-h-64 overflow-auto pr-1">
           {filtered.slice(0,25).map(p => (
@@ -1078,12 +1096,12 @@ function ArchivedProjectRestore() {
                     setRestoring(null);
                   }
                 }}
-                className="px-3 py-1.5 rounded text-xs font-medium border border-brand-teal/50 bg-brand-teal/20 hover:bg-brand-teal/30 disabled:opacity-50"
+                className="px-3 py-1.5 rounded text-xs font-medium border border-accent/50 bg-accent/20 hover:bg-accent/30 disabled:opacity-50"
               >Restore</button>
             </li>
           ))}
           {filtered.length === 0 && !loading && (
-            <li className="text-xs text-uconn-muted px-2 py-1">No archived projects match.</li>
+            <li className="text-xs text-muted px-2 py-1 uppercase tracking-caps">No archived projects match.</li>
           )}
         </ul>
       )}

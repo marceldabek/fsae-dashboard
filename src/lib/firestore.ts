@@ -1,7 +1,7 @@
 
-import { collection, getDocs, query, where, addDoc, updateDoc, deleteDoc, doc, setDoc, getDoc } from "firebase/firestore";
+import { collection, getDocs, query, where, addDoc, updateDoc, deleteDoc, doc, setDoc, getDoc, increment } from "firebase/firestore";
 import { db } from "../firebase";
-import type { Person, Project, Task, RankedSettings, RankLevel, Attendance, LogEvent } from "../types";
+import type { Person, Project, Task, RankedSettings, RankLevel, Attendance, LogEvent, DailyAnalytics } from "../types";
 import { isCurrentUserAdmin } from "../auth";
 
 // ---- Simple client-side cache with TTL ----
@@ -509,4 +509,50 @@ export async function fullSystemReset() {
   // Clear caches
   bustCache(["people", "projects", "tasks"]);
   bustCacheByPrefix("tasks:project:");
+}
+
+// ---- Anonymous visit tracking (privacy-friendly) ----
+// Each browser profile gets a random localStorage ID (not sent to server). We only
+// increment a daily aggregate doc once per client per day. No IPs, no cookies.
+const VISITOR_KEY = `${CACHE_PREFIX}visitor:id`;
+const VISIT_STAMP_KEY = `${CACHE_PREFIX}visitor:last_date`;
+
+function ensureVisitorId(): string {
+  try {
+    let v = localStorage.getItem(VISITOR_KEY);
+    if (!v) {
+      v = Math.random().toString(36).slice(2) + Date.now().toString(36);
+      localStorage.setItem(VISITOR_KEY, v);
+    }
+    return v;
+  } catch {
+    return "anon";
+  }
+}
+
+export async function recordAnonymousVisit() {
+  if (typeof window === "undefined") return;
+  const today = new Date().toISOString().slice(0, 10);
+  try {
+    const last = localStorage.getItem(VISIT_STAMP_KEY);
+    if (last === today) return; // already counted today
+    ensureVisitorId();
+    const ref = doc(db, "analytics_daily", today);
+    await setDoc(ref, { date: today, visits: increment(1) } as any, { merge: true });
+    localStorage.setItem(VISIT_STAMP_KEY, today);
+  } catch {
+    // ignore (offline). Optionally could queue a retry.
+  }
+}
+
+export async function fetchDailyAnalyticsRange(daysBack: number): Promise<DailyAnalytics[]> {
+  const snap = await getDocs(collection(db, "analytics_daily"));
+  const all = snap.docs.map(d => d.data() as DailyAnalytics);
+  const today = new Date();
+  const cutoff = new Date();
+  cutoff.setDate(today.getDate() - (daysBack - 1));
+  const cutoffStr = cutoff.toISOString().slice(0, 10);
+  return all
+    .filter(r => r.date >= cutoffStr)
+    .sort((a, b) => a.date.localeCompare(b.date));
 }

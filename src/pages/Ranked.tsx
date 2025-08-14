@@ -175,7 +175,7 @@ export default function Ranked() {
       </div>
 
       {/* Legend (single, applies to all tiers) */}
-      <div className="mb-3 text-[12px] text-uconn-muted">
+  <div className="mb-3 text-xs text-muted uppercase tracking-caps">
         Legend: green left border = promotion zone, red left border = demotion zone. Change Today: ▲ moved up, ▼ moved down.
       </div>
 
@@ -191,19 +191,19 @@ export default function Ranked() {
           const promos = Math.floor((promoPct/100) * list.length);
           const demos = Math.floor((demoPct/100) * list.length);
           return (
-            <div key={level} className="form-section p-0 overflow-hidden">
+            <div key={level} className="form-section p-0">
               <div className="px-3 py-2 flex items-center gap-2 border-b border-white/10 bg-white/5">
                 <img alt={level} src={rankIcon(level)} className="h-6 w-6 object-contain" />
                 <h2 className="font-semibold">{level}</h2>
-                <span className="ml-auto text-xs text-uconn-muted">{list.length} in pool</span>
+                <span className="ml-auto text-xs text-muted uppercase tracking-caps">{list.length} in pool</span>
               </div>
-              <table className="w-full text-sm">
-                <thead className="text-xs text-uconn-muted border-b border-white/10">
+      <table className="w-full text-[13px] sm:text-sm">
+                <thead className="text-xs text-muted uppercase tracking-caps border-b border-border/60">
                   <tr>
-                    <th className="text-left px-3 py-2 w-8">#</th>
-                    <th className="text-left px-2 py-2">Name</th>
-                    <th className="text-right px-3 py-2 w-24">Pts</th>
-                    <th className="text-right px-3 py-2 w-28">Change Today</th>
+        <th className="text-left px-2 py-2 w-6">#</th>
+        <th className="text-left px-2 py-2">Name</th>
+        <th className="text-right px-2 py-2 w-12">Pts</th>
+        <th className="text-right px-2 py-2 w-12">Δ</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -211,22 +211,22 @@ export default function Ranked() {
                     const isPromo = i < promos;
                     const isDemo = i >= Math.max(0, list.length - demos) && demos > 0;
                     const nameCls = `px-2 py-2 align-middle`;
-                    const nameInnerCls = `pl-2 border-l-4 ${isPromo ? 'border-green-400' : isDemo ? 'border-red-400' : 'border-transparent'}`;
+                    const nameInnerCls = `pl-2 border-l-4 whitespace-nowrap truncate max-w-[9.5rem] overflow-hidden ${isPromo ? 'border-green-400' : isDemo ? 'border-red-400' : 'border-transparent'}`;
                     // Determine baseline index within this tier
                     const baselineIndexRaw = (baseline.indices as any)[level]?.[p.id];
                     const baselineIndex = typeof baselineIndexRaw === 'number' ? baselineIndexRaw : i;
                     const delta = baselineIndex - i; // + means moved up (smaller current index)
                     return (
                       <tr key={p.id} className="border-b border-white/5">
-                        <td className="px-3 py-2 align-middle">{i+1}</td>
+                        <td className="px-2 py-1.5 align-middle">{i+1}</td>
                         <td className={nameCls}><div className={nameInnerCls}>{p.name}</div></td>
-                        <td className="px-3 py-2 align-middle text-right">{scores.get(p.id) || 0}</td>
-                        <td className="px-3 py-2 align-middle text-right">
+                        <td className="px-2 py-1.5 align-middle text-right tabular-nums">{scores.get(p.id) || 0}</td>
+                        <td className="px-2 py-1.5 align-middle text-right tabular-nums">
                           {delta === 0 ? (
-                            <span className="text-uconn-muted">– 0</span>
+                            <span className="text-muted">0</span>
                           ) : (
                             <span className={delta > 0 ? 'text-green-400' : 'text-red-400'}>
-                              {delta > 0 ? '▲' : '▼'} {Math.abs(delta)}
+                              {delta > 0 ? '▲' : '▼'}{Math.abs(delta)}
                             </span>
                           )}
                         </td>
@@ -234,7 +234,7 @@ export default function Ranked() {
                     );
                   })}
                   {list.length === 0 && (
-                    <tr><td colSpan={4} className="px-3 py-4 text-center text-xs text-uconn-muted">No participants</td></tr>
+                    <tr><td colSpan={4} className="px-3 py-4 text-center text-xs text-muted">No participants</td></tr>
                   )}
                 </tbody>
               </table>
