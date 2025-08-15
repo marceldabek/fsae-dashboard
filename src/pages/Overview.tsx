@@ -1,25 +1,22 @@
 
 import { useEffect, useMemo, useState, useRef } from "react";
-import { fetchPeople, fetchProjects, fetchTasks, fetchAttendance } from "../lib/firestore";
+import { fetchPeople, fetchProjects, fetchTasks, fetchAttendance, addProject } from "../lib/firestore";
 import type { Person, Project, Task, Attendance } from "../types";
 import { useAuth } from "../hooks/useAuth";
 import ProjectCard from "../components/ProjectCard";
+import PersonSelectPopover from "../components/PersonSelectPopover";
 import TrophyIcon from "../components/TrophyIcon";
 import ProgressBar from "../components/ProgressBar";
 import SwipeCarousel from "../components/SwipeCarousel";
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, Area } from "recharts";
+import { isAdminUid, isLeadUid } from "../admin";
 
 function StatCard({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="rounded-xl bg-white/5 border border-white/10 p-3 text-center flex flex-col items-center justify-center min-w-0">
     {/* Keep number large for prominence */}
     <div className="text-xl font-semibold leading-tight">{value}</div>
-      <div
-  className="text-[10px] mt-1 tracking-caps text-muted uppercase whitespace-nowrap overflow-hidden text-ellipsis leading-snug"
-        title={label}
-      >
-        {label}
-      </div>
+  <div className="mt-1 text-xs tracking-caps text-muted uppercase font-medium whitespace-nowrap overflow-hidden text-ellipsis leading-snug" title={label}>{label}</div>
     </div>
   );
 }
@@ -35,6 +32,16 @@ export default function Overview() {
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [showSubsystemMenu, setShowSubsystemMenu] = useState(false);
   const [showSortMenu, setShowSortMenu] = useState(false);
+  // Project create overlay state
+  const [showCreateProject, setShowCreateProject] = useState(false);
+  const [prName, setPrName] = useState("");
+  const [prOwners, setPrOwners] = useState<string[]>([]);
+  const [prDesign, setPrDesign] = useState("");
+  const [prDesc, setPrDesc] = useState("");
+  const [prDue, setPrDue] = useState("");
+  const [prSubsystem, setPrSubsystem] = useState("");
+  const [savingProject, setSavingProject] = useState(false);
+  const toggleOwner = (id: string) => setPrOwners(prev => prev.includes(id) ? prev.filter(x=>x!==id) : [...prev, id]);
 
   useEffect(() => {
     (async () => {
@@ -163,9 +170,32 @@ export default function Overview() {
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
   }, []);
+  const uid = user?.uid || null;
+  const canCreate = isLeadUid(uid); // leads & admins allowed
+
+  async function handleCreateProject() {
+    if (!prName.trim()) return;
+    try {
+      setSavingProject(true);
+      await addProject({
+        name: prName.trim(),
+        owner_ids: prOwners,
+        design_link: prDesign.trim() || undefined,
+        description: prDesc.trim() || undefined,
+        due_date: prDue || undefined,
+        subsystem: prSubsystem || undefined,
+      } as any);
+      const [pr] = await Promise.all([fetchProjects()]);
+      setProjects(pr);
+      // reset
+      setPrName(""); setPrOwners([]); setPrDesign(""); setPrDesc(""); setPrDue(""); setPrSubsystem("");
+      setShowCreateProject(false);
+    } finally { setSavingProject(false); }
+  }
+
   return (
     <>
-      <h1 className="text-2xl font-semibold mb-4">Team Overview</h1>
+  <h1 className="text-2xl font-semibold mb-4">Team Overview</h1>
 
   {/* Top area: stats + completion on the left, leaderboard on the right (desktop only) */}
   <div className="grid gap-4 md:grid-cols-2 mb-6">
@@ -173,9 +203,9 @@ export default function Overview() {
         <div className="min-w-0">
           {/* Top stats in one single row */}
           <div className="grid grid-cols-3 gap-3 mb-4">
-            <StatCard label="Total People" value={people.length} />
-            <StatCard label="Total Projects" value={projects.length} />
-            <StatCard label="Total Tasks" value={totalTasks} />
+            <StatCard label="Members" value={people.length} />
+            <StatCard label="Projects" value={projects.length} />
+            <StatCard label="Tasks" value={totalTasks} />
           </div>
 
           {/* Progress bar with matching stat typography */}
@@ -261,7 +291,22 @@ export default function Overview() {
       </div>
 
   {/* Project cards section */}
-      <h2 className="text-lg font-semibold mt-6 mb-2">Projects</h2>
+      <div className="mt-6 mb-2 flex items-center gap-2">
+        <h2 className="text-lg font-semibold">Projects</h2>
+        {canCreate && (
+          <button
+            aria-label="Create project"
+            onClick={()=> setShowCreateProject(true)}
+            className="group inline-flex items-center justify-center h-7 w-7 rounded-md border border-accent/40 bg-accent/15 hover:bg-accent/25 text-accent transition shadow-sm hover:shadow-accent/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" className="drop-shadow-sm">
+              <line x1="12" y1="5" x2="12" y2="19" />
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+            <span className="sr-only">Add project</span>
+          </button>
+        )}
+      </div>
   <div className="flex items-center gap-4 text-[10px] text-muted mb-1 uppercase tracking-caps">
         <div className="flex items-center gap-1" title="Grey = To-do / Not started">
           <span className="w-2 h-2 rounded-full bg-gray-400" /> To-do / Not started
@@ -357,6 +402,61 @@ export default function Overview() {
       </div>
 
   {/* Sign in button removed per request */}
+  {showCreateProject && (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={()=> setShowCreateProject(false)} />
+      <div className="relative w-[95vw] max-w-lg rounded-2xl border border-white/10 bg-bg/95 backdrop-blur-sm shadow-2xl p-5 overflow-auto max-h-[92vh]">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-lg font-semibold">Create Project</h3>
+          <button onClick={()=> setShowCreateProject(false)} aria-label="Close" className="h-8 w-8 inline-flex items-center justify-center rounded hover:bg-white/10">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#E5E7EB" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+        <div className="space-y-3">
+          <input className="px-3 py-2 rounded w-full" placeholder="Project name" value={prName} onChange={e=>setPrName(e.target.value)} />
+          <input className="px-3 py-2 rounded w-full" placeholder="Design link (optional)" value={prDesign} onChange={e=>setPrDesign(e.target.value)} />
+          <textarea className="px-3 py-2 rounded w-full" placeholder="Project description (optional)" value={prDesc} onChange={e=>setPrDesc(e.target.value)} />
+          <div className="flex flex-col sm:flex-row gap-2">
+            <select className="px-3 py-2 rounded w-full dark-select" value={prSubsystem} onChange={e=>setPrSubsystem(e.target.value)}>
+              <option value="">Select subsystem…</option>
+              <option>Aero</option>
+              <option>Business</option>
+              <option>Composites</option>
+              <option>Controls</option>
+              <option>Data Acquisition</option>
+              <option>Electrical IC</option>
+              <option>Electrical EV</option>
+              <option>Finance</option>
+              <option>Frame</option>
+              <option>Manufacturing</option>
+              <option>Powertrain EV</option>
+              <option>Powertrain IC</option>
+              <option>Suspension</option>
+            </select>
+            <input type="date" className="px-3 py-2 rounded w-full" value={prDue} onChange={e=>setPrDue(e.target.value)} />
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="text-sm text-muted uppercase tracking-caps">Owners</div>
+            <PersonSelectPopover
+              mode="multi"
+              people={people}
+              selectedIds={prOwners}
+              onAdd={(id)=> toggleOwner(id)}
+              onRemove={(id)=> toggleOwner(id)}
+              triggerLabel={prOwners.length ? `${prOwners.length} selected` : 'Add/Remove'}
+              buttonClassName="ml-auto text-[11px] px-2 py-1 rounded bg-white/10 border border-white/20"
+              maxItems={5}
+            />
+          </div>
+          <button
+            onClick={handleCreateProject}
+            disabled={!prName.trim() || savingProject}
+            className={`w-full px-3 py-2 rounded border border-border text-sm text-center ${prName.trim() ? 'bg-overlay-6 hover:bg-overlay-5' : 'bg-overlay-6 opacity-50 cursor-not-allowed'}`}
+          >{savingProject ? 'Saving…' : 'Save Project'}</button>
+        </div>
+      </div>
+    </div>
+  )}
     </>
   );
 }

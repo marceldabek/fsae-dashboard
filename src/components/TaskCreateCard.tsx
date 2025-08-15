@@ -9,9 +9,11 @@ interface TaskCreateCardProps {
   fixedProjectId?: string; // if provided, hides project selector
   onCreated?: () => void; // callback after successful creation
   className?: string;
+  hideTitle?: boolean; // suppress internal heading (e.g., when parent provides one)
+  unstyled?: boolean; // render without outer card wrapper
 }
 
-export default function TaskCreateCard({ people, projects = [], fixedProjectId, onCreated, className = "" }: TaskCreateCardProps) {
+export default function TaskCreateCard({ people, projects = [], fixedProjectId, onCreated, className = "", hideTitle = false, unstyled = false }: TaskCreateCardProps) {
   const [projectId, setProjectId] = useState<string>(fixedProjectId || "");
   const [desc, setDesc] = useState("");
   const [status, setStatus] = useState<"Todo" | "In Progress" | "Complete">("In Progress");
@@ -40,9 +42,9 @@ export default function TaskCreateCard({ people, projects = [], fixedProjectId, 
 
   const disable = !desc.trim() || saving || !(fixedProjectId || projectId);
 
-  return (
-    <div className={"rounded-2xl bg-white/5 border border-white/10 p-4 space-y-3 " + className}>
-      <h3 className="text-sm font-semibold">Add Task</h3>
+  const content = (
+    <div className="space-y-3 text-white">
+      {!hideTitle && <h3 className="text-sm font-semibold">Add Task</h3>}
       {!fixedProjectId && (
         <select
           className="px-3 h-10 rounded text-sm w-full dark-select"
@@ -76,7 +78,7 @@ export default function TaskCreateCard({ people, projects = [], fixedProjectId, 
             onSelect={(id)=> setAssignee(id || "")}
             triggerLabel={assignee ? (people.find(p=>p.id===assignee)?.name || 'Assignee') : 'Assign to…'}
             buttonClassName="px-3 h-10 rounded text-sm bg-white/10 border border-white/20 flex items-center hover:bg-white/15 whitespace-nowrap"
-            maxItems={8}
+            maxItems={5}
         />
       </div>
       <select
@@ -102,5 +104,11 @@ export default function TaskCreateCard({ people, projects = [], fixedProjectId, 
         className="w-full h-10 rounded bg-white/10 border border-white/20 text-sm font-medium hover:bg-white/15 disabled:opacity-40 disabled:cursor-not-allowed transition"
       >{saving ? 'Saving…' : 'Save'}</button>
     </div>
+  );
+
+  if (unstyled) return content;
+
+  return (
+    <div className={"rounded-2xl bg-white/5 border border-white/10 p-4 " + className}>{content}</div>
   );
 }

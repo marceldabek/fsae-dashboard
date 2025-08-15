@@ -134,6 +134,15 @@ export default function Stats() {
     return days;
   }, [tasks]);
 
+  // Trim leading zero-completion days so mobile view doesn't show activity compressed at far right
+  const last14DaysDisplay = useMemo(() => {
+    const firstNonZero = last14Days.findIndex(d => d.completed > 0);
+    if (firstNonZero > 2) {
+      return last14Days.slice(firstNonZero - 1); // keep one context day before first activity
+    }
+    return last14Days;
+  }, [last14Days]);
+
   // Subsystem segmented bars: proportions of Todo / In Progress / Complete across all tasks in the subsystem
   // Subsystem segmented bars: exclude archived projects so subsystem status reflects active work only
   const subsystemSegments = useMemo(() => {
@@ -225,6 +234,12 @@ export default function Stats() {
   // Exponential smoothing (alpha=0.3) to soften single-day spikes; one-line update per key
   const dailyHoursBySubsystemSmooth = useMemo(() => { const rows=dailyHoursBySubsystem; if(!rows.length) return []; const keys=Object.keys(rows[0]).filter(k=>k!=='day'); const alpha=0.3; const prev:Record<string,number>={}; return rows.map(r=>{const o:any={day:r.day}; keys.forEach(k=>o[k]=prev[k]=prev[k]==null?r[k]:alpha*r[k]+(1-alpha)*prev[k]); return o;}); }, [dailyHoursBySubsystem]);
 
+  // Trim leading zero visits so chart focus isn't shoved to far right on mobile
+  const dailyAnalyticsDisplay = useMemo(() => {
+    const firstNonZero = dailyAnalytics.findIndex(d => (d.visits || 0) > 0);
+    if (firstNonZero > 2) return dailyAnalytics.slice(firstNonZero - 1);
+    return dailyAnalytics;
+  }, [dailyAnalytics]);
   if (loading) return <div className="text-sm text-muted">Loading stats…</div>;
 
   return (
@@ -240,25 +255,25 @@ export default function Stats() {
         <StatCard label="Visits Today" value={(dailyAnalytics.find(d => d.date === new Date().toISOString().slice(0,10))?.visits) ?? 0} />
       </div>
 
-      <Section title="Tasks completed past 14 days">
+  <Section title="Tasks completed" subtitle="Past 14 days">
         <div className="h-56">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={last14Days} margin={{ left: 8, right: 8, top: 8, bottom: 8 }}>
+            <LineChart data={last14DaysDisplay} margin={{ top: 6, right: 10, left: 4, bottom: 4 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.10)" />
               <XAxis
                 dataKey="day"
-                tick={{ fill: "#BDC0C3", fontSize: 11 }}
-                interval={1}
-                angle={-30}
-                textAnchor="end"
-                height={60}
+        tick={{ fill: "#BDC0C3", fontSize: 11 }}
+        minTickGap={12}
+        angle={-30}
+        textAnchor="end"
+        height={54}
                 tickFormatter={(v: string) => {
                   // v is YYYY-MM-DD; display as M/D
                   const [y, m, d] = v.split("-").map(Number);
                   return `${m}/${d}`;
                 }}
               />
-              <YAxis allowDecimals={false} tick={{ fill: "#BDC0C3", fontSize: 11 }} />
+              <YAxis allowDecimals={false} tick={{ fill: "#BDC0C3", fontSize: 11 }} domain={[0, 'dataMax + 1']} width={28} />
               <Tooltip contentStyle={{ background: "#0F1B3A", border: "1px solid rgba(255,255,255,0.10)", borderRadius: 8 }} />
               <Line type="monotone" dataKey="completed" stroke="#34D399" strokeWidth={2} dot={false} />
             </LineChart>
@@ -284,7 +299,7 @@ export default function Stats() {
 
   {/* Removed Top contributors section per request */}
 
-      <Section title="Subsystem status (task counts)">
+  <Section title="Subsystem status" subtitle="Task counts">
         <div className="space-y-2">
           <div className="text-xs text-muted flex flex-wrap items-center gap-3 uppercase tracking-caps">
             <span className="font-semibold text-white">Legend</span>
@@ -312,13 +327,13 @@ export default function Stats() {
         </div>
       </Section>
 
-      <Section title="Attendance (last 10 meetings)">
+  <Section title="Attendance" subtitle="Last 10 meetings">
         <div className="h-48">
           <AttendanceLast10 attendance={attendance} />
         </div>
       </Section>
 
-  <Section title="Daily hours by subsystem (last 30 days)">
+  <Section title="Daily hours by subsystem" subtitle="Last 30 days">
         <div className="h-72">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={dailyHoursBySubsystem} margin={{ left: 8, right: 8, top: 8, bottom: 8 }}>
@@ -348,7 +363,7 @@ export default function Stats() {
         </div>
       </Section>
 
-  <Section title="Daily hours by subsystem (smoothed)">
+  <Section title="Daily hours by subsystem" subtitle="Smoothed (α=0.3)">
         <div className="h-72">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={dailyHoursBySubsystemSmooth} margin={{ left: 8, right: 8, top: 8, bottom: 8 }}>
@@ -378,10 +393,10 @@ export default function Stats() {
   <p className="mt-2 text-tick text-muted">Exponential smoothing (α=0.3) dampens spikes from large task completions while keeping trends clear. Raw totals (previous chart) remain the authoritative sum.</p>
       </Section>
 
-  <Section title="Daily visits (last 30 days)">
+  <Section title="Daily visits" subtitle="Last 30 days">
         <div className="h-56">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={dailyAnalytics} margin={{ left: 8, right: 8, top: 8, bottom: 8 }}>
+            <LineChart data={dailyAnalyticsDisplay} margin={{ top: 6, right: 10, left: 4, bottom: 4 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.10)" />
               <XAxis
                 dataKey="date"
@@ -389,13 +404,13 @@ export default function Stats() {
                 tick={{ fill: "#BDC0C3", fontSize: 11 }}
                 angle={-30}
                 textAnchor="end"
-                height={60}
+                height={54}
                 tickFormatter={(v: string) => {
                   const [y,m,d] = v.split('-');
                   return `${m}/${d}`;
                 }}
               />
-              <YAxis allowDecimals={false} tick={{ fill: "#BDC0C3", fontSize: 11 }} />
+              <YAxis allowDecimals={false} tick={{ fill: "#BDC0C3", fontSize: 11 }} width={28} />
               <Tooltip contentStyle={{ background: "#0F1B3A", border: "1px solid rgba(255,255,255,0.10)", borderRadius: 8 }} />
               {/* Use accent-weak to differentiate from weekly completions */}
               <Line type="monotone" dataKey="visits" stroke="#98D7D8" strokeWidth={2} dot={false} />
@@ -407,11 +422,13 @@ export default function Stats() {
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
   return (
     <section className="rounded-lg border border-border bg-overlay-6 p-4">
       {/* Section title shrinks on narrow phones */}
-      <h2 className="text-base sm:text-lg font-semibold mb-3 uppercase tracking-caps">{title}</h2>
+      <h2 className="text-base sm:text-lg font-semibold uppercase tracking-caps mb-1">{title}</h2>
+      {subtitle && <div className="text-[11px] sm:text-xs text-muted mb-3 -mt-1">{subtitle}</div>}
+      {!subtitle && <div className="mb-3" />}
       {children}
     </section>
   );
@@ -444,7 +461,7 @@ function AttendanceLast10({ attendance }: { attendance: Attendance[] }) {
   }
   const data = [...days].reverse().map(date => {
     const d = new Date(date + 'T00:00:00');
-    const label = d.toLocaleDateString(undefined, { weekday: 'short', month: 'numeric', day: 'numeric' });
+    const label = `${d.getMonth() + 1}/${d.getDate()}`; // M/D format
     return { date, label, attendees: counts.get(date) || 0 };
   });
 

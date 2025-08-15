@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useMemo } from "react";
+import { useEffect, useRef, useState, useMemo, type ReactNode } from "react";
 import type { Person } from "../types";
 
 // Standardized person selection popover component (single or multi select)
@@ -13,7 +13,9 @@ export interface PersonSelectPopoverProps {
 	onAdd?: (id: string) => void; // multi
 	onRemove?: (id: string) => void; // multi
 	triggerLabel?: string; // custom button label override
+	triggerContent?: ReactNode; // full custom trigger node (icon etc.)
 	buttonClassName?: string;
+	disabled?: boolean;
 	maxItems?: number; // limit results shown (no scrolling design goal)
 	allowUnassign?: boolean; // single mode only
 	allowScroll?: boolean; // allow scrolling inside the popover list
@@ -29,7 +31,9 @@ export default function PersonSelectPopover(props: PersonSelectPopoverProps) {
 		onAdd,
 		onRemove,
 		triggerLabel,
+		triggerContent,
 		buttonClassName = "px-3 py-2 rounded bg-white/10 border border-white/20 text-sm hover:bg-white/15 transition",
+		disabled = false,
 		maxItems = 8,
 		allowUnassign = true,
 		allowScroll = false,
@@ -78,7 +82,9 @@ export default function PersonSelectPopover(props: PersonSelectPopoverProps) {
 
 	return (
 		<>
-			<button type="button" onClick={() => setOpen(o => !o)} className={buttonClassName}>{autoLabel}</button>
+			<button type="button" disabled={disabled} onClick={() => !disabled && setOpen(o => !o)} className={`${buttonClassName} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`} aria-label={typeof triggerContent !== 'undefined' ? (triggerLabel || 'Open selector') : undefined}>
+				{triggerContent ?? autoLabel}
+			</button>
 			{open && (
 				<div className="fixed inset-0 z-40 flex items-start justify-center pt-24 px-4">
 					<div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
