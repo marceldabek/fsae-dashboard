@@ -53,7 +53,7 @@ export const db = (globalThis as any).__FSAE_FIRESTORE__
 export const functions = getFunctions(app);
 
 // In local development, automatically connect to the Functions emulator if running.
-// Default emulator port for functions is 5001. Safe no-op if emulator not started.
+// This project uses a custom functions emulator port (5002) per firebase.json.
 if (import.meta.env.DEV && typeof window !== "undefined") {
   try {
     const host = window.location.hostname;

@@ -3,8 +3,8 @@ const SCOPE = new URL(self.registration.scope);
 const BASE = SCOPE.pathname.endsWith('/') ? SCOPE.pathname : SCOPE.pathname + '/';
 
 // Increment VERSION on any change that should invalidate old caches.
-// v4: bump after Firebase API key / config change so clients fetch new bundle.
-const VERSION = 'v4';
+// v5: auth flow change (redirect) + debugging; force clients to fetch new bundle.
+const VERSION = 'v5';
 const STATIC_CACHE = `static-${VERSION}`;
 
 // Core assets to precache (exclude index.html so we don't serve stale HTML with old hashed asset names)

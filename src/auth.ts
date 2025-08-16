@@ -5,11 +5,13 @@ import { isAdminUid } from "./admin";
 
 const auth = getAuth(app);
 const provider = new GoogleAuthProvider();
+provider.setCustomParameters({ prompt: 'select_account' });
 
 export function listenAuth(cb: (user: User | null) => void) {
   return onAuthStateChanged(auth, cb);
 }
-export async function signIn() {
+// Popup sign-in (restored). Returns the signed-in user.
+export async function signIn(): Promise<User> {
   const { user } = await signInWithPopup(auth, provider);
   return user;
 }
