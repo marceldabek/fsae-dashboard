@@ -1,0 +1,35 @@
+{
+    "compilerOptions": {
+        "module": "commonjs",
+        "esModuleInterop": true,
+        "moduleResolution": "node10",
+        "noImplicitReturns": true,
+        "noUnusedLocals": true,
+        "outDir": "./lib",
+        "sourceMap": true,
+        "strict": true,
+        "target": "es2020",
+        "allowSyntheticDefaultImports": true,
+        "noImplicitAny": true,
+        "noImplicitThis": true,
+        "strictNullChecks": true,
+        "strictFunctionTypes": true,
+        "strictBindCallApply": true,
+        "strictPropertyInitialization": true,
+        "strictBuiltinIteratorReturn": true,
+        "alwaysStrict": true,
+        "useUnknownInCatchVariables": true
+    },
+    "files": [
+        "./src/index.ts",
+        "./scripts/seedAdmins.ts"
+    ],
+    "include": [
+        "src",
+        "scripts"
+    ],
+    "exclude": [
+        "c:/Users/mdabe/Desktop/fsae-dashboard/functions/lib"
+    ],
+    "compileOnSave": true
+}

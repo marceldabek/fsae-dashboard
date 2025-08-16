@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { fetchPeople, fetchTasks, fetchRankedSettings, refreshAllCaches, fetchAttendance, computeRankedScores } from "../lib/firestore";
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../firebase';
 import type { Person, Task, RankedSettings, RankLevel } from "../types";
 import { useRankedEnabled } from "../hooks/useRankedEnabled";
 
@@ -23,6 +25,7 @@ export default function Ranked() {
   const [busy, setBusy] = useState(false);
   const [rankedEnabled] = useRankedEnabled();
   const [nowTs, setNowTs] = useState<number>(Date.now());
+  const [baseline, setBaseline] = useState<{ ts: number; tiers: Record<string,string[]>; people: string[] } | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -85,15 +88,30 @@ export default function Ranked() {
   const mm = Math.floor((msLeft % 3600000) / 60000);
   const countdown = `${dd}d ${hh}h ${mm}m`;
 
-  // Compute "Change Today": compare current index to index at start of day or after last reset if that was later.
-  const startOfDay = (ts: number) => {
-    const d = new Date(ts);
-    d.setHours(0,0,0,0);
-    return d.getTime();
-  };
-  const baselineTs = Math.max(startOfDay(nowTs), settings?.last_reset_at ?? 0);
+  // Server-driven baseline: baseline_today doc written by nightly or manual apply
+  useEffect(()=>{
+    let stopped = false;
+    (async ()=>{
+      try {
+        const snap = await getDoc(doc(db,'ranked','baseline_today'));
+        if (!stopped) {
+          if (snap.exists()) setBaseline(snap.data() as any);
+          else setBaseline(null);
+        }
+      } catch { setBaseline(null); }
+    })();
+    const id = setInterval(async ()=>{
+      try {
+        const snap = await getDoc(doc(db,'ranked','baseline_today'));
+        if (!stopped) {
+          if (snap.exists()) setBaseline(snap.data() as any);
+        }
+      } catch {}
+    }, 60*1000); // refresh baseline view every minute
+    return ()=>{ stopped = true; clearInterval(id); };
+  },[]);
 
-  // Build the current sorted lists per tier (used both for display and to seed baseline when absent)
+  // Build current sorted lists per tier
   const sortedByTier = useMemo(() => {
     const m: Record<RankLevel, Person[]> = { Bronze: [], Silver: [], Gold: [], Platinum: [], Diamond: [] } as any;
     for (const lvl of RANKS) {
@@ -103,59 +121,13 @@ export default function Ranked() {
     return m;
   }, [byRank, scores]);
 
-  // Persist a per-tier baseline at the start of day/reset in localStorage and mirror it to state for rendering
-  type BaselineState = { ts: number; indices: Record<RankLevel, Record<string, number>> };
-  const [baseline, setBaseline] = useState<BaselineState>(() => {
-    try {
-      const data: BaselineState = {
-        ts: baselineTs,
-        indices: { Bronze: {}, Silver: {}, Gold: {}, Platinum: {}, Diamond: {} } as any
-      };
-      for (const lvl of RANKS) {
-        const key = `ranked:baseline:${lvl}`;
-        const raw = localStorage.getItem(key);
-        if (raw) {
-          const parsed = JSON.parse(raw) as { ts: number; indices: Record<string, number> };
-          if (parsed && parsed.ts === baselineTs) {
-            (data.indices as any)[lvl] = parsed.indices || {};
-          }
-        }
-      }
-      return data;
-    } catch {
-      return { ts: baselineTs, indices: { Bronze: {}, Silver: {}, Gold: {}, Platinum: {}, Diamond: {} } as any };
-    }
-  });
-
-  useEffect(() => {
-    // If stored baseline doesn't match current baselineTs or missing any tier, seed from current ordering
-    const next: BaselineState = {
-      ts: baselineTs,
-      indices: { Bronze: {}, Silver: {}, Gold: {}, Platinum: {}, Diamond: {} } as any,
-    };
-    let changed = false;
-    for (const lvl of RANKS) {
-      const key = `ranked:baseline:${lvl}`;
-      let indices: Record<string, number> | undefined;
-      try {
-        const raw = localStorage.getItem(key);
-        if (raw) {
-          const parsed = JSON.parse(raw) as { ts: number; indices: Record<string, number> };
-          if (parsed.ts === baselineTs) indices = parsed.indices;
-        }
-      } catch {}
-      if (!indices) {
-        // seed from current order for this tier
-        indices = {};
-        const list = sortedByTier[lvl] || [];
-        list.forEach((p, idx) => { indices![p.id] = idx; });
-        try { localStorage.setItem(key, JSON.stringify({ ts: baselineTs, indices })); } catch {}
-        changed = true;
-      }
-      (next.indices as any)[lvl] = indices || {};
-    }
-    if (changed || baseline.ts !== baselineTs) setBaseline(next);
-  }, [baselineTs, sortedByTier]);
+  // Helper to get baseline index per tier from server baseline tiers map
+  function getBaselineIndex(level: RankLevel, personId: string, fallback: number): number {
+    const tierList: string[] | undefined = (baseline as any)?.tiers?.[level];
+    if (!tierList) return fallback;
+    const idx = tierList.indexOf(personId);
+    return idx === -1 ? fallback : idx;
+  }
 
   return (
     <div>
@@ -213,8 +185,7 @@ export default function Ranked() {
                     const nameCls = `px-2 py-2 align-middle`;
                     const nameInnerCls = `pl-2 border-l-4 whitespace-nowrap truncate max-w-[9.5rem] overflow-hidden ${isPromo ? 'border-green-400' : isDemo ? 'border-red-400' : 'border-transparent'}`;
                     // Determine baseline index within this tier
-                    const baselineIndexRaw = (baseline.indices as any)[level]?.[p.id];
-                    const baselineIndex = typeof baselineIndexRaw === 'number' ? baselineIndexRaw : i;
+                    const baselineIndex = getBaselineIndex(level, p.id, i);
                     const delta = baselineIndex - i; // + means moved up (smaller current index)
                     return (
                       <tr key={p.id} className="border-b border-white/5">

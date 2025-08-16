@@ -2,22 +2,31 @@
 node_modules/
 functions/node_modules/
 dist/
-.DS_Store
-.env
-.env.local
-.env.*
-.env.*.local
+functions/lib/
+
+# Firebase local state
+.firebase/
+firebase-debug.log*
+
+# Env & runtime config
+.runtimeconfig.json
+.env*
+*.local
+*.secret
+
 # Firebase runtime config (functions)
 functions/.runtimeconfig.json
-functions/.env
-# Functions build output
-functions/lib/
+functions/.env*
+
 # Service account or private key material
+service-account*.json
 serviceAccount*.json
 *.pem
 *.p12
 *.key
+
 # OS/Editor junk
+.DS_Store
 Thumbs.db
 .vscode/*
 !.vscode/extensions.json

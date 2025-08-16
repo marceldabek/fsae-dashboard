@@ -1,7 +1,7 @@
 
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
-import { isAdminUid } from "../admin";
+import { isAdminUid, isLeadUid, subscribeAdminRoleChanges } from "../admin";
 import { signIn, signOutUser } from "../auth";
 import { useEffect, useState } from "react";
 import TeamLogo from "./TeamLogo";
@@ -10,7 +10,15 @@ import { useRankedEnabled } from "../hooks/useRankedEnabled";
 
 export default function Layout() {
   const user = useAuth();
-  const isAdminUser = isAdminUid(user?.uid || null);
+  const uid = user?.uid || null;
+  const [, force] = useState(0);
+  useEffect(()=>{
+    // Subscribe to role change events to force re-render when callable returns
+    const unsub = subscribeAdminRoleChanges(()=>force(x=>x+1));
+    return () => { unsub(); };
+  },[]);
+  const isAdminUser = isAdminUid(uid);
+  const isLeadUser = isLeadUid(uid);
   const isAdmin = isAdminUser; // admin view concept removed
   const [menuOpen, setMenuOpen] = useState(false);
   const [rankedEnabled, updateRankedEnabled] = useRankedEnabled();
@@ -92,12 +100,12 @@ export default function Layout() {
           </div>
           <nav className="px-2 py-3 text-base">
             <MenuLink to="/" label="Overview" />
-            <MenuLink to="/people" label="People" />
+              <MenuLink to="/members" label="Members" />
             <MenuLink to="/stats" label="Stats" />
             <MenuLink to="/timeline" label="Timeline" />
             {/* Show Ranked entry only when Ranked mode is enabled */}
             {rankedEnabled && <MenuLink to="/ranked" label="Ranked" />}
-            {isAdminUser && <MenuLink to="/admin" label="Admin" />}
+            {(isAdminUser || isLeadUser) && <MenuLink to="/admin" label="Admin" />}
             <div className="my-3 border-t border-border/60" />
             <label className="flex items-center gap-2 px-3 py-2 text-sm select-none cursor-pointer">
               <span className="text-muted uppercase tracking-caps">Ranked mode</span>
@@ -113,11 +121,11 @@ export default function Layout() {
               </span>
             </label>
             {user ? (
-              <button onClick={signOutUser} className="w-full text-left px-3 py-2 rounded-md hover:bg-black/20 transition text-sm">
+              <button onClick={signOutUser} className="w-full text-left px-3 py-2 rounded-md hover:bg-black/20 transition text-sm font-normal">
                 Sign out
               </button>
             ) : (
-              <button onClick={signIn} className="w-full text-left px-3 py-2 rounded-md bg-accent/30 hover:bg-accent/50 transition text-sm text-black">
+              <button onClick={signIn} className="w-full text-left px-3 py-2 rounded-md bg-accent/30 hover:bg-accent/50 transition text-sm font-normal text-text">
                 Sign in
               </button>
             )}

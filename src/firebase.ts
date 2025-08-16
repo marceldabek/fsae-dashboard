@@ -6,6 +6,7 @@ import {
   persistentMultipleTabManager,
   CACHE_SIZE_UNLIMITED,
 } from "firebase/firestore";
+import { getFunctions, connectFunctionsEmulator } from 'firebase/functions';
 
 // If you later add App Check, import it here.
 
@@ -47,3 +48,28 @@ export const db = (globalThis as any).__FSAE_FIRESTORE__
           cacheSizeBytes: CACHE_SIZE_UNLIMITED,
         }),
       }));
+
+// Export Functions instance (default region). Adjust region if you deploy elsewhere.
+export const functions = getFunctions(app);
+
+// In local development, automatically connect to the Functions emulator if running.
+// Default emulator port for functions is 5001. Safe no-op if emulator not started.
+if (import.meta.env.DEV && typeof window !== "undefined") {
+  try {
+    const host = window.location.hostname;
+    if (host === "localhost" || host === "127.0.0.1") {
+      // Avoid reconnecting on HMR (Firebase SDK will throw otherwise)
+      const g: any = globalThis as any;
+      if (!g.__FSAE_FN_EMULATOR__) {
+        const port = Number(import.meta.env.VITE_FUNCTIONS_EMULATOR_PORT) || 5002; // firebase.json sets 5002
+        connectFunctionsEmulator(functions, host, port);
+        g.__FSAE_FN_EMULATOR__ = true;
+        // eslint-disable-next-line no-console
+        console.log("[firebase] Connected Functions emulator at", host, port);
+      }
+    }
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.warn("[firebase] Functions emulator connect failed", e);
+  }
+}

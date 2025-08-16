@@ -17,9 +17,12 @@ import {
   fullSystemReset,
   fetchTasks,
   fetchRankedSettings,
-  applyRankedPromotionsDemotions,
   addAttendance,
+  fetchRecentLogs,
+  setRankedSettings as setRankedSettingsFs,
 } from "../lib/firestore";
+import { functions } from "../firebase";
+import { httpsCallable } from "firebase/functions";
 
 export default function Admin() {
   const user = useAuth();
@@ -96,9 +99,7 @@ export default function Admin() {
   // Load data/settings once
   useEffect(() => {
     (async () => {
-      const { fetchRankedSettings } = await import("../lib/firestore");
-  const { fetchRecentLogs } = await import("../lib/firestore");
-  const [pe, pr, st, rs, logs] = await Promise.all([fetchPeople(), fetchProjects(), fetchSettings(), fetchRankedSettings(), fetchRecentLogs(50)]);
+      const [pe, pr, st, rs, logs] = await Promise.all([fetchPeople(), fetchProjects(), fetchSettings(), fetchRankedSettings(), fetchRecentLogs(50)]);
       setPeople(pe);
       setProjects(pr);
       setSettingsState(st);
@@ -506,7 +507,7 @@ export default function Admin() {
                   onRemove={(id)=> toggleOwner(id)}
                   triggerLabel={prOwners.length ? `${prOwners.length} selected` : 'Add/Remove'}
                   buttonClassName="ml-auto text-[11px] px-2 py-1 rounded bg-white/10 border border-white/20"
-                  maxItems={8}
+                  maxItems={5}
                 />
               </div>
               <button
@@ -820,14 +821,14 @@ export default function Admin() {
                 <label className="inline-flex items-center gap-2 text-sm">
                   <input type="checkbox" className="accent-accent" checked={!!rankedSettings?.enabled} onChange={async (e) => {
                     const enabled = e.target.checked; setRankedSettingsState(s=>s?{...s, enabled}: { enabled });
-                    const { setRankedSettings } = await import("../lib/firestore"); await setRankedSettings({ enabled });
+                    await setRankedSettingsFs({ enabled });
                   }} />
                   Enable ranked mode
                 </label>
                 <label className="inline-flex items-center gap-2 text-sm">
                   <input type="checkbox" className="accent-accent" checked={!!rankedSettings?.autoApply} onChange={async (e) => {
                     const autoApply = e.target.checked; setRankedSettingsState(s=>s?{...s, autoApply}: { autoApply });
-                    const { setRankedSettings } = await import("../lib/firestore"); await setRankedSettings({ autoApply });
+                    await setRankedSettingsFs({ autoApply });
                   }} />
                   Auto apply hourly
                 </label>
@@ -902,8 +903,7 @@ export default function Admin() {
                   disabled={!rsDirty}
                   onClick={async ()=>{
                     try {
-                      const { setRankedSettings } = await import("../lib/firestore");
-                      await setRankedSettings({ promotion_pct: promoEdit as any, demotion_pct: demoEdit as any });
+                      await setRankedSettingsFs({ promotion_pct: promoEdit as any, demotion_pct: demoEdit as any });
                       setRankedSettingsState(s => ({ ...(s||{}), promotion_pct: { ...(promoEdit as any) }, demotion_pct: { ...(demoEdit as any) } } as any));
                       setRsDirty(false);
                       showToast("Ranked settings saved");
@@ -937,7 +937,6 @@ export default function Admin() {
                   <button
                     className="text-xs px-2 py-1 rounded border border-border bg-overlay-6 uppercase tracking-caps"
                     onClick={async ()=>{
-                      const { fetchRecentLogs } = await import("../lib/firestore");
                       setRecentLogs(await fetchRecentLogs(50));
                     }}
                   >Refresh</button>
@@ -1029,9 +1028,11 @@ export default function Admin() {
                 onClick={async ()=>{
                   try {
                     setRankedApplying(true);
-        const [pe, ts, rs, att] = await Promise.all([fetchPeople(), fetchTasks(), fetchRankedSettings(), (await import("../lib/firestore")).fetchAttendance()]);
-        const moved = await applyRankedPromotionsDemotions(pe, ts, rs, att);
-                    showToast(`${moved} updates applied`);
+  // Call backend callable to apply ranked changes server-side (authoritative)
+  const callable: any = httpsCallable(functions, "applyRankedChanges");
+  const res = await callable();
+  const moved = res?.data?.applied ?? 0;
+  showToast(`${moved} updates applied`);
                     const { fetchRecentLogs } = await import("../lib/firestore");
                     setRecentLogs(await fetchRecentLogs(50));
                     setShowApplyModal(false);

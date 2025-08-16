@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { fetchPeople, fetchProjects, fetchTasks, fetchSettings, fetchLogsForPerson, fetchAttendance } from "../lib/firestore";
+import { fetchPeople, fetchProjects, fetchTasks, fetchSettings, fetchAttendance } from "../lib/firestore";
 import type { Person, Project, Task, RankLevel, LogEvent, Attendance } from "../types";
 import { useRankedEnabled } from "../hooks/useRankedEnabled";
+import LinkButton from "../components/LinkButton";
 
 export default function PersonDetail() {
   const { id } = useParams();
@@ -33,11 +34,24 @@ export default function PersonDetail() {
       setTasks(allTasks.filter(t => t.assignee_id === id));
       setSettings(settings);
       setAttendance(attendance);
-      if (id) {
-        try { setLogs(await fetchLogsForPerson(id)); } catch {}
+      // Only load logs when Ranked mode is enabled to avoid unnecessary module loads
+      if (id && rankedEnabled) {
+        try {
+          const mod = await import("../lib/firestore");
+          if (mod && typeof mod.fetchLogsForPerson === 'function') {
+            setLogs(await mod.fetchLogsForPerson(id));
+          } else {
+            setLogs([]);
+          }
+        } catch {
+          // ignore log fetch errors
+          setLogs([]);
+        }
+      } else {
+        setLogs([]);
       }
     })();
-  }, [id]);
+  }, [id, rankedEnabled]);
 
   // Compute attendance streak (consecutive meeting days with attendance, counting today if applicable)
   useEffect(() => {
@@ -101,6 +115,33 @@ export default function PersonDetail() {
   // Sort rank history newest first for display
   const history = (person.rank_history || []).slice().sort((a,b)=>b.ts-a.ts);
 
+  // Date formatting helpers (e.g., Aug 9th)
+  function ordinal(n: number) {
+    return n === 1 || n === 21 || n === 31 ? 'st'
+      : n === 2 || n === 22 ? 'nd'
+      : n === 3 || n === 23 ? 'rd' : 'th';
+  }
+  function formatMonthDay(input: number | Date) {
+    const d = input instanceof Date ? input : new Date(input);
+    const month = d.toLocaleString('en-US', { month: 'short' });
+    const day = d.getDate();
+    return `${month} ${day}${ordinal(day)}`;
+  }
+  function replaceIsoDateInNote(note: string) {
+    return note.replace(/(\d{4})-(\d{2})-(\d{2})/, (_m, y, mo, da) => {
+      const d = new Date(Number(y), Number(mo) - 1, Number(da));
+      return formatMonthDay(d);
+    });
+  }
+  function formatLogNote(l: LogEvent) {
+    const base = l.note ? replaceIsoDateInNote(l.note) : l.type;
+    if (l.type === 'attendance') {
+      // Remove patterns like "Attendance 10 pts on " or similar numeric pts phrasing
+      return base.replace(/Attendance\s+\d+\s*pts?\s+on\s+/i, 'Attendance ');
+    }
+    return base;
+  }
+
   return (
     <div className="max-w-2xl mx-auto mt-6 space-y-6">
       {/* Profile Card */}
@@ -120,20 +161,20 @@ export default function PersonDetail() {
           )}
         </div>
   {/* role/year shown above; badges are displayed below Projects per request */}
-        <div className="flex gap-4 mt-1">
-          <div className="text-center">
+        <div className="mt-3 grid grid-cols-5 text-center">
+          <div className="flex flex-col items-center">
             <div className="text-lg font-semibold">{numProjects}</div>
             <div className="text-xs text-muted uppercase tracking-caps">Projects</div>
           </div>
-          <div className="text-center">
+          <div className="flex flex-col items-center">
             <div className="text-lg font-semibold">{numTasks}</div>
             <div className="text-xs text-muted uppercase tracking-caps">Tasks</div>
           </div>
-          <div className="text-center">
+          <div className="flex flex-col items-center">
             <div className="text-lg font-semibold">{numTasksTodo}</div>
             <div className="text-xs text-muted uppercase tracking-caps">To Do</div>
           </div>
-          <div className="text-center flex flex-col items-center">
+          <div className="flex flex-col items-center">
             <div className="text-lg font-semibold flex items-center gap-1">
               {streak}
               {streak > 0 && (
@@ -144,8 +185,11 @@ export default function PersonDetail() {
             </div>
             <div className="text-xs text-muted uppercase tracking-caps">Streak</div>
           </div>
+          <div className="flex flex-col items-center">
+            <div className="text-lg font-semibold">{taskHours}</div>
+            <div className="text-xs text-muted uppercase tracking-caps">Hrs</div>
+          </div>
         </div>
-  <span className="absolute bottom-4 right-6 text-sm text-muted/90 tracking-caps">{taskHours}hrs</span>
       </div>
 
       {/* Quick Links Card */}
@@ -192,8 +236,15 @@ export default function PersonDetail() {
             return (
               <li key={p.id} className="rounded-xl bg-white/10 border border-white/10 p-3">
                 <div className="flex items-center justify-between">
-                  <Link className="underline font-semibold" to={`/project/${p.id}`}>{p.name}</Link>
-                  <div className="text-xs text-muted uppercase tracking-caps">{done}/{total} · {percent}%</div>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Link className="text-base md:text-lg font-semibold truncate" to={`/project/${p.id}`}>{p.name}</Link>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <div className="text-sm text-muted">{done}/{total} · {percent}%</div>
+                    {p.design_link && (
+                      <LinkButton href={p.design_link}>Design Docs</LinkButton>
+                    )}
+                  </div>
                 </div>
                 <div className="text-xs text-muted uppercase tracking-caps">
                   {p.description ? p.description : null}
@@ -242,10 +293,9 @@ export default function PersonDetail() {
         )}
       </div>
 
-  {/* Bottom two-column area: Ranked History (left) & Points History (right) */}
-  <div className="grid md:grid-cols-2 gap-6">
-    {/* Ranked History */}
-    {rankedEnabled && (
+  {/* Bottom two-column area: Ranked History (left) & Points History (right) - only when ranked is enabled */}
+  {rankedEnabled ? (
+    <div className="grid md:grid-cols-2 gap-6">
       <div className="rounded-2xl bg-white/5 border border-white/10 p-4">
         <h2 className="font-semibold mb-2">Ranked History</h2>
         {history.length === 0 ? (
@@ -254,7 +304,7 @@ export default function PersonDetail() {
           <ul className="space-y-2 text-sm">
             {history.map((h, i) => (
               <li key={i} className="flex items-center gap-2">
-                <span className="text-xs text-muted w-28 uppercase tracking-caps">{new Date(h.ts).toLocaleDateString('en-US')}</span>
+                <span className="text-xs text-muted w-24 uppercase tracking-caps">{formatMonthDay(h.ts)}</span>
                 <span className="inline-flex items-center gap-1">
                   <img src={rankIcon(h.from)} alt={h.from} className="h-4 w-4 object-contain" />
                   <span>{h.from}</span>
@@ -269,32 +319,29 @@ export default function PersonDetail() {
           </ul>
         )}
       </div>
-    )}
-    {/* Points History */}
-    <div className="rounded-2xl bg-white/5 border border-white/10 p-4">
-      <h2 className="font-semibold mb-2">Points History</h2>
-      {logs.length === 0 ? (
-  <div className="text-xs text-muted uppercase tracking-caps">No point events yet.</div>
-      ) : (
-        <ul className="space-y-2 text-sm max-h-72 overflow-auto pr-1">
-          {logs
-            .filter(l => (l.type === 'attendance' || l.type === 'task_points'))
-            .slice(0, 100)
-            .map((l, i) => (
-              <li key={l.id || i} className="flex items-start gap-2">
-                <span className="text-tick text-muted w-24 shrink-0">
-                  {new Date(l.ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                </span>
-                <span className="flex-1">
-                  <span className="text-white/90">{l.note || l.type}</span>{' '}
-                  {typeof l.points === 'number' && <span className="text-accent font-semibold">(+{l.points})</span>}
-                </span>
-              </li>
-            ))}
-        </ul>
-      )}
+      <div className="rounded-2xl bg-white/5 border border-white/10 p-4">
+        <h2 className="font-semibold mb-2">Points History</h2>
+        {logs.length === 0 ? (
+          <div className="text-xs text-muted uppercase tracking-caps">No point events yet.</div>
+        ) : (
+          <ul className="space-y-2 text-sm max-h-72 overflow-auto pr-1">
+            {logs
+              .filter(l => (l.type === 'attendance' || l.type === 'task_points'))
+              .slice(0, 100)
+              .map((l, i) => (
+                <li key={l.id || i} className="flex items-start gap-2">
+                  <span className="text-xs text-muted w-24 shrink-0 uppercase tracking-caps">{formatMonthDay(l.ts)}</span>
+                  <span className="flex-1">
+                    <span className="text-white/90">{formatLogNote(l)}</span>{' '}
+                    {typeof l.points === 'number' && <span className="text-accent font-semibold">(+{l.points})</span>}
+                  </span>
+                </li>
+              ))}
+          </ul>
+        )}
+      </div>
     </div>
-  </div>
+  ) : null}
     </div>
   );
 }

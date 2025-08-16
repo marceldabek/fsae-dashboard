@@ -1,12 +1,13 @@
 import { Link } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
-import { isAdminUid } from "../admin";
+import { isAdminUid, isLeadUid } from "../admin";
 
 export default function AdminBadge() {
   const user = useAuth();
-  const isAdmin = isAdminUid(user?.uid || null);
+  const uid = user?.uid || null;
+  const elevated = isAdminUid(uid) || isLeadUid(uid);
 
-  if (!isAdmin) return null;
+  if (!elevated) return null;
 
   return (
     <div className="fixed bottom-4 right-4 flex gap-2 z-50">
