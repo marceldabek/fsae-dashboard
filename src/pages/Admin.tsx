@@ -67,6 +67,7 @@ export default function Admin() {
   // Admin UI helpers
   const [peopleSearch, setPeopleSearch] = useState("");
   const [projectsSearch, setProjectsSearch] = useState("");
+  const [recentLogsLimit, setRecentLogsLimit] = useState(20);
   // Admin projects list filtering/sorting (UI similar to Overview)
   const [admSelectedSubsystems, setAdmSelectedSubsystems] = useState<string[]>([]);
   const [admSortBy, setAdmSortBy] = useState<"name"|"due"|"subsystem">("subsystem");
@@ -283,7 +284,9 @@ export default function Admin() {
       <h1 className="text-2xl font-semibold mb-1">Admin</h1>
       {/* Tab bar without filled background; keeps underline across full width */}
       {toast && (
-  <div className="fixed bottom-4 left-4 z-50 px-4 py-2 rounded bg-accent text-black shadow-lg text-sm font-medium animate-fade-in">
+        <div
+          className="fixed bottom-4 left-4 z-50 px-4 py-2 rounded shadow-lg animate-fade-in bg-accent/90 border border-accent-weak/60 font-medium text-[13px] leading-snug text-bg"
+        >
           {toast}
         </div>
       )}
@@ -813,90 +816,97 @@ export default function Admin() {
       )}
 
   {activeTab === 'ranked' && canViewAdminTab(uid,'ranked') && (
+  // ...existing code...
         <div role="tabpanel" className="mt-4">
           <section className="space-y-2">
-            <h2 className="font-semibold">Ranked Settings</h2>
-            <div className="form-section wide p-5 space-y-4">
+            <h2 className="font-semibold mb-2">Ranked Settings</h2>
+            {/* Settings and table OUTSIDE card for max width */}
+            <div className="space-y-4">
               <div className="grid sm:grid-cols-2 gap-3">
-                <label className="inline-flex items-center gap-2 text-sm">
-                  <input type="checkbox" className="accent-accent" checked={!!rankedSettings?.enabled} onChange={async (e) => {
-                    const enabled = e.target.checked; setRankedSettingsState(s=>s?{...s, enabled}: { enabled });
-                    await setRankedSettingsFs({ enabled });
-                  }} />
-                  Enable ranked mode
-                </label>
-                <label className="inline-flex items-center gap-2 text-sm">
-                  <input type="checkbox" className="accent-accent" checked={!!rankedSettings?.autoApply} onChange={async (e) => {
-                    const autoApply = e.target.checked; setRankedSettingsState(s=>s?{...s, autoApply}: { autoApply });
-                    await setRankedSettingsFs({ autoApply });
-                  }} />
-                  Auto apply hourly
-                </label>
+                <div className="form-section p-3 bg-surface/80 border border-border/40 rounded mb-2 flex flex-col gap-2">
+                  <label className="inline-flex items-center gap-2 text-sm">
+                    <input type="checkbox" className="accent-accent" checked={!!rankedSettings?.enabled} onChange={async (e) => {
+                      const enabled = e.target.checked; setRankedSettingsState(s=>s?{...s, enabled}: { enabled });
+                      await setRankedSettingsFs({ enabled });
+                    }} />
+                    Enable ranked mode
+                  </label>
+                  <p className="text-xs text-muted uppercase tracking-caps mt-1">When on, the app reveals the Ranked page and point indicators. Turning it off hides ranked UI and points, but nothing is deleted.</p>
+                  <label className="inline-flex items-center gap-2 text-sm mt-2">
+                    <input type="checkbox" className="accent-accent" checked={!!rankedSettings?.autoApply} onChange={async (e) => {
+                      const autoApply = e.target.checked; setRankedSettingsState(s=>s?{...s, autoApply}: { autoApply });
+                      await setRankedSettingsFs({ autoApply });
+                    }} />
+                    Auto apply weekly
+                  </label>
+                  <p className="text-xs text-muted uppercase tracking-caps mt-1">When on, promotions/relegations are automatically applied each week for all users. Disable to require manual action only.</p>
+                </div>
               </div>
               <div className="grid sm:grid-cols-2 gap-3 -mt-2">
-                <p className="text-xs text-muted uppercase tracking-caps">When on, the app reveals the Ranked page and point indicators. Turning it off hides ranked UI and points, but nothing is deleted.</p>
-                <p className="text-xs text-muted uppercase tracking-caps">When on, promotions/relegations can be applied on a schedule. In this client-only build it’s a manual action or conceptual; see note below.</p>
+                {/* Removed extra card for schedule explanation, now only one card remains above */}
               </div>
-              <div className="mt-2 overflow-auto rounded border border-white/10">
-                <table className="w-full text-sm">
-                  <thead className="bg-white/5">
-                    <tr>
-                      <th className="text-left px-3 py-2 font-medium">Rank</th>
-                      <th className="text-left px-3 py-2 font-medium">Promote %</th>
-                      <th className="text-left px-3 py-2 font-medium">Relegate %</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(["Bronze","Silver","Gold","Platinum","Diamond"] as const).map(r => {
-                      const key = r.toLowerCase() as "bronze"|"silver"|"gold"|"platinum"|"diamond";
-                      const promo = (promoEdit as any)[key] ?? 0;
-                      const demo = (demoEdit as any)[key] ?? 0;
-                      const promoDisabled = r === "Diamond"; // no promotion from Diamond
-                      const demoDisabled = r === "Bronze"; // no demotion from Bronze
-                      return (
-                        <tr key={r} className="border-t border-white/10"> 
-                          <td className="px-3 py-2 text-xs">{r}</td>
-                          <td className="px-3 py-2">
-                            {promoDisabled ? (
-                              <span className="text-xs text-muted uppercase tracking-caps">N/A</span>
-                            ) : (
-                              <input
-                                type="number"
-                                min={0}
-                                max={100}
-                                value={promo}
-                                onChange={async (e)=>{
-                                  const v = Math.max(0, Math.min(100, Number(e.target.value)));
-                                  setPromoEdit(prev => ({ ...(prev||{}), [key]: v }));
-                                  setRsDirty(true);
-                                }}
-                                className="px-2 py-1 rounded w-24 bg-white/5 border border-white/10"
-                              />
-                            )}
-                          </td>
-                          <td className="px-3 py-2">
-                            {demoDisabled ? (
-                              <span className="text-xs text-muted uppercase tracking-caps">N/A</span>
-                            ) : (
-                              <input
-                                type="number"
-                                min={0}
-                                max={100}
-                                value={demo}
-                                onChange={async (e)=>{
-                                  const v = Math.max(0, Math.min(100, Number(e.target.value)));
-                                  setDemoEdit(prev => ({ ...(prev||{}), [key]: v }));
-                                  setRsDirty(true);
-                                }}
-                                className="px-2 py-1 rounded w-24 bg-white/5 border border-white/10"
-                              />
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+              <div className="mt-2">
+                <div className="form-section wide p-4 overflow-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-white/5">
+                      <tr>
+                        <th className="text-left px-2 py-2 font-medium text-sm">Rank</th>
+                        <th className="text-left px-2 py-2 font-medium text-sm">Promote %</th>
+                        <th className="text-left px-2 py-2 font-medium text-sm">Relegate %</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {["Bronze","Silver","Gold","Platinum","Diamond"].map(r => {
+                        const key = r.toLowerCase();
+                        const promo = (promoEdit as any)[key] ?? 0;
+                        const demo = (demoEdit as any)[key] ?? 0;
+                        const promoDisabled = r === "Diamond";
+                        const demoDisabled = r === "Bronze";
+                        return (
+                          <tr key={r} className="border-t border-white/10"> 
+                            <td className="px-2 py-2 text-sm">{r}</td>
+                            <td className="px-2 py-2">
+                              {promoDisabled ? (
+                                <span className="text-sm text-muted uppercase tracking-caps">N/A</span>
+                              ) : (
+                                <input
+                                  type="number"
+                                  min={0}
+                                  max={100}
+                                  value={promo}
+                                  onChange={async (e)=>{
+                                    const v = Math.max(0, Math.min(100, Number(e.target.value)));
+                                    setPromoEdit(prev => ({ ...(prev||{}), [key]: v }));
+                                    setRsDirty(true);
+                                  }}
+                                  className="px-2 py-1 rounded w-16 max-w-[64px] text-center bg-white/5 border border-white/10 text-base font-semibold"
+                                />
+                              )}
+                            </td>
+                            <td className="px-2 py-2">
+                              {demoDisabled ? (
+                                <span className="text-sm text-muted uppercase tracking-caps">N/A</span>
+                              ) : (
+                                <input
+                                  type="number"
+                                  min={0}
+                                  max={100}
+                                  value={demo}
+                                  onChange={async (e)=>{
+                                    const v = Math.max(0, Math.min(100, Number(e.target.value)));
+                                    setDemoEdit(prev => ({ ...(prev||{}), [key]: v }));
+                                    setRsDirty(true);
+                                  }}
+                                  className="px-2 py-1 rounded w-16 max-w-[64px] text-center bg-white/5 border border-white/10 text-base font-semibold"
+                                />
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               </div>
               <div className="flex items-center justify-end">
                 <button
@@ -929,77 +939,82 @@ export default function Admin() {
                   >Apply now</button>
                 </div>
               </div>
-
-              {/* Recent ranked activity log */}
-              <div className="pt-4 mt-4 border-t border-white/10">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="text-sm font-medium">Recent ranked activity</div>
-                  <button
-                    className="text-xs px-2 py-1 rounded border border-border bg-overlay-6 uppercase tracking-caps"
-                    onClick={async ()=>{
-                      setRecentLogs(await fetchRecentLogs(50));
-                    }}
-                  >Refresh</button>
-                </div>
-                <ul className="text-sm divide-y divide-white/10 rounded border border-white/10">
-                  {recentLogs.length === 0 && (
-                    <li className="px-3 py-2 text-muted uppercase tracking-caps">No activity yet</li>
-                  )}
-                  {recentLogs.map((e, i) => (
-                    <li
-                      key={e.id || i}
-                      className="px-3 py-2 flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-3 overflow-hidden"
-                    >
-                      <div className="flex items-center gap-2 text-xs text-muted leading-snug uppercase tracking-caps">
-                        <span className="shrink-0 sm:w-40 sm:inline block">
-                          {new Date(e.ts || 0).toLocaleString()}
-                        </span>
-                        <span className="font-mono text-[10px] sm:text-xs uppercase tracking-wide px-1.5 py-0.5 rounded bg-white/10 border border-white/10">
-                          {e.type}
-                        </span>
-                      </div>
-                      <span className="text-sm break-words whitespace-pre-wrap leading-snug">
-                        {e.type === 'attendance' && (
-                          <>
-                            Attendance · {e.points} pts {e.person_id ? `→ ${people.find(p=>p.id===e.person_id)?.name || e.person_id}` : ''}
-                          </>
-                        )}
-                        {e.type === 'rank_change' && (
-                          <>
-                            Rank · {people.find(p=>p.id===e.person_id)?.name || e.person_id} {e.from_rank} → {e.to_rank}
-                          </>
-                        )}
-                        {e.type === 'task_points' && (()=>{
-                          // Sanitize duplicate concatenated notes (e.g., duplicated "Task complete:" strings)
-                          let note: string | undefined = e.note;
-                          if (note) {
-                            // If perfect duplicate halves, collapse
-                            if (note.length % 2 === 0) {
-                              const half = note.length/2;
-                              const a = note.slice(0, half);
-                              const b = note.slice(half);
-                              if (a === b) note = a;
-                            }
-                            // If 'Task complete:' appears multiple times with same tail, dedupe
-                            if ((note.match(/Task complete:/g) || []).length > 1) {
-                              const parts = note.split('Task complete:').filter(Boolean).map(s=>s.trim());
-                              if (parts.length >= 2 && parts.every(p=>p === parts[0])) {
-                                note = 'Task complete: ' + parts[0];
-                              } else {
-                                // keep only first occurrence
-                                note = 'Task complete: ' + parts[0];
-                              }
+            </div>
+            {/* Recent ranked activity log in a card below, limited to 20 logs, with Load More */}
+            <div className="form-section wide p-5 mt-6">
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-sm font-medium">Recent ranked activity</div>
+                <button
+                  className="text-xs px-2 py-1 rounded border border-border bg-overlay-6 uppercase tracking-caps"
+                  onClick={async ()=>{
+                    setRecentLogs(await fetchRecentLogs(20));
+                  }}
+                >Refresh</button>
+              </div>
+              <ul className="text-sm divide-y divide-white/10 rounded border border-white/10">
+                {recentLogs.length === 0 && (
+                  <li className="px-3 py-2 text-muted uppercase tracking-caps">No activity yet</li>
+                )}
+                {recentLogs.slice(0, recentLogsLimit).map((e, i) => (
+                  <li
+                    key={e.id || i}
+                    className="px-3 py-2 flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-3 overflow-hidden"
+                  >
+                    <div className="flex items-center gap-2 text-xs text-muted leading-snug uppercase tracking-caps">
+                      <span className="shrink-0 sm:w-40 sm:inline block">
+                        {new Date(e.ts || 0).toLocaleString()}
+                      </span>
+                      <span className="font-mono text-[10px] sm:text-xs uppercase tracking-wide px-1.5 py-0.5 rounded bg-white/10 border border-white/10">
+                        {e.type}
+                      </span>
+                    </div>
+                    <span className="text-sm break-words whitespace-pre-wrap leading-snug">
+                      {e.type === 'attendance' && (
+                        <>
+                          Attendance · {e.points} pts {e.person_id ? `→ ${people.find(p=>p.id===e.person_id)?.name || e.person_id}` : ''}
+                        </>
+                      )}
+                      {e.type === 'rank_change' && (
+                        <>
+                          Rank · {people.find(p=>p.id===e.person_id)?.name || e.person_id} {e.from_rank} → {e.to_rank}
+                        </>
+                      )}
+                      {e.type === 'task_points' && (()=>{
+                        let note: string | undefined = e.note;
+                        if (note) {
+                          if (note.length % 2 === 0) {
+                            const half = note.length/2;
+                            const a = note.slice(0, half);
+                            const b = note.slice(half);
+                            if (a === b) note = a;
+                          }
+                          if ((note.match(/Task complete:/g) || []).length > 1) {
+                            const parts = note.split('Task complete:').filter(Boolean).map(s=>s.trim());
+                            if (parts.length >= 2 && parts.every(p=>p === parts[0])) {
+                              note = 'Task complete: ' + parts[0];
+                            } else {
+                              note = 'Task complete: ' + parts[0];
                             }
                           }
-                          return (
-                            <>Task · {e.points} pts {e.person_id ? `→ ${people.find(p=>p.id===e.person_id)?.name || e.person_id}` : ''}{note ? ` · ${note}` : ''}</>
-                          );
-                        })()}
-                        {e.type !== 'attendance' && e.type !== 'rank_change' && (e.note || '')}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
+                        }
+                        return (
+                          <>Task · {e.points} pts {e.person_id ? `→ ${people.find(p=>p.id===e.person_id)?.name || e.person_id}` : ''}{note ? ` · ${note}` : ''}</>
+                        );
+                      })()}
+                      {e.type !== 'attendance' && e.type !== 'rank_change' && (e.note || '')}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <div className="flex items-center justify-center mt-2">
+                <button
+                  className="text-xs px-3 py-1 rounded border border-border bg-overlay-6 uppercase tracking-caps"
+                  onClick={async ()=>{
+                    const newLimit = recentLogsLimit + 20;
+                    setRecentLogs(await fetchRecentLogs(newLimit));
+                    setRecentLogsLimit(newLimit);
+                  }}
+                >Load More</button>
               </div>
             </div>
           </section>

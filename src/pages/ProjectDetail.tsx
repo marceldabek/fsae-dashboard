@@ -208,16 +208,33 @@ const canEdit = isAdminUid(uid) || isLeadUid(uid);
           </div>
         </div>
                 {toast && (
-                  <div className="fixed bottom-6 right-6 bg-white/6 border border-white/10 text-sm px-4 py-2 rounded shadow">{toast}</div>
+                  <div className="fixed bottom-6 right-6 px-4 py-2 rounded shadow bg-surface/95 border border-accent/40 text-[13px] leading-snug text-white font-medium backdrop-blur-sm">
+                    {toast}
+                  </div>
                 )}
         <div className="mt-2">
-          <ProgressBar value={percent} />
+          <ProgressBar value={percent} color={percent === 100 ? 'linear-gradient(90deg,#22c55e,#16a34a)' : undefined} />
         </div>
         <div className="text-[11px] text-muted text-center uppercase tracking-caps font-medium tracking-wide mt-1 mb-1">
           {total > 0 ? `${done}/${total} complete` : "No tasks yet"}
         </div>
 
           <section className="space-y-2">
+          {/* Status Dot Legend */}
+          <div className="flex justify-between items-center w-full max-w-xs mx-auto mb-2" style={{minWidth: '250px', maxWidth: '390px'}}>
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-gray-400 inline-block" aria-hidden></span>
+              <span className="text-[11px] text-muted uppercase tracking-caps font-medium">To-do / Not started</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-yellow-400 inline-block" aria-hidden></span>
+              <span className="text-[11px] text-muted uppercase tracking-caps font-medium">In Progress</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-green-500 inline-block" aria-hidden></span>
+              <span className="text-[11px] text-muted uppercase tracking-caps font-medium">Complete</span>
+            </div>
+          </div>
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <h2 className="font-semibold text-base leading-tight">Tasks</h2>

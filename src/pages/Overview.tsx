@@ -9,14 +9,15 @@ import TrophyIcon from "../components/TrophyIcon";
 import ProgressBar from "../components/ProgressBar";
 import SwipeCarousel from "../components/SwipeCarousel";
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, Area } from "recharts";
+import AttendanceCard from "../components/AttendanceCard";
 import { isAdminUid, isLeadUid } from "../admin";
 
 function StatCard({ label, value }: { label: string; value: string | number }) {
   return (
     <div className="rounded-xl bg-white/5 border border-white/10 p-3 text-center flex flex-col items-center justify-center min-w-0">
-    {/* Keep number large for prominence */}
-    <div className="text-xl font-semibold leading-tight">{value}</div>
-  <div className="mt-1 text-xs tracking-caps text-muted uppercase font-medium whitespace-nowrap overflow-hidden text-ellipsis leading-snug" title={label}>{label}</div>
+      {/* Make value text match total task completion font */}
+      <div className="text-xl font-semibold leading-tight">{value}</div>
+  <div className="mt-1 text-xs uppercase text-muted font-medium whitespace-nowrap overflow-hidden text-ellipsis leading-snug" title={label}>{label}</div>
     </div>
   );
 }
@@ -28,7 +29,7 @@ export default function Overview() {
   const [attendance, setAttendance] = useState<Attendance[]>([]);
   // Subsystem multi-select with search
   const [selectedSubsystems, setSelectedSubsystems] = useState<string[]>([]);
-  const [sortBy, setSortBy] = useState<"subsystem" | "name" | "due" | "progress">("subsystem");
+  const [sortBy, setSortBy] = useState<"subsystem" | "name" | "due" | "progress">("name");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [showSubsystemMenu, setShowSubsystemMenu] = useState(false);
   const [showSortMenu, setShowSortMenu] = useState(false);
@@ -98,28 +99,46 @@ export default function Overview() {
 
   const user = useAuth();
 
-  // Build attendance series for recent days; include only Tue/Thu/Sat
-  const attendanceSeries = useMemo(() => {
-    const days = 21; // 3 weeks to ensure enough Tue/Thu/Sat points
-    const today = new Date();
-    const byDate = new Map<string, number>();
-    for (const a of attendance) {
-      const d = a.date; // YYYY-MM-DD
-      byDate.set(d, (byDate.get(d) || 0) + 1);
+  // Attendance utilities for AttendanceCard
+  type AttendanceRecord = { date: string | Date; present: number };
+  const dayLabels = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+  function toWeekSeries(records: AttendanceRecord[]) {
+    const now = new Date();
+    // Find the last 3 meeting days (Tue=2, Thu=4, Sat=6)
+    const meetings: { label: string; present: number }[] = [];
+    let count = 0;
+    let d = new Date(now);
+    while (meetings.length < 3 && count < 14) { // look back max 2 weeks
+      const dow = d.getDay();
+      if ([2, 4, 6].includes(dow)) {
+        const key = d.toISOString().slice(0, 10);
+        const present = records.filter(r => new Date(r.date).toISOString().slice(0,10) === key).reduce((s, r) => s + r.present, 0);
+        meetings.unshift({ label: dayLabels[dow], present });
+      }
+      d.setDate(d.getDate() - 1);
+      count++;
     }
-    const pad = (n: number) => String(n).padStart(2, "0");
-    const points: { date: string; count: number }[] = [];
-    for (let i = days - 1; i >= 0; i--) {
-      const dt = new Date(today);
-      dt.setDate(today.getDate() - i);
-      const dow = dt.getDay(); // 0=Sun ... 6=Sat
-      if (!(dow === 2 || dow === 4 || dow === 6)) continue; // Tue/Thu/Sat only
-      const key = `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`;
-      const label = dt.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-      points.push({ date: label, count: byDate.get(key) || 0 });
-    }
-    return points;
-  }, [attendance]);
+    return meetings;
+  }
+  function toMonthSeries(records: AttendanceRecord[]) {
+    const now = new Date();
+    const days = 30;
+    // Only include Tue (2), Thu (4), Sat (6)
+    return Array.from({ length: days }).map((_, idx) => {
+      const d = new Date(now);
+      d.setDate(now.getDate() - (days - 1 - idx));
+      const dayOfWeek = d.getDay();
+      if (![2, 4, 6].includes(dayOfWeek)) return null;
+      const key = d.toISOString().slice(0, 10);
+      const present = records.filter(r => new Date(r.date).toISOString().slice(0,10) === key).reduce((s, r) => s + r.present, 0);
+      const label = `${d.toLocaleString(undefined, { month: "short" })} ${d.getDate()}`;
+      return { label, present };
+    }).filter(Boolean);
+  }
+  // Convert Attendance[] to AttendanceRecord[]
+  const attendanceRecords: AttendanceRecord[] = attendance.map(a => ({ date: a.date, present: 1 }));
+  const weekData = toWeekSeries(attendanceRecords);
+  const monthData = toMonthSeries(attendanceRecords).filter((d): d is { label: string; present: number } => d !== null);
 
   // derive list of subsystems present
   // Only consider non-archived (open) projects for the Overview lists/filters
@@ -209,13 +228,13 @@ export default function Overview() {
           </div>
 
           {/* Progress bar with matching stat typography */}
-      <div className="rounded-xl bg-white/5 border border-white/10 p-4 pb-6">
+  <div className="rounded-xl bg-white/5 border border-white/10 p-2 pb-3">
             <div className="flex items-center justify-between mb-2">
               <div className="text-xs tracking-caps text-muted uppercase">Total Task Completion</div>
               {/* Keep completion percentage prominent */}
               <div className="text-xl font-semibold leading-tight">{completion}%</div>
             </div>
-            <ProgressBar value={completion} heightClass="h-3" />
+            <ProgressBar value={completion} heightClass="h-3" color={completion === 100 ? 'linear-gradient(90deg,#22c55e,#16a34a)' : undefined} />
           </div>
         </div>
 
@@ -226,51 +245,28 @@ export default function Overview() {
             onIndexChange={() => { /* no-op for now */ }}
             dots
           >
-            {/* Slide 0: Attendance chart */}
-            <div className="rounded-2xl bg-white/5 border border-white/10 p-3 md:p-4">
-              <h2 className="text-base md:text-lg font-bold mb-2">Meeting Attendance</h2>
-              <div className="h-48 sm:h-56">
-                {attendanceSeries.length ? (
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={attendanceSeries} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                      <defs>
-                        <linearGradient id="attLine" x1="0" y1="0" x2="1" y2="0">
-                          <stop offset="0%" stopColor="#64C7C9" />
-                          <stop offset="100%" stopColor="#98D7D8" />
-                        </linearGradient>
-                        <linearGradient id="attFill" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor="#64C7C9" stopOpacity={0.35} />
-                          <stop offset="100%" stopColor="#98D7D8" stopOpacity={0.05} />
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid stroke="rgba(255,255,255,0.08)" strokeDasharray="3 3" />
-                      <XAxis dataKey="date" tick={{ fill: "#9CA3AF", fontSize: 10 }} axisLine={false} tickLine={false} />
-                      <YAxis allowDecimals={false} tick={{ fill: "#9CA3AF", fontSize: 10 }} axisLine={false} tickLine={false} width={24} />
-                      <Tooltip contentStyle={{ background: "#0b132b", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8 }} labelStyle={{ color: "#cbd5e1" }} />
-                      <Area type="monotone" dataKey="count" stroke="none" fill="url(#attFill)" />
-                      <Line type="monotone" dataKey="count" stroke="url(#attLine)" strokeWidth={3} dot={{ r: 2, stroke: "#98D7D8" }} activeDot={{ r: 4 }} />
-                    </LineChart>
-                  </ResponsiveContainer>
-                ) : (
-                  <div className="h-full flex items-center justify-center text-sm text-muted">No attendance yet</div>
-                )}
-              </div>
-            </div>
+            {/* Slide 0: AttendanceCard */}
+            <AttendanceCard
+              title="Attendance"
+              weekData={weekData}
+              monthData={monthData}
+              className="h-48 sm:h-56"
+            />
 
             {/* Slide 1: Leaderboard */}
-            <div className="rounded-2xl bg-white/5 border border-white/10 p-3 md:p-4">
-              <h2 className="text-base md:text-lg font-bold mb-2">Leaderboard</h2>
-              <div className="h-48 sm:h-56 overflow-hidden">
+            <div className="relative max-w-[390px] w-full mx-auto rounded-2xl p-5 md:p-6 border bg-white/5 text-text border-white/10 overflow-hidden h-48 sm:h-56 flex flex-col">
+              <h2 className="text-xs md:text-sm mb-2 text-muted uppercase tracking-caps" style={{ fontWeight: 400 }}>All-Time Leaderboard</h2>
+              <div className="h-full overflow-hidden">
                 <table className="w-full table-fixed text-xs sm:text-sm">
                   <thead>
                     <tr>
-                      <th className="w-8 py-1.5 px-2 text-center text-muted font-semibold uppercase tracking-caps">#</th>
-                      <th className="py-1.5 px-2 text-left text-muted font-semibold uppercase tracking-caps">Name</th>
-                      <th className="w-24 md:w-28 py-1.5 px-2 text-center text-muted font-semibold uppercase tracking-caps">Completed</th>
+                      <th className="w-8 py-1.5 px-2 text-center text-muted uppercase tracking-caps" style={{ fontWeight: 400 }}>#</th>
+                      <th className="py-1.5 px-2 text-left text-muted uppercase tracking-caps" style={{ fontWeight: 400 }}>Name</th>
+                      <th className="w-24 md:w-28 py-1.5 px-2 text-center text-muted uppercase tracking-caps" style={{ fontWeight: 400 }}>Tasks</th>
                     </tr>
                   </thead>
                   <tbody className="align-middle">
-                    {leaderboard.map((person, idx) => (
+                    {leaderboard.slice(0, 5).map((person, idx) => (
                       <tr key={person.id} className={idx === 0 ? "bg-yellow-100/40" : ""}>
                         <td className="py-1.5 px-2 text-center">{idx + 1}</td>
                         <td className="py-1.5 px-2">
@@ -368,7 +364,7 @@ export default function Overview() {
           </button>
           {/* Sort popover */}
           <div className={`absolute z-20 mt-1 w-48 rounded-md border border-overlay-10 bg-bg/95 shadow-xl overflow-hidden transition transform origin-top ${showSortMenu ? "opacity-100 scale-100" : "opacity-0 scale-95 pointer-events-none"}`}>
-            {(["subsystem","name","due","progress"] as const).map(v => (
+            {(["name","subsystem","due","progress"] as const).map(v => (
               <button
                 key={v}
                 className={`w-full text-left px-3 py-2 text-xs hover:bg-white/10 ${sortBy === v ? "bg-white/10" : ""}`}

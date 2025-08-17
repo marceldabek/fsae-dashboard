@@ -40,8 +40,7 @@ export default function ProjectCard({
   return (
     <div className={container}>
       <div className="flex items-start justify-between gap-2">
-        <div className="flex items-center gap-2 min-w-0">
-          <div className={`w-2 h-2 rounded-full ${statusColor}`} aria-hidden />
+        <div className="flex items-center min-w-0">
           <Link to={`/project/${project.id}`} className={`${nameClass} truncate`} title={project.name}>
             {project.name}
           </Link>
@@ -69,23 +68,19 @@ export default function ProjectCard({
       {/* Owners wrap to multiple lines to prevent horizontal overflow */}
   <div className="flex items-start justify-between gap-2 text-tick text-muted">
         <div className="flex-1 min-w-0">
-          <div className="text-[10px] uppercase tracking-wide opacity-80 mb-1">Owners</div>
-          <div className="flex flex-wrap gap-1.5">
-            {owners.length ? (
-              owners.map(o => (
-                <span key={o.id} className="px-1.5 py-0.5 rounded bg-white/10 whitespace-normal break-words">
-                  {o.name}
-                </span>
-              ))
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-[10px] uppercase tracking-wide opacity-80">OWNERS</span>
+            {owners.length > 0 ? (
+              <span className="px-1.5 py-0.5 rounded bg-white/10 whitespace-normal break-words text-[10px]" style={{paddingTop: '1px', paddingBottom: '1px'}}>{owners.length}</span>
             ) : (
-              <span className="opacity-60">—</span>
+              <span className="px-1.5 py-0.5 rounded bg-white/10 whitespace-normal break-words text-[10px]" style={{paddingTop: '1px', paddingBottom: '1px'}}>N/A</span>
             )}
           </div>
         </div>
         {project.due_date && (() => {
           let date: Date | null = null;
           const s = project.due_date;
-          const m = s.match(/(\d{4})[\/-]?(\d{2})[\/-]?(\d{2})/);
+          const m = s.match(/(\d{4})[\/\-]?(\d{2})[\/\-]?(\d{2})/);
           if (m) {
             const [, y, mo, d] = m;
             date = new Date(Number(y), Number(mo) - 1, Number(d));
@@ -97,7 +92,7 @@ export default function ProjectCard({
             const month = date.toLocaleString('en-US', { month: compact ? 'short' : 'long' });
             const day = date.getDate();
             const suffix = (n: number) => n === 1 || n === 21 || n === 31 ? 'st' : n === 2 || n === 22 ? 'nd' : n === 3 || n === 23 ? 'rd' : 'th';
-            return <span className="whitespace-nowrap ml-2 shrink-0">Due {weekday} {month} {day}{suffix(day)}</span>;
+            return <span className="text-[10px] uppercase tracking-wide opacity-80 whitespace-nowrap ml-2 shrink-0">Due {weekday} {month} {day}{suffix(day)}</span>;
           }
           return null;
         })()}
@@ -110,7 +105,7 @@ export default function ProjectCard({
           {rankedEnabled && <span className="font-semibold text-[10px]">Σ +{totalPoints}</span>}
         </div>
       </div>
-      <ProgressBar value={percent} heightClass={progressHeight} />
+  <ProgressBar value={percent} heightClass={progressHeight} color={percent === 100 ? 'linear-gradient(90deg,#22c55e,#16a34a)' : undefined} />
     </div>
   );
 }
