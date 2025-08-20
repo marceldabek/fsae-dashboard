@@ -235,26 +235,43 @@ export default function PersonDetail() {
             })();
             return (
               <li key={p.id} className="rounded-xl bg-white/10 border border-white/10 p-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <Link className="text-base md:text-lg font-semibold truncate" to={`/project/${p.id}`}>{p.name}</Link>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <div className="text-sm text-muted">{done}/{total} · {percent}%</div>
-                    {p.design_link && (
-                      <LinkButton href={p.design_link}>Design Docs</LinkButton>
+                <div className="flex items-start justify-between">
+                  <div className="flex flex-col gap-0 min-w-0">
+                    <Link className="text-base md:text-lg font-normal truncate" to={`/project/${p.id}`}>{p.name}</Link>
+                    {p.subsystem && (
+                      <div className="text-xs uppercase tracking-caps text-muted leading-tight truncate mb-2" style={{marginBottom: '8px'}}>{p.subsystem}</div>
                     )}
                   </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <div className="text-sm text-muted">{done}/{total}</div>
+                      {/* Design link removed as requested */}
+                  </div>
                 </div>
-                <div className="text-xs text-muted uppercase tracking-caps">
-                  {p.description ? p.description : null}
-                </div>
-                {p.due_date && (
-                  <div className="text-xs text-muted mt-1 uppercase tracking-caps">Due {due}</div>
-                )}
+                {/* Description removed as requested */}
+                {p.due_date && (() => {
+                  let date: Date | null = null;
+                  const s = p.due_date;
+                  const m = s.match(/(\d{4})[\/-]?(\d{2})[\/-]?(\d{2})/);
+                  if (m) {
+                    const [, y, mo, d] = m;
+                    date = new Date(Number(y), Number(mo) - 1, Number(d));
+                  } else if (!isNaN(Date.parse(s))) {
+                    date = new Date(s);
+                  }
+                  if (date) {
+                    const weekday = date.toLocaleString('en-US', { weekday: 'long' });
+                    const month = date.toLocaleString('en-US', { month: 'long' });
+                    const day = date.getDate();
+                    const suffix = (n: number) => n === 1 || n === 21 || n === 31 ? 'st' : n === 2 || n === 22 ? 'nd' : n === 3 || n === 23 ? 'rd' : 'th';
+                    return (
+                      <div className="text-xs text-muted uppercase tracking-caps" style={{marginTop: 0}}>{weekday}, {month} {day}{suffix(day)}</div>
+                    );
+                  }
+                  return null;
+                })()}
                 {/* Show only open tasks (not Complete) and style them similar to ProjectDetail */}
                 {ptasksAll.filter(t => t.status !== 'Complete').length > 0 && (
-                  <ul className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <ul className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-1">
                     {ptasksAll.filter(t => t.status !== 'Complete').map(t => {
                       const color = t.status === "In Progress" ? "bg-yellow-400" : "bg-red-500";
                       return (
@@ -267,7 +284,11 @@ export default function PersonDetail() {
                               <span>{t.assignee_id ? `@${(people.find(pp => pp.id === t.assignee_id)?.name) || 'Assignee'}` : 'Unassigned'}</span>
                             </div>
                           </div>
-                          <span className={`absolute top-3 right-3 w-3.5 h-3.5 rounded-full ${color} shadow`} aria-hidden />
+                          <span
+                            className={`absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 rounded-full ${color} shadow`}
+                            style={{ transform: 'translateY(-50%)' }}
+                            aria-hidden
+                          />
                         </li>
                       );
                     })}
@@ -296,8 +317,17 @@ export default function PersonDetail() {
   {/* Bottom two-column area: Ranked History (left) & Points History (right) - only when ranked is enabled */}
   {rankedEnabled ? (
     <div className="grid md:grid-cols-2 gap-6">
-      <div className="rounded-2xl bg-white/5 border border-white/10 p-4">
-        <h2 className="font-semibold mb-2">Ranked History</h2>
+      <div className="rounded-2xl bg-white/5 border border-white/10 p-4 relative">
+        <div className="flex items-center mb-2">
+          <h2 className="font-semibold flex-1">Ranked History</h2>
+          <button
+            className="px-3 py-0.5 rounded bg-accent/10 border border-accent/30 text-accent font-medium uppercase tracking-caps text-xs hover:bg-accent/20 transition"
+            type="button"
+            onClick={() => alert('Trophy cabinet coming soon!')}
+          >
+            Trophies
+          </button>
+        </div>
         {history.length === 0 ? (
           <div className="text-xs text-muted uppercase tracking-caps">No rank changes yet.</div>
         ) : (

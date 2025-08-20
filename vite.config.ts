@@ -1,14 +1,15 @@
 
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import path from 'path'
 
 // dev ignores base; prod uses it
 export default defineConfig({
   plugins: [react()],
   base: process.env.NODE_ENV === 'production' ? '/fsae-dashboard/' : '/',
   resolve: {
-    // Prevent multiple React copies (e.g. due to symlinked local packages like functions/ depending on root)
-    dedupe: ['react', 'react-dom'],
+  dedupe: ['react', 'react-dom'],
+  alias: { "@": path.resolve(__dirname, "./src") }
   },
   server: {
     // Lock the dev port + make sure the client knows which port to use for HMR WS

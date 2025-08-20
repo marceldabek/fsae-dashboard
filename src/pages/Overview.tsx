@@ -10,7 +10,7 @@ import ProgressBar from "../components/ProgressBar";
 import SwipeCarousel from "../components/SwipeCarousel";
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, Area } from "recharts";
 import AttendanceCard from "../components/AttendanceCard";
-import { isAdminUid, isLeadUid } from "../admin";
+import { useAdminStatus } from "../hooks/useAdminStatus";
 
 function StatCard({ label, value }: { label: string; value: string | number }) {
   return (
@@ -42,7 +42,13 @@ export default function Overview() {
   const [prDue, setPrDue] = useState("");
   const [prSubsystem, setPrSubsystem] = useState("");
   const [savingProject, setSavingProject] = useState(false);
-  const toggleOwner = (id: string) => setPrOwners(prev => prev.includes(id) ? prev.filter(x=>x!==id) : [...prev, id]);
+  function toggleOwner(id: string) {
+    setPrOwners(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  }
+  // Search bar state
+  const [projectSearch, setProjectSearch] = useState("");
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => setProjectSearch(e.target.value);
 
   useEffect(() => {
     (async () => {
@@ -157,9 +163,26 @@ export default function Overview() {
     return m;
   }, [openProjects]);
 
-  const filteredProjects = selectedSubsystems.length
-    ? openProjects.filter(p => p.subsystem && selectedSubsystems.includes(p.subsystem))
-    : openProjects;
+  // Hide completed projects switch state
+  const [hideCompleted, setHideCompleted] = useState(false);
+  // Filter projects by subsystem, search, and hide completed
+  const filteredProjects = useMemo(() => {
+    let arr = selectedSubsystems.length
+      ? openProjects.filter(p => p.subsystem && selectedSubsystems.includes(p.subsystem))
+      : openProjects;
+    if (projectSearch.trim()) {
+      const q = projectSearch.trim().toLowerCase();
+      arr = arr.filter(p =>
+        p.name.toLowerCase().includes(q) ||
+        (p.description && p.description.toLowerCase().includes(q)) ||
+        (p.subsystem && p.subsystem.toLowerCase().includes(q))
+      );
+    }
+    if (hideCompleted) {
+      arr = arr.filter(p => projectProgress(p) < 1);
+    }
+    return arr;
+  }, [openProjects, selectedSubsystems, projectSearch, hideCompleted]);
   const projectsToShow = [...filteredProjects].sort((a, b) => {
     let cmp = 0;
     if (sortBy === "name") {
@@ -190,7 +213,8 @@ export default function Overview() {
     return () => window.removeEventListener("keydown", handleKey);
   }, []);
   const uid = user?.uid || null;
-  const canCreate = isLeadUid(uid); // leads & admins allowed
+  const { isAdmin, isLead, rolesLoaded } = useAdminStatus();
+  const canCreate = isLead || isAdmin;
 
   async function handleCreateProject() {
     if (!prName.trim()) return;
@@ -287,13 +311,13 @@ export default function Overview() {
       </div>
 
   {/* Project cards section */}
-      <div className="mt-6 mb-2 flex items-center gap-2">
+      <div className="mt-6 mb-2 flex items-center w-full" style={{ display: 'flex' }}>
         <h2 className="text-lg font-semibold">Projects</h2>
         {canCreate && (
           <button
             aria-label="Create project"
             onClick={()=> setShowCreateProject(true)}
-            className="group inline-flex items-center justify-center h-7 w-7 rounded-md border border-accent/40 bg-accent/15 hover:bg-accent/25 text-accent transition shadow-sm hover:shadow-accent/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+            className="group inline-flex items-center justify-center h-7 w-7 rounded-md border border-accent/40 bg-accent/15 hover:bg-accent/25 text-accent transition shadow-sm hover:shadow-accent/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 ml-2"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" className="drop-shadow-sm">
               <line x1="12" y1="5" x2="12" y2="19" />
@@ -302,6 +326,27 @@ export default function Overview() {
             <span className="sr-only">Add project</span>
           </button>
         )}
+        <div className="flex-1" />
+        {/* Hide completed switch, styled like admin page ranked pool switch */}
+  <label className="relative inline-flex items-center cursor-pointer select-none outline-none focus:outline-none" style={{ marginLeft: 8 }}>
+          <input
+            type="checkbox"
+            checked={hideCompleted}
+            onChange={e => setHideCompleted(e.target.checked)}
+            className="sr-only peer outline-none focus:outline-none"
+            onMouseUp={e => e.currentTarget.blur()}
+          />
+          <span
+            className="w-10 h-6 flex items-center bg-white/10 border border-white/20 rounded-full transition peer-checked:bg-accent/60 peer-focus:ring-2 peer-focus:ring-accent/60 relative"
+            style={{ minWidth: 40 }}
+          >
+            <span
+              className={`absolute w-4 h-4 bg-white rounded-full shadow transition-transform ${hideCompleted ? 'translate-x-5' : 'translate-x-1'}`}
+              style={{ top: '50%', transform: `${hideCompleted ? 'translateX(20px)' : 'translateX(4px)'} translateY(-50%)`, transition: 'transform 0.2s' }}
+            />
+          </span>
+          <span className="sr-only">Hide completed projects</span>
+        </label>
       </div>
   <div className="flex items-center gap-4 text-[10px] text-muted mb-1 uppercase tracking-caps">
         <div className="flex items-center gap-1" title="Grey = To-do / Not started">
@@ -311,7 +356,7 @@ export default function Overview() {
         <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500" /> Complete</div>
       </div>
       {/* Toolbar: Subsystem multi-select + Sort dropdown */}
-      <div className="grid grid-cols-2 gap-2 mb-3 w-full">
+  <div className="grid grid-cols-2 gap-2 w-full">
         <div className="relative min-w-0">
           <button
             onClick={() => { setShowSubsystemMenu(v=>!v); setShowSortMenu(false); }}
@@ -355,10 +400,10 @@ export default function Overview() {
           </div>
         </div>
 
-    <div className="relative min-w-0">
+        <div className="relative min-w-0">
           <button
             onClick={() => { setShowSortMenu(v=>!v); setShowSubsystemMenu(false); }}
-      className="px-3 py-1.5 rounded-md text-xs font-medium border border-white/10 bg-white/5 hover:bg-white/10 w-full"
+            className="px-3 py-1.5 rounded-md text-xs font-medium border border-white/10 bg-white/5 hover:bg-white/10 w-full"
           >
             Sort: <span className="font-semibold">{sortLabel(sortBy)} {dirSymbol}</span>
           </button>
@@ -384,6 +429,18 @@ export default function Overview() {
         {(showSubsystemMenu || showSortMenu) && (
           <div className="fixed inset-0 z-10" onClick={() => { setShowSubsystemMenu(false); setShowSortMenu(false); }} />
         )}
+      </div>
+
+      {/* Project search bar */}
+  <div className="w-full mt-2 mb-4">
+        <input
+          ref={searchInputRef}
+          type="text"
+          value={projectSearch}
+          onChange={handleSearchChange}
+          placeholder="Search projects..."
+          className="px-3 py-1.5 rounded-md text-xs font-medium border border-white/10 bg-white/5 focus:bg-white/10 w-full focus:outline-none"
+        />
       </div>
   <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
         {projectsToShow.map(p => (

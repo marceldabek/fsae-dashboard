@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import PersonSelectPopover from "../components/PersonSelectPopover";
 import TaskCreateCard from "../components/TaskCreateCard";
 import { useAuth } from "../hooks/useAuth";
-import { isAdminUid, isLeadUid, canViewAdminTab, AdminTab } from "../admin";
+import { useAdminStatus } from "../hooks/useAdminStatus";
+import { canViewAdminTab, AdminTab } from "../admin";
 import type { Person, Project, RankLevel, RankedSettings } from "../types";
 import {
   fetchPeople,
@@ -27,8 +28,7 @@ import { httpsCallable } from "firebase/functions";
 export default function Admin() {
   const user = useAuth();
   const uid = user?.uid || null;
-  const isAdmin = isAdminUid(uid);
-  const isLead = isLeadUid(uid) && !isAdmin; // lead but not full admin
+  const { isAdmin, isLead, rolesLoaded } = useAdminStatus();
 
   // Data
   const [people, setPeople] = useState<Person[]>([]);
@@ -276,7 +276,7 @@ export default function Admin() {
   }, [uid, activeTab]);
 
   // Gate entire page: allow leads (limited) & full admins
-  if (!isLeadUid(uid)) return (<div><h1 className="text-2xl font-bold uppercase tracking-caps">Admin</h1><p className="text-sm text-muted mt-2">You must be signed in as an admin or lead to access this page.</p></div>);
+  if (!isLead) return (<div><h1 className="text-2xl font-bold uppercase tracking-caps">Admin</h1><p className="text-sm text-muted mt-2">You must be signed in as an admin or lead to access this page.</p></div>);
 
   return (
   <div className="max-w-6xl mx-auto px-3 sm:px-4 overflow-x-hidden admin-typography">

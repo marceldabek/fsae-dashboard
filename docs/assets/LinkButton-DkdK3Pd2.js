@@ -1,1 +1,0 @@
-import{j as t}from"./index-Bf8EZJGZ.js";function i({href:e,children:r}){return e?t.jsx("a",{href:e,target:"_blank",rel:"noreferrer",className:"inline-flex items-center px-3 py-1.5 rounded bg-white/10 hover:bg-white/20 transition",children:r}):null}export{i as L};
