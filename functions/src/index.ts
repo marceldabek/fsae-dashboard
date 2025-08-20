@@ -13,9 +13,8 @@ import { onSchedule } from "firebase-functions/v2/scheduler";
 import * as admin from "firebase-admin";
 
 // Initialize the Admin SDK once. If already initialized reuse it.
-try { admin.app(); } catch (e) { admin.initializeApp(); }
-
-interface RolesDoc { uids?: string[]; leads?: string[]; }
+// Initialize Admin once
+try { admin.app(); } catch { admin.initializeApp(); }
 
 // Domain model minimal shapes (only fields we read/write).
 type RankLevel = "Bronze" | "Silver" | "Gold" | "Platinum" | "Diamond";
@@ -45,32 +44,40 @@ interface AttendanceRec {
  * Returns role booleans for caller. If caller is a full admin, also returns
  * the full admin + lead UID arrays. Non‑admins/leads do not see the lists.
  */
+// Removed duplicate import of setGlobalOptions
+
+try { admin.app(); } catch { admin.initializeApp(); }
+setGlobalOptions({ region: "us-central1", maxInstances: 10 });
+
+const toUidArray = (v: unknown): string[] =>
+	Array.isArray(v) ? v.map(s => String(s).trim()).filter(Boolean) : [];
+
 export const getAdminRoles = onCall(async (request) => {
-	const auth = request.auth;
-	if (!auth) {
-		throw new HttpsError("unauthenticated", "Must be signed in");
-	}
+	const uid = request.auth?.uid;
+	if (!uid) throw new HttpsError("unauthenticated", "Must be signed in");
 
-	const snap = await admin
-		.firestore()
-		.collection("config")
-		.doc("admins")
-		.get();
-	const data: RolesDoc = snap.exists ? (snap.data() as RolesDoc) : {};
+	const db = admin.firestore();
+	const [adminsSnap, leadsSnap] = await Promise.all([
+		db.doc("config/admins").get(),
+		db.doc("config/leads").get(),
+	]);
 
-	const adminUids = Array.isArray(data.uids) ? data.uids : [];
-	const leadUids = Array.isArray(data.leads) ? data.leads : [];
-	const uid = auth.uid;
-	const isAdmin = adminUids.includes(uid);
-	const isLead = isAdmin || leadUids.includes(uid);
+	const adminData = adminsSnap.data() ?? {};
+	const leadData  = leadsSnap.data()  ?? {};
 
-	if (isAdmin) {
-		return { isAdmin, isLead, adminUids, leadUids };
-	}
-	return { isAdmin, isLead };
+	// Accept 'uids' or accidental 'leads' field names
+	const adminUids = toUidArray((adminData as any).uids ?? (adminData as any).leads);
+	const leadUids  = toUidArray((leadData  as any).uids ?? (leadData  as any).leads);
+
+	const me = uid.trim();
+	const isAdmin = adminUids.includes(me);
+	const isLead  = isAdmin || leadUids.includes(me);
+
+	// Always return the same shape so UI can rely on booleans
+	return { uid: me, isAdmin: !!isAdmin, isLead: !!isLead, adminUids, leadUids };
 });
 
-// ---------- Ranked mode server-side automation ----------
+// ---------- Ranked mode server-side automation ----------x
 
 interface RankedSettings {
 	enabled?: boolean;
@@ -321,7 +328,7 @@ export const weeklyRankApply = onSchedule({ schedule: "every monday 00:10", time
 // functions should each use functions.runWith({ maxInstances: 10 }) instead.
 // In the v1 API, each function can only serve one request per container, so
 // this will be the maximum concurrent request count.
-setGlobalOptions({ maxInstances: 10 });
+
 
 // Removed temporary ping function.
 

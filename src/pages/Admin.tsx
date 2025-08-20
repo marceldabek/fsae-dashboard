@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import PersonSelectPopover from "../components/PersonSelectPopover";
 import TaskCreateCard from "../components/TaskCreateCard";
 import { useAuth } from "../hooks/useAuth";
-import { useAdminStatus } from "../hooks/useAdminStatus";
+import { RequireLead, RequireAdmin } from "../lib/roles";
 import { canViewAdminTab, AdminTab } from "../admin";
 import type { Person, Project, RankLevel, RankedSettings } from "../types";
 import {
@@ -28,7 +28,6 @@ import { httpsCallable } from "firebase/functions";
 export default function Admin() {
   const user = useAuth();
   const uid = user?.uid || null;
-  const { isAdmin, isLead, rolesLoaded } = useAdminStatus();
 
   // Data
   const [people, setPeople] = useState<Person[]>([]);
@@ -276,382 +275,391 @@ export default function Admin() {
   }, [uid, activeTab]);
 
   // Gate entire page: allow leads (limited) & full admins
-  if (!isLead) return (<div><h1 className="text-2xl font-bold uppercase tracking-caps">Admin</h1><p className="text-sm text-muted mt-2">You must be signed in as an admin or lead to access this page.</p></div>);
-
   return (
-  <div className="max-w-6xl mx-auto px-3 sm:px-4 overflow-x-hidden admin-typography">
-      {/* Title inline above a sleek tab bar */}
-      <h1 className="text-2xl font-semibold mb-1">Admin</h1>
-      {/* Tab bar without filled background; keeps underline across full width */}
-      {toast && (
-        <div
-          className="fixed bottom-4 left-4 z-50 px-4 py-2 rounded shadow-lg animate-fade-in bg-accent/90 border border-accent-weak/60 font-medium text-[13px] leading-snug text-bg"
-        >
-          {toast}
+    <RequireLead>
+      <div className="max-w-6xl mx-auto px-3 sm:px-4 overflow-x-hidden admin-typography">
+        {/* Title inline above a sleek tab bar */}
+        <h1 className="text-2xl font-semibold mb-1">Admin</h1>
+        {/* Tab bar without filled background; keeps underline across full width */}
+        {toast && (
+          <div
+            className="fixed bottom-4 left-4 z-50 px-4 py-2 rounded shadow-lg animate-fade-in bg-accent/90 border border-accent-weak/60 font-medium text-[13px] leading-snug text-bg"
+          >
+            {toast}
+          </div>
+        )}
+
+        {/* Tabs */}
+        <div className="sticky top-0 z-30 px-3 sm:px-4 pt-1 bg-bg/70 backdrop-blur border-b border-border/60 overflow-x-auto h-scroll-tabs no-fade">
+          <nav className="flex gap-2 sm:gap-3 h-11 items-end min-w-max whitespace-nowrap" role="tablist">
+            <button
+              className={`px-3 py-2 rounded-t font-medium text-sm transition border-b-2 ${activeTab === "people" ? "border-accent text-accent" : "border-transparent text-muted hover:text-accent/80"}`}
+              onClick={() => setActiveTab("people")}
+              role="tab"
+              aria-selected={activeTab === "people"}
+            >People</button>
+            <button
+              className={`px-3 py-2 rounded-t font-medium text-sm transition border-b-2 ${activeTab === "projects" ? "border-accent text-accent" : "border-transparent text-muted hover:text-accent/80"}`}
+              onClick={() => setActiveTab("projects")}
+              role="tab"
+              aria-selected={activeTab === "projects"}
+            >Projects & Tasks</button>
+            <RequireAdmin>
+              <button
+                className={`px-3 py-2 rounded-t font-medium text-sm transition border-b-2 ${activeTab === "settings" ? "border-accent text-accent" : "border-transparent text-muted hover:text-accent/80"}`}
+                onClick={() => setActiveTab("settings")}
+                role="tab"
+                aria-selected={activeTab === "settings"}
+              >Global Settings</button>
+              <button
+                className={`px-3 py-2 rounded-t font-medium text-sm transition border-b-2 ${activeTab === "ranked" ? "border-accent text-accent" : "border-transparent text-muted hover:text-accent/80"}`}
+                onClick={() => setActiveTab("ranked")}
+                role="tab"
+                aria-selected={activeTab === "ranked"}
+              >Ranked Settings</button>
+            </RequireAdmin>
+          </nav>
         </div>
-      )}
 
-      {/* Tabs */}
-  <div className="sticky top-0 z-30 px-3 sm:px-4 pt-1 bg-bg/70 backdrop-blur border-b border-border/60 overflow-x-auto h-scroll-tabs no-fade">
-        <nav className="flex gap-2 sm:gap-3 h-11 items-end min-w-max whitespace-nowrap" role="tablist">
-          {(["people","projects","settings","ranked"] as AdminTab[])
-            .filter(tab => canViewAdminTab(uid, tab))
-            .map(tab => {
-              const label = tab === "people" ? "People" : tab === "projects" ? "Projects & Tasks" : tab === "settings" ? "Global Settings" : "Ranked Settings";
-              return (
-                <button
-                  key={tab}
-                  role="tab"
-                  aria-selected={activeTab === tab}
-                  onClick={() => setActiveTab(tab)}
-                  className={`px-3 pb-2 pt-2 border-b-2 ${activeTab===tab ? 'border-accent text-white' : 'border-transparent text-muted hover:text-white'}`}
-                >
-                  {label}
-                </button>
-              );
-            })}
-        </nav>
-      </div>
+        {/* Auto-correct activeTab if role changes (e.g., demoted while viewing restricted tab) */}
+        { !canViewAdminTab(uid, activeTab) && (
+          <div className="mt-4 text-xs text-red-300">You no longer have access to the {activeTab} tab. Showing People tab.</div>
+        ) }
 
-      {/* Auto-correct activeTab if role changes (e.g., demoted while viewing restricted tab) */}
-      { !canViewAdminTab(uid, activeTab) && (
-        <div className="mt-4 text-xs text-red-300">You no longer have access to the {activeTab} tab. Showing People tab.</div>
-      ) }
+        {activeTab === 'people' && (
+          <div role="tabpanel" className="mt-4">
+            <div className="grid md:grid-cols-2 gap-6">
+              <section className="space-y-2">
+                {/* Create profile card */}
+                <div className="form-section p-4 space-y-3">
+                  <div className="text-sm font-semibold text-white">Create profile</div>
+                  <input className="px-3 py-2 rounded w-full" placeholder="Name" value={pName} onChange={(e) => setPName(e.target.value)} />
+                  <input className="px-3 py-2 rounded w-full" placeholder="Discord (e.g., username)" value={pDiscord} onChange={(e) => setPDiscord(e.target.value)} />
+                  <button
+                    onClick={async()=>{
+                      if(!pName.trim()) { showToast('Enter a name'); return; }
+                      await handleCreatePerson();
+                    }}
+                    disabled={!pName.trim()}
+                    className={`px-3 py-2 rounded w-full border border-border text-sm text-center ${pName.trim() ? 'bg-overlay-6' : 'bg-overlay-6 opacity-50 cursor-not-allowed'}`}>
+                    Create profile
+                  </button>
+                </div>
 
-      {activeTab === 'people' && (
-        <div role="tabpanel" className="mt-4">
-          <div className="grid md:grid-cols-2 gap-6">
-            <section className="space-y-2">
-              {/* Create profile card */}
-              <div className="form-section p-4 space-y-3">
-                <div className="text-sm font-semibold text-white">Create profile</div>
-                <input className="px-3 py-2 rounded w-full" placeholder="Name" value={pName} onChange={(e) => setPName(e.target.value)} />
-                <input className="px-3 py-2 rounded w-full" placeholder="Discord (e.g., username)" value={pDiscord} onChange={(e) => setPDiscord(e.target.value)} />
-                <button
-                  onClick={async()=>{
-                    if(!pName.trim()) { showToast('Enter a name'); return; }
-                    await handleCreatePerson();
-                  }}
-                  disabled={!pName.trim()}
-                  className={`px-3 py-2 rounded w-full border border-border text-sm text-center ${pName.trim() ? 'bg-overlay-6' : 'bg-overlay-6 opacity-50 cursor-not-allowed'}`}>
-                  Create profile
-                </button>
-              </div>
+                {/* Quick attendance card */}
+                <div className="form-section p-4 space-y-3">
+                  <div className="text-sm font-semibold text-white">Quick attendance</div>
 
-              {/* Quick attendance card */}
-              <div className="form-section p-4 space-y-3">
-                <div className="text-sm font-semibold text-white">Quick attendance</div>
+                  <input
+                    type="date"
+                    className="px-2.5 py-1.5 rounded text-sm bg-white/5 border border-white/10 w-full"
+                    value={attendanceDate}
+                    onChange={(e)=>setAttendanceDate(e.target.value)}
+                  />
 
-                <input
-                  type="date"
-                  className="px-2.5 py-1.5 rounded text-sm bg-white/5 border border-white/10 w-full"
-                  value={attendanceDate}
-                  onChange={(e)=>setAttendanceDate(e.target.value)}
-                />
-
-                <div className="grid grid-cols-2 gap-2 items-stretch">
-                  <div>
-                    <PersonSelectPopover
-                      people={people}
-                      mode="multi"
-                      selectedIds={attendeeIds}
-                      onAdd={(id) => setAttendeeIds(prev => prev.includes(id) ? prev : [...prev, id])}
-                      onRemove={(id) => setAttendeeIds(prev => prev.filter(x => x !== id))}
-                      triggerLabel={attendeeIds.length ? `${attendeeIds.length} selected` : 'Select person…'}
-                      buttonClassName="w-full px-2.5 py-1.5 rounded dark-select text-sm"
-                      maxItems={50}
-                      allowScroll={true}
-                    />
-                  </div>
-                  <div>
-                    <button
-                      className={`w-full px-2.5 py-1.5 rounded border border-border text-sm text-center ${attendeeIds.length ? 'bg-overlay-6' : 'bg-overlay-6 opacity-50 cursor-not-allowed'}`}
-                      disabled={attendeeIds.length === 0}
-                      onClick={async()=>{
-                        if(!attendeeIds || attendeeIds.length === 0) { showToast('Select at least one person'); return; }
-                        const date = attendanceDate || new Date().toISOString().slice(0,10);
-                        try {
-                          const results = await Promise.allSettled(attendeeIds.map(id => addAttendance({ person_id: id, date, points: 10 })));
-                          const successNames: string[] = [];
-                          const duplicateNames: string[] = [];
-                          const errorNames: string[] = [];
-                          results.forEach((r, i) => {
-                            const id = attendeeIds[i];
-                            const name = people.find(p=>p.id===id)?.name || id;
-                            if (r.status === 'fulfilled') successNames.push(name);
-                            else {
-                              const err: any = r.reason;
-                              if (err?.code === 'DUPLICATE_ATTENDANCE' || err?.message === 'DUPLICATE_ATTENDANCE') duplicateNames.push(name);
-                              else errorNames.push(name);
-                            }
-                          });
-                          if (successNames.length > 0) showToast(`${successNames.length} marked present (+10 pts)`);
-                          if (duplicateNames.length > 0) showToast(`${duplicateNames.join(', ')} already marked for ${date}`);
-                          if (errorNames.length > 0) showToast(`Failed for: ${errorNames.join(', ')}`);
-                          setTimeout(()=>{
-                            setAttendeeIds([]);
-                            setAttendanceDate(new Date().toISOString().slice(0,10));
-                          }, 0);
-                        } catch (e:any) {
-                          console.error(e);
-                          showToast('Attendance failed');
-                        }
-                      }}
-                    >Give 10 pts</button>
+                  <div className="grid grid-cols-2 gap-2 items-stretch">
+                    <div>
+                      <PersonSelectPopover
+                        people={people}
+                        mode="multi"
+                        selectedIds={attendeeIds}
+                        onAdd={(id) => setAttendeeIds(prev => prev.includes(id) ? prev : [...prev, id])}
+                        onRemove={(id) => setAttendeeIds(prev => prev.filter(x => x !== id))}
+                        triggerLabel={attendeeIds.length ? `${attendeeIds.length} selected` : 'Select person…'}
+                        buttonClassName="w-full px-2.5 py-1.5 rounded dark-select text-sm"
+                        maxItems={50}
+                        allowScroll={true}
+                      />
+                    </div>
+                    <div>
+                      <button
+                        className={`w-full px-2.5 py-1.5 rounded border border-border text-sm text-center ${attendeeIds.length ? 'bg-overlay-6' : 'bg-overlay-6 opacity-50 cursor-not-allowed'}`}
+                        disabled={attendeeIds.length === 0}
+                        onClick={async()=>{
+                          if(!attendeeIds || attendeeIds.length === 0) { showToast('Select at least one person'); return; }
+                          const date = attendanceDate || new Date().toISOString().slice(0,10);
+                          try {
+                            const results = await Promise.allSettled(attendeeIds.map(id => addAttendance({ person_id: id, date, points: 10 })));
+                            const successNames: string[] = [];
+                            const duplicateNames: string[] = [];
+                            const errorNames: string[] = [];
+                            results.forEach((r, i) => {
+                              const id = attendeeIds[i];
+                              const name = people.find(p=>p.id===id)?.name || id;
+                              if (r.status === 'fulfilled') successNames.push(name);
+                              else {
+                                const err: any = r.reason;
+                                if (err?.code === 'DUPLICATE_ATTENDANCE' || err?.message === 'DUPLICATE_ATTENDANCE') duplicateNames.push(name);
+                                else errorNames.push(name);
+                              }
+                            });
+                            if (successNames.length > 0) showToast(`${successNames.length} marked present (+10 pts)`);
+                            if (duplicateNames.length > 0) showToast(`${duplicateNames.join(', ')} already marked for ${date}`);
+                            if (errorNames.length > 0) showToast(`Failed for: ${errorNames.join(', ')}`);
+                            setTimeout(()=>{
+                              setAttendeeIds([]);
+                              setAttendanceDate(new Date().toISOString().slice(0,10));
+                            }, 0);
+                          } catch (e:any) {
+                            console.error(e);
+                            showToast('Attendance failed');
+                          }
+                        }}
+                      >Give 10 pts</button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </section>
-            <section className="space-y-2">
-              <div className="flex items-center justify-between mb-2">
-                <h2 className="font-semibold truncate">Edit profiles</h2>
-                <div className="ml-4">
-                  <input className="px-3 py-2 rounded text-sm w-44 sm:w-56" placeholder="Search people…" value={peopleSearch} onChange={(e)=>setPeopleSearch(e.target.value)} />
+              </section>
+              <section className="space-y-2">
+                <div className="flex items-center justify-between mb-2">
+                  <h2 className="font-semibold truncate">Edit profiles</h2>
+                  <div className="ml-4">
+                    <input className="px-3 py-2 rounded text-sm w-44 sm:w-56" placeholder="Search people…" value={peopleSearch} onChange={(e)=>setPeopleSearch(e.target.value)} />
+                  </div>
                 </div>
-              </div>
-              <div className="space-y-4">
-                {people
-                  .filter(p=>{
-                    const q = peopleSearch.toLowerCase();
-                    if(!q) return true;
-                    return p.name.toLowerCase().includes(q) || (p.skills||[]).some(s=>s.toLowerCase().includes(q)) || (p.role||"").toLowerCase().includes(q);
-                  })
-                  .sort((a,b)=>a.name.localeCompare(b.name))
-                  .map((p) => (
-                    <details key={p.id} className="rounded-xl bg-white/5 border border-white/10">
-                      <summary className="cursor-pointer font-medium px-3 py-2 flex items-center justify-between gap-2">
-                        <span className="truncate">{p.name}</span>
-                        {/* Constrain role text so long roles don't widen card */}
-                        <span className="text-xs text-muted ml-2 max-w-[8rem] md:max-w-[10rem] min-w-0 truncate uppercase tracking-caps">{p.role || p.year || ""}</span>
-                      </summary>
-                      <div className="px-3 pb-3 mt-1 grid sm:grid-cols-2 gap-4">
-                        <input className="px-3 py-2 rounded" value={p.name} onChange={(e) => setPeople((prev) => prev.map((x) => (x.id === p.id ? { ...x, name: e.target.value } : x)))} />
-                        <select className="px-3 py-2 rounded dark-select" value={p.year || "Senior"} onChange={(e) => setPeople((prev) => prev.map((x) => (x.id === p.id ? { ...x, year: e.target.value } : x)))}>
-                          <option>Freshman</option>
-                          <option>Sophomore</option>
-                          <option>Junior</option>
-                          <option>Senior</option>
-                          <option>Graduate</option>
-                        </select>
-                        <input className="px-3 py-2 rounded" placeholder="Role" value={p.role || ""} onChange={(e) => setPeople((prev) => prev.map((x) => (x.id === p.id ? { ...x, role: e.target.value } : x)))} />
-                        <input className="px-3 py-2 rounded" placeholder="Discord" value={p.discord || ""} onChange={(e) => setPeople((prev) => prev.map((x) => (x.id === p.id ? { ...x, discord: e.target.value } : x)))} />
-                        <input className="px-3 py-2 rounded sm:col-span-2" placeholder="Skills (comma-separated)" value={(p.skills || []).join(", ")} onChange={(e) => setPeople((prev) => prev.map((x) => x.id === p.id ? { ...x, skills: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) } : x))} />
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:col-span-2 items-end">
-                          <div>
-                            <label className="text-xs text-muted uppercase tracking-caps">Rank</label>
-                            <select className="mt-1 px-3 py-2 rounded w-full dark-select" value={(p as any).rank || "Bronze"} onChange={(e)=> setPeople(prev=>prev.map(x=>x.id===p.id?{...x, rank: e.target.value as any}:x))}>
-                              <option>Bronze</option>
-                              <option>Silver</option>
-                              <option>Gold</option>
-                              <option>Platinum</option>
-                              <option>Diamond</option>
-                            </select>
+                <div className="space-y-4">
+                  {people
+                    .filter(p=>{
+                      const q = peopleSearch.toLowerCase();
+                      if(!q) return true;
+                      return p.name.toLowerCase().includes(q) || (p.skills||[]).some(s=>s.toLowerCase().includes(q)) || (p.role||"").toLowerCase().includes(q);
+                    })
+                    .sort((a,b)=>a.name.localeCompare(b.name))
+                    .map((p) => (
+                      <details key={p.id} className="rounded-xl bg-white/5 border border-white/10">
+                        <summary className="cursor-pointer font-medium px-3 py-2 flex items-center justify-between gap-2">
+                          <span className="truncate">{p.name}</span>
+                          {/* Constrain role text so long roles don't widen card */}
+                          <span className="text-xs text-muted ml-2 max-w-[8rem] md:max-w-[10rem] min-w-0 truncate uppercase tracking-caps">{p.role || p.year || ""}</span>
+                        </summary>
+                        <div className="px-3 pb-3 mt-1 grid sm:grid-cols-2 gap-4">
+                          <input className="px-3 py-2 rounded" value={p.name} onChange={(e) => setPeople((prev) => prev.map((x) => (x.id === p.id ? { ...x, name: e.target.value } : x)))} />
+                          <select className="px-3 py-2 rounded dark-select" value={p.year || "Senior"} onChange={(e) => setPeople((prev) => prev.map((x) => (x.id === p.id ? { ...x, year: e.target.value } : x)))}>
+                            <option>Freshman</option>
+                            <option>Sophomore</option>
+                            <option>Junior</option>
+                            <option>Senior</option>
+                            <option>Graduate</option>
+                          </select>
+                          <input className="px-3 py-2 rounded" placeholder="Role" value={p.role || ""} onChange={(e) => setPeople((prev) => prev.map((x) => (x.id === p.id ? { ...x, role: e.target.value } : x)))} />
+                          <input className="px-3 py-2 rounded" placeholder="Discord" value={p.discord || ""} onChange={(e) => setPeople((prev) => prev.map((x) => (x.id === p.id ? { ...x, discord: e.target.value } : x)))} />
+                          <input className="px-3 py-2 rounded sm:col-span-2" placeholder="Skills (comma-separated)" value={(p.skills || []).join(", ")} onChange={(e) => setPeople((prev) => prev.map((x) => x.id === p.id ? { ...x, skills: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) } : x))} />
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:col-span-2 items-end">
+                            <div>
+                              <label className="text-xs text-muted uppercase tracking-caps">Rank</label>
+                              <select className="mt-1 px-3 py-2 rounded w-full dark-select" value={(p as any).rank || "Bronze"} onChange={(e)=> setPeople(prev=>prev.map(x=>x.id===p.id?{...x, rank: e.target.value as any}:x))}>
+                                <option>Bronze</option>
+                                <option>Silver</option>
+                                <option>Gold</option>
+                                <option>Platinum</option>
+                                <option>Diamond</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label className="text-xs text-muted uppercase tracking-caps">Ranked pool</label>
+                              <label className="mt-1 flex items-center gap-3 select-none">
+                                <input
+                                  type="checkbox"
+                                  className="peer sr-only"
+                                  checked={!!(p as any).ranked_opt_in}
+                                  onChange={(e)=> setPeople(prev=>prev.map(x=>x.id===p.id?{...x, ranked_opt_in: e.target.checked}:x))}
+                                />
+                                <span className="relative inline-block h-6 w-11 rounded-full bg-white/15 transition-colors peer-checked:bg-accent/70 
+                                  after:content-[''] after:absolute after:left-0.5 after:top-0.5 after:h-5 after:w-5 after:rounded-full after:bg-white after:shadow after:transition-transform after:duration-200 peer-checked:after:translate-x-5" />
+                                <span className="text-xs text-white/90">Opted in</span>
+                              </label>
+                            </div>
                           </div>
-                          <div>
-                            <label className="text-xs text-muted uppercase tracking-caps">Ranked pool</label>
-                            <label className="mt-1 flex items-center gap-3 select-none">
-                              <input
-                                type="checkbox"
-                                className="peer sr-only"
-                                checked={!!(p as any).ranked_opt_in}
-                                onChange={(e)=> setPeople(prev=>prev.map(x=>x.id===p.id?{...x, ranked_opt_in: e.target.checked}:x))}
-                              />
-                              <span className="relative inline-block h-6 w-11 rounded-full bg-white/15 transition-colors peer-checked:bg-accent/70 
-                                after:content-[''] after:absolute after:left-0.5 after:top-0.5 after:h-5 after:w-5 after:rounded-full after:bg-white after:shadow after:transition-transform after:duration-200 peer-checked:after:translate-x-5" />
-                              <span className="text-xs text-white/90">Opted in</span>
-                            </label>
-                          </div>
+                          <button className="px-3 py-2 rounded bg-accent text-black border border-accent hover:bg-accent/90 sm:col-span-2" onClick={async () => { await updatePerson(p.id, p as any); showToast("Person updated"); }}>Save Changes</button>
                         </div>
-                        <button className="px-3 py-2 rounded bg-accent text-black border border-accent hover:bg-accent/90 sm:col-span-2" onClick={async () => { await updatePerson(p.id, p as any); showToast("Person updated"); }}>Save Changes</button>
+                      </details>
+                    ))}
+                </div>
+              </section>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'projects' && (
+          <div role="tabpanel" className="mt-4 space-y-6">
+            <div className="grid lg:grid-cols-2 gap-6">
+              <section className="space-y-2">
+              <h2 className="font-semibold">Create Project & Assign Owners</h2>
+              <div className="form-section p-4 space-y-3">
+                <input className="px-3 py-2 rounded w-full" placeholder="Project name" value={prName} onChange={(e) => setPrName(e.target.value)} />
+                <input className="px-3 py-2 rounded w-full" placeholder="Design link (optional)" value={prDesign} onChange={(e) => setPrDesign(e.target.value)} />
+                <textarea className="px-3 py-2 rounded w-full" placeholder="Project description (optional)" value={prDesc} onChange={(e) => setPrDesc(e.target.value)} />
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <select className="px-3 py-2 rounded w-full dark-select" value={prSubsystem} onChange={(e)=>setPrSubsystem(e.target.value)}>
+                    <option value="">Select subsystem…</option>
+                    <option>Aero</option>
+                    <option>Business</option>
+                    <option>Composites</option>
+                    <option>Controls</option>
+                    <option>Data Acquisition</option>
+                    <option>Electrical IC</option>
+                    <option>Electrical EV</option>
+                    <option>Finance</option>
+                    <option>Frame</option>
+                    <option>Manufacturing</option>
+                    <option>Powertrain EV</option>
+                    <option>Powertrain IC</option>
+                    <option>Suspension</option>
+                  </select>
+                  <input type="date" className="px-3 py-2 rounded w-full" value={prDue} onChange={(e) => setPrDue(e.target.value)} />
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="text-sm text-muted uppercase tracking-caps">Owners</div>
+                  <PersonSelectPopover
+                    mode="multi"
+                    people={people}
+                    selectedIds={prOwners}
+                    onAdd={(id)=> toggleOwner(id)}
+                    onRemove={(id)=> toggleOwner(id)}
+                    triggerLabel={prOwners.length ? `${prOwners.length} selected` : 'Add/Remove'}
+                    buttonClassName="ml-auto text-[11px] px-2 py-1 rounded bg-white/10 border border-white/20"
+                    maxItems={5}
+                  />
+                </div>
+                <button
+                  onClick={async () => {
+                    if (!prName.trim()) { showToast('Give the project a name'); return; }
+                    await handleCreateProject();
+                  }}
+                  disabled={!prName.trim()}
+                  className={`w-full px-3 py-2 rounded border border-border text-sm text-center ${prName.trim() ? 'bg-overlay-6' : 'bg-overlay-6 opacity-50 cursor-not-allowed'}`}>
+                  Save Project
+                </button>
+              </div>
+              </section>
+              <section className="space-y-2">
+                <h2 className="font-semibold">Create Task</h2>
+                <TaskCreateCard
+                  people={people}
+                  projects={projects}
+                  onCreated={reloadAll}
+                />
+              </section>
+            </div>
+
+            <section className="mt-2">
+              <div className="mb-2">
+                <div className="flex items-center justify-between">
+                  <h2 className="font-semibold">Projects</h2>
+                  <input
+                    className="toolbar-input px-3 py-1.5 rounded-md text-xs font-medium border border-overlay-10 bg-overlay-6 w-28 sm:w-44 placeholder:text-muted focus:outline-none focus-visible:outline-none"
+                    placeholder="Search projects…"
+                    value={projectsSearch}
+                    onChange={(e)=>setProjectsSearch(e.target.value)}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-2 mt-2">
+                  <div className="">
+                    {/* Subsystem multi-select popover (left column) */}
+                    <div className="relative w-full">
+                      <button
+                        onClick={() => { setAdmShowSubsystemMenu(v=>!v); setAdmShowSortMenu(false); }}
+                        className="toolbar-btn px-3 py-1.5 rounded-md text-xs font-medium border border-white/10 bg-white/5 hover:bg-white/10 w-full text-left"
+                      >
+                        Subsystems: <span className="font-semibold">{admSelectedSubsystems.length ? `${admSelectedSubsystems.length} selected` : "All"}</span>
+                      </button>
+                      <div className={`absolute left-0 z-20 mt-1 w-64 rounded-md border border-overlay-10 bg-bg/95 shadow-xl overflow-hidden transition transform origin-top ${admShowSubsystemMenu ? "opacity-100 scale-100" : "opacity-0 scale-95 pointer-events-none"}`}>
+                        <div className="px-3 py-2 border-b border-white/10">
+                          <button
+                            className="w-full px-3 py-2 rounded-md text-xs sm:text-sm font-semibold bg-red-500/15 hover:bg-red-500/25 text-red-200 focus:outline-none focus-visible:outline-none"
+                            onClick={() => setAdmSelectedSubsystems([])}
+                          >
+                            Clear selection
+                          </button>
+                        </div>
+                        <div className="max-h-60 overflow-auto p-1">
+                          {subsystems.length === 0 && (
+                            <div className="px-3 py-2 text-xs text-muted uppercase tracking-caps">No subsystems</div>
+                          )}
+                          {subsystems.map(s => {
+                            const checked = admSelectedSubsystems.includes(s);
+                            const count = subsystemCounts.get(s) ?? 0;
+                            return (
+                              <label key={s} className="flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-white/10 cursor-pointer">
+                                <input
+                                  type="checkbox"
+                                  className="accent-accent"
+                                  checked={checked}
+                                  onChange={() => setAdmSelectedSubsystems(prev => checked ? prev.filter(x=>x!==s) : [...prev, s])}
+                                />
+                                <span className="truncate">{s}</span>
+                                <span className="ml-auto inline-flex items-center justify-center rounded-full bg-white/10 px-2 py-0.5 text-[10px]">{count}</span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-end">
+                    {/* Sort popover (right column) */}
+                    <div className="relative w-full">
+                      <button
+                        onClick={() => { setAdmShowSortMenu(v=>!v); setAdmShowSubsystemMenu(false); }}
+                        className="toolbar-btn px-3 py-1.5 rounded-md text-xs font-medium border border-white/10 bg-white/5 hover:bg-white/10 w-full text-left"
+                      >
+                        Sort: <span className="font-semibold">{sortLabel(admSortBy)} {dirSymbol}</span>
+                      </button>
+                      <div className={`absolute right-0 z-20 mt-1 w-48 rounded-md border border-overlay-10 bg-bg/95 shadow-xl overflow-hidden transition transform origin-top ${admShowSortMenu ? "opacity-100 scale-100" : "opacity-0 scale-95 pointer-events-none"}`}>
+                        {(["subsystem","name","due"] as const).map(v => (
+                          <button
+                            key={v}
+                            className={`w-full text-left px-3 py-2 text-xs hover:bg-white/10 ${admSortBy === v ? "bg-white/10" : ""}`}
+                            onClick={() => {
+                              if (admSortBy === v) setAdmSortDir(d => d === "asc" ? "desc" : "asc");
+                              else setAdmSortBy(v);
+                              setAdmShowSortMenu(false);
+                            }}
+                          >{sortLabel(v)} {admSortBy === v ? dirSymbol : ""}</button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                {(admShowSubsystemMenu || admShowSortMenu) && (
+                  <div className="fixed inset-0 z-10" onClick={() => { setAdmShowSubsystemMenu(false); setAdmShowSortMenu(false); }} />
+                )}
+              </div>
+              <div className="grid md:grid-cols-2 gap-2">
+                {projectsToShow.map((p) => (
+                    <details key={p.id} className="form-section p-3">
+                      <summary className="cursor-pointer font-medium">{p.name}</summary>
+                      <div className="mt-2 space-y-3">
+                        <input className="px-3 py-2 rounded w-full" value={p.name} onChange={(e) => setProjects((prev) => prev.map((x) => (x.id === p.id ? { ...x, name: e.target.value } : x)))} />
+                        <input className="px-3 py-2 rounded w-full" placeholder="Design link" value={p.design_link || ""} onChange={(e) => setProjects((prev) => prev.map((x) => (x.id === p.id ? { ...x, design_link: e.target.value } : x)))} />
+                        <textarea className="px-3 py-2 rounded w-full" placeholder="Description" value={p.description || ""} onChange={(e) => setProjects((prev) => prev.map((x) => (x.id === p.id ? { ...x, description: e.target.value } : x)))} />
+                        <div className="flex flex-col sm:flex-row gap-3">
+                          <select className="px-3 py-2 rounded w-full dark-select" value={p.subsystem || ""} onChange={(e)=> setProjects(prev=>prev.map(x=>x.id===p.id?{...x, subsystem: e.target.value || undefined}:x))}>
+                            <option value="">Subsystem…</option>
+                            <option>Aero</option>
+                            <option>Business</option>
+                            <option>Composites</option>
+                            <option>Controls</option>
+                            <option>Data Acquisition</option>
+                            <option>Electrical IC</option>
+                            <option>Electrical EV</option>
+                            <option>Finance</option>
+                            <option>Frame</option>
+                            <option>Manufacturing</option>
+                            <option>Powertrain EV</option>
+                            <option>Powertrain IC</option>
+                            <option>Suspension</option>
+                          </select>
+                          <input type="date" className="px-3 py-2 rounded w-full" value={p.due_date || ""} onChange={(e) => setProjects((prev) => prev.map((x) => (x.id === p.id ? { ...x, due_date: e.target.value } : x)))} />
+                        </div>
+                        <button className="px-3 py-2 rounded bg-accent text-black border border-accent hover:bg-accent/90 w-full" onClick={async () => { await updateProject(p.id, p); showToast("Project updated"); }}>Save Changes</button>
                       </div>
                     </details>
-                ))}
+                  ))}
               </div>
             </section>
           </div>
-        </div>
-      )}
-
-      {activeTab === 'projects' && (
-        <div role="tabpanel" className="mt-4 space-y-6">
-          <div className="grid lg:grid-cols-2 gap-6">
-            <section className="space-y-2">
-            <h2 className="font-semibold">Create Project & Assign Owners</h2>
-            <div className="form-section p-4 space-y-3">
-              <input className="px-3 py-2 rounded w-full" placeholder="Project name" value={prName} onChange={(e) => setPrName(e.target.value)} />
-              <input className="px-3 py-2 rounded w-full" placeholder="Design link (optional)" value={prDesign} onChange={(e) => setPrDesign(e.target.value)} />
-              <textarea className="px-3 py-2 rounded w-full" placeholder="Project description (optional)" value={prDesc} onChange={(e) => setPrDesc(e.target.value)} />
-              <div className="flex flex-col sm:flex-row gap-2">
-                <select className="px-3 py-2 rounded w-full dark-select" value={prSubsystem} onChange={(e)=>setPrSubsystem(e.target.value)}>
-                  <option value="">Select subsystem…</option>
-                  <option>Aero</option>
-                  <option>Business</option>
-                  <option>Composites</option>
-                  <option>Controls</option>
-                  <option>Data Acquisition</option>
-                  <option>Electrical IC</option>
-                  <option>Electrical EV</option>
-                  <option>Finance</option>
-                  <option>Frame</option>
-                  <option>Manufacturing</option>
-                  <option>Powertrain EV</option>
-                  <option>Powertrain IC</option>
-                  <option>Suspension</option>
-                </select>
-                <input type="date" className="px-3 py-2 rounded w-full" value={prDue} onChange={(e) => setPrDue(e.target.value)} />
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="text-sm text-muted uppercase tracking-caps">Owners</div>
-                <PersonSelectPopover
-                  mode="multi"
-                  people={people}
-                  selectedIds={prOwners}
-                  onAdd={(id)=> toggleOwner(id)}
-                  onRemove={(id)=> toggleOwner(id)}
-                  triggerLabel={prOwners.length ? `${prOwners.length} selected` : 'Add/Remove'}
-                  buttonClassName="ml-auto text-[11px] px-2 py-1 rounded bg-white/10 border border-white/20"
-                  maxItems={5}
-                />
-              </div>
-              <button
-                onClick={async () => {
-                  if (!prName.trim()) { showToast('Give the project a name'); return; }
-                  await handleCreateProject();
-                }}
-                disabled={!prName.trim()}
-                className={`w-full px-3 py-2 rounded border border-border text-sm text-center ${prName.trim() ? 'bg-overlay-6' : 'bg-overlay-6 opacity-50 cursor-not-allowed'}`}>
-                Save Project
-              </button>
-            </div>
-            </section>
-            <section className="space-y-2">
-              <h2 className="font-semibold">Create Task</h2>
-              <TaskCreateCard
-                people={people}
-                projects={projects}
-                onCreated={reloadAll}
-              />
-            </section>
-          </div>
-
-          <section className="mt-2">
-            <div className="mb-2">
-              <div className="flex items-center justify-between">
-                <h2 className="font-semibold">Projects</h2>
-                <input
-                  className="toolbar-input px-3 py-1.5 rounded-md text-xs font-medium border border-overlay-10 bg-overlay-6 w-28 sm:w-44 placeholder:text-muted focus:outline-none focus-visible:outline-none"
-                  placeholder="Search projects…"
-                  value={projectsSearch}
-                  onChange={(e)=>setProjectsSearch(e.target.value)}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-2 mt-2">
-                <div className="">
-                  {/* Subsystem multi-select popover (left column) */}
-                  <div className="relative w-full">
-                    <button
-                      onClick={() => { setAdmShowSubsystemMenu(v=>!v); setAdmShowSortMenu(false); }}
-                      className="toolbar-btn px-3 py-1.5 rounded-md text-xs font-medium border border-white/10 bg-white/5 hover:bg-white/10 w-full text-left"
-                    >
-                      Subsystems: <span className="font-semibold">{admSelectedSubsystems.length ? `${admSelectedSubsystems.length} selected` : "All"}</span>
-                    </button>
-                    <div className={`absolute left-0 z-20 mt-1 w-64 rounded-md border border-overlay-10 bg-bg/95 shadow-xl overflow-hidden transition transform origin-top ${admShowSubsystemMenu ? "opacity-100 scale-100" : "opacity-0 scale-95 pointer-events-none"}`}>
-                      <div className="px-3 py-2 border-b border-white/10">
-                        <button
-                          className="w-full px-3 py-2 rounded-md text-xs sm:text-sm font-semibold bg-red-500/15 hover:bg-red-500/25 text-red-200 focus:outline-none focus-visible:outline-none"
-                          onClick={() => setAdmSelectedSubsystems([])}
-                        >
-                          Clear selection
-                        </button>
-                      </div>
-                      <div className="max-h-60 overflow-auto p-1">
-                        {subsystems.length === 0 && (
-                          <div className="px-3 py-2 text-xs text-muted uppercase tracking-caps">No subsystems</div>
-                        )}
-                        {subsystems.map(s => {
-                          const checked = admSelectedSubsystems.includes(s);
-                          const count = subsystemCounts.get(s) ?? 0;
-                          return (
-                            <label key={s} className="flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-white/10 cursor-pointer">
-                              <input
-                                type="checkbox"
-                                className="accent-accent"
-                                checked={checked}
-                                onChange={() => setAdmSelectedSubsystems(prev => checked ? prev.filter(x=>x!==s) : [...prev, s])}
-                              />
-                              <span className="truncate">{s}</span>
-                              <span className="ml-auto inline-flex items-center justify-center rounded-full bg-white/10 px-2 py-0.5 text-[10px]">{count}</span>
-                            </label>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center justify-end">
-                  {/* Sort popover (right column) */}
-                  <div className="relative w-full">
-                    <button
-                      onClick={() => { setAdmShowSortMenu(v=>!v); setAdmShowSubsystemMenu(false); }}
-                      className="toolbar-btn px-3 py-1.5 rounded-md text-xs font-medium border border-white/10 bg-white/5 hover:bg-white/10 w-full text-left"
-                    >
-                      Sort: <span className="font-semibold">{sortLabel(admSortBy)} {dirSymbol}</span>
-                    </button>
-                    <div className={`absolute right-0 z-20 mt-1 w-48 rounded-md border border-overlay-10 bg-bg/95 shadow-xl overflow-hidden transition transform origin-top ${admShowSortMenu ? "opacity-100 scale-100" : "opacity-0 scale-95 pointer-events-none"}`}>
-                      {(["subsystem","name","due"] as const).map(v => (
-                        <button
-                          key={v}
-                          className={`w-full text-left px-3 py-2 text-xs hover:bg-white/10 ${admSortBy === v ? "bg-white/10" : ""}`}
-                          onClick={() => {
-                            if (admSortBy === v) setAdmSortDir(d => d === "asc" ? "desc" : "asc");
-                            else setAdmSortBy(v);
-                            setAdmShowSortMenu(false);
-                          }}
-                        >{sortLabel(v)} {admSortBy === v ? dirSymbol : ""}</button>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-              {(admShowSubsystemMenu || admShowSortMenu) && (
-                <div className="fixed inset-0 z-10" onClick={() => { setAdmShowSubsystemMenu(false); setAdmShowSortMenu(false); }} />
-              )}
-            </div>
-            <div className="grid md:grid-cols-2 gap-2">
-              {projectsToShow.map((p) => (
-                  <details key={p.id} className="form-section p-3">
-                    <summary className="cursor-pointer font-medium">{p.name}</summary>
-                    <div className="mt-2 space-y-3">
-                      <input className="px-3 py-2 rounded w-full" value={p.name} onChange={(e) => setProjects((prev) => prev.map((x) => (x.id === p.id ? { ...x, name: e.target.value } : x)))} />
-                      <input className="px-3 py-2 rounded w-full" placeholder="Design link" value={p.design_link || ""} onChange={(e) => setProjects((prev) => prev.map((x) => (x.id === p.id ? { ...x, design_link: e.target.value } : x)))} />
-                      <textarea className="px-3 py-2 rounded w-full" placeholder="Description" value={p.description || ""} onChange={(e) => setProjects((prev) => prev.map((x) => (x.id === p.id ? { ...x, description: e.target.value } : x)))} />
-                      <div className="flex flex-col sm:flex-row gap-3">
-                        <select className="px-3 py-2 rounded w-full dark-select" value={p.subsystem || ""} onChange={(e)=> setProjects(prev=>prev.map(x=>x.id===p.id?{...x, subsystem: e.target.value || undefined}:x))}>
-                          <option value="">Subsystem…</option>
-                          <option>Aero</option>
-                          <option>Business</option>
-                          <option>Composites</option>
-                          <option>Controls</option>
-                          <option>Data Acquisition</option>
-                          <option>Electrical IC</option>
-                          <option>Electrical EV</option>
-                          <option>Finance</option>
-                          <option>Frame</option>
-                          <option>Manufacturing</option>
-                          <option>Powertrain EV</option>
-                          <option>Powertrain IC</option>
-                          <option>Suspension</option>
-                        </select>
-                        <input type="date" className="px-3 py-2 rounded w-full" value={p.due_date || ""} onChange={(e) => setProjects((prev) => prev.map((x) => (x.id === p.id ? { ...x, due_date: e.target.value } : x)))} />
-                      </div>
-                      <button className="px-3 py-2 rounded bg-accent text-black border border-accent hover:bg-accent/90 w-full" onClick={async () => { await updateProject(p.id, p); showToast("Project updated"); }}>Save Changes</button>
-                    </div>
-                  </details>
-                ))}
-            </div>
-          </section>
-        </div>
-      )}
+        )}
 
   {activeTab === 'settings' && canViewAdminTab(uid,'settings') && (
         <div role="tabpanel" className="mt-4">
@@ -816,7 +824,6 @@ export default function Admin() {
       )}
 
   {activeTab === 'ranked' && canViewAdminTab(uid,'ranked') && (
-  // ...existing code...
         <div role="tabpanel" className="mt-4">
           <section className="space-y-2">
             <h2 className="font-semibold mb-2">Ranked Settings</h2>
@@ -1064,6 +1071,7 @@ export default function Admin() {
         </div>
       )}
     </div>
+    </RequireLead>
   );
 }
 

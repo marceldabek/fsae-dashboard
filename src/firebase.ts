@@ -1,4 +1,3 @@
-
 import { initializeApp, getApps, getApp } from "firebase/app";
 import {
   initializeFirestore,
@@ -7,6 +6,7 @@ import {
   CACHE_SIZE_UNLIMITED,
 } from "firebase/firestore";
 import { getFunctions, connectFunctionsEmulator } from 'firebase/functions';
+import { getAuth } from "firebase/auth";
 
 // If you later add App Check, import it here.
 
@@ -73,3 +73,5 @@ if (import.meta.env.DEV && typeof window !== "undefined") {
     console.warn("[firebase] Functions emulator connect failed", e);
   }
 }
+
+export const auth = getAuth(app);

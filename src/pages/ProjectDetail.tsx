@@ -8,7 +8,7 @@ import TaskCreateCard from "../components/TaskCreateCard";
 import { fetchPeople, fetchProjects, fetchTasksForProject, addTask, updateTask, deleteTaskById, updateProjectOwners, archiveProject, deleteProject } from "../lib/firestore";
 import { useRankedEnabled } from "../hooks/useRankedEnabled";
 import { useAuth } from "../hooks/useAuth";
-import { useAdminStatus } from "../hooks/useAdminStatus";
+import { RequireLead } from "../lib/roles";
 import type { Person, Project, Task } from "../types";
 
 export default function ProjectDetail() {
@@ -31,8 +31,9 @@ export default function ProjectDetail() {
 const user = useAuth();
 const uid = user?.uid || null;
 // Leads can edit everything except hidden admin tabs, so treat them like admins here.
-const { isAdmin, isLead, rolesLoaded } = useAdminStatus();
-const canEdit = isAdmin || isLead;
+// const { isAdmin, isLead, rolesLoaded } = useAdminStatus();
+// const canEdit = isAdmin || isLead;
+const canEdit = false; // Replace with new guard logic if needed
   const [ownerIds, setOwnerIds] = useState<string[]>([]);
   const ownerMutationVersion = useRef(0); // incremental guard to avoid race conditions
   const [ownersBusy, setOwnersBusy] = useState(false);
@@ -170,45 +171,51 @@ const canEdit = isAdmin || isLead;
                   title="Design link"
                 >Link</a>
               )}
-              {canEdit && !((project as any).archived) && (
-                <div className="relative">
-                  <button
-                    onClick={()=> setShowArchiveConfirm(true)}
-                    className="w-[68px] inline-flex items-center justify-center h-6 rounded-md border border-yellow-400/50 bg-yellow-400/15 hover:bg-yellow-400/25 text-yellow-200 text-[11px] font-medium whitespace-nowrap transition"
-                  >Archive</button>
-                  {showArchiveConfirm && (
-                    <div className="absolute right-0 mt-2 w-72 rounded bg-surface border border-border p-3 shadow-lg z-20">
-                      <div className="text-sm">Archive this project? You can re-enable it from the Admin page.</div>
-                      <div className="flex gap-2 mt-3">
-                        <button className="px-3 py-1 rounded bg-red-600 text-white" onClick={async ()=>{ if(!project) return; await archiveProject(project.id); setProject(p=> p ? ({...p, archived: true} as any) : p); setShowArchiveConfirm(false); setToast('Project archived — re-enable from Admin'); setTimeout(()=>setToast(''),3000); }}>Confirm</button>
-                        <button className="px-3 py-1 rounded bg-overlay-6 border border-border" onClick={()=> setShowArchiveConfirm(false)}>Cancel</button>
+              {/* Only leads/admins can see archive/delete buttons */}
+              <RequireLead>
+                {!((project as any).archived) && (
+                  <div className="relative">
+                    <button
+                      onClick={()=> setShowArchiveConfirm(true)}
+                      className="w-[68px] inline-flex items-center justify-center h-6 rounded-md border border-yellow-400/50 bg-yellow-400/15 hover:bg-yellow-400/25 text-yellow-200 text-[11px] font-medium whitespace-nowrap transition"
+                    >Archive</button>
+                    {showArchiveConfirm && (
+                      <div className="absolute right-0 mt-2 w-72 rounded bg-surface border border-border p-3 shadow-lg z-20">
+                        <div className="text-sm">Archive this project? You can re-enable it from the Admin page.</div>
+                        <div className="flex gap-2 mt-3">
+                          <button className="px-3 py-1 rounded bg-red-600 text-white" onClick={async ()=>{ if(!project) return; await archiveProject(project.id); setProject(p=> p ? ({...p, archived: true} as any) : p); setShowArchiveConfirm(false); setToast('Project archived — re-enable from Admin'); setTimeout(()=>setToast(''),3000); }}>Confirm</button>
+                          <button className="px-3 py-1 rounded bg-overlay-6 border border-border" onClick={()=> setShowArchiveConfirm(false)}>Cancel</button>
+                        </div>
                       </div>
-                    </div>
-                  )}
-                </div>
-              )}
-              {canEdit && !((project as any).archived) && (
-                <div className="relative">
-                  <button
-                    onClick={() => setShowDeleteConfirm(true)}
-                    className="w-[68px] inline-flex items-center justify-center h-6 rounded-md border border-red-700/50 bg-red-700/20 hover:bg-red-700/30 text-red-200 text-[11px] font-medium whitespace-nowrap transition"
-                    title="Delete project"
-                  >Delete</button>
-                  {showDeleteConfirm && (
-                    <div className="absolute right-0 mt-2 w-72 rounded bg-surface border border-border p-3 shadow-lg z-30">
-                      <div className="text-sm">Delete this project permanently? This cannot be undone.</div>
-                      <div className="flex gap-2 mt-3">
-                        <button className="px-3 py-1 rounded bg-red-700 text-white" onClick={handleDeleteProject}>Confirm Delete</button>
-                        <button className="px-3 py-1 rounded bg-overlay-6 border border-border" onClick={()=> setShowDeleteConfirm(false)}>Cancel</button>
+                    )}
+                  </div>
+                )}
+                {!((project as any).archived) && (
+                  <div className="relative">
+                    <button
+                      onClick={() => setShowDeleteConfirm(true)}
+                      className="w-[68px] inline-flex items-center justify-center h-6 rounded-md border border-red-700/50 bg-red-700/20 hover:bg-red-700/30 text-red-200 text-[11px] font-medium whitespace-nowrap transition"
+                      title="Delete project"
+                    >Delete</button>
+                    {showDeleteConfirm && (
+                      <div className="absolute right-0 mt-2 w-72 rounded bg-surface border border-border p-3 shadow-lg z-30">
+                        <div className="text-sm">Delete this project permanently? This cannot be undone.</div>
+                        <div className="flex gap-2 mt-3">
+                          <button className="px-3 py-1 rounded bg-red-700 text-white" onClick={handleDeleteProject}>Confirm Delete</button>
+                          <button className="px-3 py-1 rounded bg-overlay-6 border border-border" onClick={()=> setShowDeleteConfirm(false)}>Cancel</button>
+                        </div>
                       </div>
-                    </div>
-                  )}
-                </div>
-              )}
+                    )}
+                  </div>
+                )}
+              </RequireLead>
             </div>
-            {canEdit && (project as any).archived && (
-              <span className="inline-flex items-center h-7 w-[68px] justify-center rounded border border-yellow-400/40 bg-yellow-400/10 text-xs text-yellow-300 font-semibold uppercase tracking-wide">Archived</span>
-            )}
+              {/* Only leads/admins see archived badge */}
+              <RequireLead>
+                {(project as any).archived && (
+                  <span className="inline-flex items-center h-7 w-[68px] justify-center rounded border border-yellow-400/40 bg-yellow-400/10 text-xs text-yellow-300 font-semibold uppercase tracking-wide">Archived</span>
+                )}
+              </RequireLead>
           </div>
            {/* Description box - always below buttons, with 32px margin above title */}
            <div className="mb-0" style={{ marginTop: '32px' }}>
@@ -236,20 +243,23 @@ const canEdit = isAdmin || isLead;
               ) : (
                 <span className="px-2 py-0.5 rounded bg-surface/60 border border-border text-tick text-sm whitespace-nowrap font-medium">N/A</span>
               )}
-              {canEdit && !((project as any).archived) && (
-                <PersonSelectPopover
-                  mode="multi"
-                  people={allPeople}
-                  selectedIds={ownerIds}
-                  onAdd={handleAddOwner}
-                  onRemove={handleRemoveOwner}
-                  triggerLabel="Add/Remove"
-                  triggerContent={<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>}
-                  buttonClassName="inline-flex items-center justify-center h-5 w-5 rounded-md border border-accent/40 bg-accent/15 hover:bg-accent/25 text-accent transition"
-                  disabled={ownersBusy}
-                  maxItems={5}
-                />
-              )}
+              {/* Only leads/admins can edit owners */}
+              <RequireLead>
+                {!((project as any).archived) && (
+                  <PersonSelectPopover
+                    mode="multi"
+                    people={allPeople}
+                    selectedIds={ownerIds}
+                    onAdd={handleAddOwner}
+                    onRemove={handleRemoveOwner}
+                    triggerLabel="Add/Remove"
+                    triggerContent={<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>}
+                    buttonClassName="inline-flex items-center justify-center h-5 w-5 rounded-md border border-accent/40 bg-accent/15 hover:bg-accent/25 text-accent transition"
+                    disabled={ownersBusy}
+                    maxItems={5}
+                  />
+                )}
+              </RequireLead>
             </div>
           </div>
         </div>
@@ -269,19 +279,22 @@ const canEdit = isAdmin || isLead;
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <h2 className="font-semibold text-base leading-tight">Tasks</h2>
-                {canEdit && !(project as any).archived && (
-                  <button
-                    aria-label="Add task"
-                    onClick={()=> setShowAddTask(true)}
-                    className="group inline-flex items-center justify-center h-7 w-7 rounded-md border border-accent/40 bg-accent/15 hover:bg-accent/25 text-accent transition shadow-sm hover:shadow-accent/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" className="drop-shadow-sm">
-                      <line x1="12" y1="5" x2="12" y2="19" />
-                      <line x1="5" y1="12" x2="19" y2="12" />
-                    </svg>
-                    <span className="sr-only">Add task</span>
-                  </button>
-                )}
+                {/* Only leads/admins can add tasks */}
+                <RequireLead>
+                  {!(project as any).archived && (
+                    <button
+                      aria-label="Add task"
+                      onClick={()=> setShowAddTask(true)}
+                      className="group inline-flex items-center justify-center h-7 w-7 rounded-md border border-accent/40 bg-accent/15 hover:bg-accent/25 text-accent transition shadow-sm hover:shadow-accent/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" className="drop-shadow-sm">
+                        <line x1="12" y1="5" x2="12" y2="19" />
+                        <line x1="5" y1="12" x2="19" y2="12" />
+                      </svg>
+                      <span className="sr-only">Add task</span>
+                    </button>
+                  )}
+                </RequireLead>
               </div>
               <label className="flex items-center gap-2 select-none cursor-pointer group">
                 <span className="text-[11px] font-medium text-muted uppercase tracking-caps">Hide completed</span>
@@ -336,30 +349,34 @@ const canEdit = isAdmin || isLead;
                     <div className="min-w-0 flex items-center">
                       <div className="font-medium text-sm truncate flex items-center" title={t.description}>
                         {t.description}
-                        {canEdit && !isEditing && (
-                          <button
-                            className="ml-2 p-1 rounded hover:bg-white/10"
-                            title="Edit task"
-                            onClick={() => setEditTaskId(t.id)}
-                          >
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
-                          </button>
-                        )}
-                        {canEdit && isEditing && (
-                          <button
-                            className="ml-2 p-1 rounded hover:bg-white/10"
-                            title="Close edit"
-                            onClick={() => setEditTaskId(null)}
-                          >
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                          </button>
-                        )}
+                        {/* Only leads/admins can edit tasks */}
+                        <RequireLead>
+                          {!isEditing && (
+                            <button
+                              className="ml-2 p-1 rounded hover:bg-white/10"
+                              title="Edit task"
+                              onClick={() => setEditTaskId(t.id)}
+                            >
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
+                            </button>
+                          )}
+                          {isEditing && (
+                            <button
+                              className="ml-2 p-1 rounded hover:bg-white/10"
+                              title="Close edit"
+                              onClick={() => setEditTaskId(null)}
+                            >
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                            </button>
+                          )}
+                        </RequireLead>
                       </div>
                     </div>
                     <div className="text-tick text-muted flex gap-2 items-center mt-0.5">
                       <span>{t.status}</span>
                       <span>·</span>
-                      {canEdit ? (
+                      {/* Only leads/admins can assign tasks */}
+                      <RequireLead>
                         <PersonSelectPopover
                           mode="single"
                           people={allPeople}
@@ -370,57 +387,61 @@ const canEdit = isAdmin || isLead;
                           maxItems={5}
                           disabled={isEditing}
                         />
-                      ) : (
+                      </RequireLead>
+                      <RequireLead>
                         <span className="px-2 py-0.5 rounded bg-transparent">{assignee ? `@${assignee.name}` : "Unassigned"}</span>
-                      )}
+                      </RequireLead>
                     </div>
                     {rankedEnabled && (
                       <span className="absolute top-2 right-3 text-tick text-muted font-semibold">+{pts} · {ptsToHours(pts)}h</span>
                     )}
-                    {canEdit && isEditing && (
-                      <div className="w-full flex flex-col gap-1 text-xs mt-2">
-                        <div className="flex items-center justify-between w-full gap-2 flex-wrap">
-                          <div className="flex w-full gap-1.5 flex-wrap">
-                              <button onClick={() => handleUpdate(t, "Todo")} className="inline-flex items-center gap-1 px-2.5 h-7 rounded border text-[11px] font-medium border-white/15 bg-white/5 hover:bg-white/10 transition justify-center flex-1 sm:flex-none sm:justify-start">
-                                <span className="w-1.5 h-1.5 rounded-full bg-red-400"/> Todo
-                              </button>
-                              <button onClick={() => handleUpdate(t, "In Progress")} className="inline-flex items-center gap-1 px-2.5 h-7 rounded border text-[11px] font-medium border-white/15 bg-white/5 hover:bg-white/10 transition whitespace-nowrap justify-center flex-1 sm:flex-none sm:justify-start">
-                                <span className="w-1.5 h-1.5 rounded-full bg-yellow-300"/> In Progress
-                              </button>
-                              <button onClick={() => handleUpdate(t, "Complete")} className="inline-flex items-center gap-1 px-2.5 h-7 rounded border text-[11px] font-medium border-white/15 bg-white/5 hover:bg-white/10 transition justify-center flex-1 sm:flex-none sm:justify-start">
-                                <span className="w-1.5 h-1.5 rounded-full bg-green-400"/> Complete
+                    {/* Only leads/admins can edit task details and delete tasks */}
+                    <RequireLead>
+                      {isEditing && (
+                        <div className="w-full flex flex-col gap-1 text-xs mt-2">
+                          <div className="flex items-center justify-between w-full gap-2 flex-wrap">
+                            <div className="flex w-full gap-1.5 flex-wrap">
+                                <button onClick={() => handleUpdate(t, "Todo")} className="inline-flex items-center gap-1 px-2.5 h-7 rounded border text-[11px] font-medium border-white/15 bg-white/5 hover:bg-white/10 transition justify-center flex-1 sm:flex-none sm:justify-start">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-red-400"/> Todo
+                                </button>
+                                <button onClick={() => handleUpdate(t, "In Progress")} className="inline-flex items-center gap-1 px-2.5 h-7 rounded border text-[11px] font-medium border-white/15 bg-white/5 hover:bg-white/10 transition whitespace-nowrap justify-center flex-1 sm:flex-none sm:justify-start">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-yellow-300"/> In Progress
+                                </button>
+                                <button onClick={() => handleUpdate(t, "Complete")} className="inline-flex items-center gap-1 px-2.5 h-7 rounded border text-[11px] font-medium border-white/15 bg-white/5 hover:bg-white/10 transition justify-center flex-1 sm:flex-none sm:justify-start">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-green-400"/> Complete
+                                </button>
+                              </div>
+                            <div />
+                          </div>
+
+                          <div className="flex items-center justify-between w-full gap-2 flex-wrap">
+                            <div className="flex items-center gap-2 w-full">
+                              <select
+                                className="h-7 px-2.5 rounded bg-surface/60 border border-border text-xs text-text dark-select flex-[2] w-full sm:flex-none sm:w-auto"
+                                value={t.ranked_points || ""}
+                                onChange={e=>updateTask(t.id, { ranked_points: e.target.value ? Number(e.target.value) : undefined }).then(reloadTasks)}
+                              >
+                                  <option value="">Points…</option>
+                                  <option value="1">1 pt ~ 0.5 hr</option>
+                                  <option value="3">3 pts ~ 1 hr</option>
+                                  <option value="6">6 pts ~ 2 hrs</option>
+                                  <option value="10">10 pts ~ 3 hrs</option>
+                                  <option value="15">15 pts ~ 5 hrs</option>
+                                  <option value="40">40 pts ~ 10 hrs</option>
+                                  <option value="65">65 pts ~ 15 hrs</option>
+                                  <option value="98">98 pts ~ 20 hrs</option>
+                                  <option value="150">150 pts ~ 25 hrs</option>
+                                  <option value="200">200 pts ~ 30 hrs</option>
+                              </select>
+                              <button onClick={() => handleDelete(t)} className="inline-flex items-center gap-1 px-2.5 h-7 rounded border text-[11px] font-medium border-red-500/60 text-red-200 bg-red-500/10 hover:bg-red-500/20 transition flex-1 sm:flex-none">
+                                Delete
                               </button>
                             </div>
-                          <div />
-                        </div>
-
-                        <div className="flex items-center justify-between w-full gap-2 flex-wrap">
-                          <div className="flex items-center gap-2 w-full">
-                            <select
-                              className="h-7 px-2.5 rounded bg-surface/60 border border-border text-xs text-text dark-select flex-[2] w-full sm:flex-none sm:w-auto"
-                              value={t.ranked_points || ""}
-                              onChange={e=>updateTask(t.id, { ranked_points: e.target.value ? Number(e.target.value) : undefined }).then(reloadTasks)}
-                            >
-                                <option value="">Points…</option>
-                                <option value="1">1 pt ~ 0.5 hr</option>
-                                <option value="3">3 pts ~ 1 hr</option>
-                                <option value="6">6 pts ~ 2 hrs</option>
-                                <option value="10">10 pts ~ 3 hrs</option>
-                                <option value="15">15 pts ~ 5 hrs</option>
-                                <option value="40">40 pts ~ 10 hrs</option>
-                                <option value="65">65 pts ~ 15 hrs</option>
-                                <option value="98">98 pts ~ 20 hrs</option>
-                                <option value="150">150 pts ~ 25 hrs</option>
-                                <option value="200">200 pts ~ 30 hrs</option>
-                            </select>
-                            <button onClick={() => handleDelete(t)} className="inline-flex items-center gap-1 px-2.5 h-7 rounded border text-[11px] font-medium border-red-500/60 text-red-200 bg-red-500/10 hover:bg-red-500/20 transition flex-1 sm:flex-none">
-                              Delete
-                            </button>
+                            <div />
                           </div>
-                          <div />
                         </div>
-                      </div>
-                    )}
+                      )}
+                    </RequireLead>
                     <span className={`absolute top-1/2 -translate-y-1/2 right-3 w-3.5 h-3.5 rounded-full ${color} shadow`} aria-hidden />
                   </li>
                 );

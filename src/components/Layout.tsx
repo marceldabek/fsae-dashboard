@@ -1,8 +1,7 @@
-
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { subscribeAdminRoleChanges } from "../admin";
-import { useAdminStatus } from "../hooks/useAdminStatus";
+import { RequireLead } from "../lib/roles";
 import { signIn, signOutUser } from "../auth";
 import { useEffect, useState } from "react";
 import TeamLogo from "./TeamLogo";
@@ -10,7 +9,6 @@ import { fetchRankedSettings, setRankedSettings } from "../lib/firestore";
 import { useRankedEnabled } from "../hooks/useRankedEnabled";
 
 export default function Layout() {
-  const { isAdmin, isLead, rolesLoaded } = useAdminStatus();
   const [menuOpen, setMenuOpen] = useState(false);
   const [rankedEnabled, updateRankedEnabled] = useRankedEnabled();
   const location = useLocation();
@@ -96,7 +94,9 @@ export default function Layout() {
             <MenuLink to="/timeline" label="Timeline" />
             {/* Show Ranked entry only when Ranked mode is enabled */}
             {rankedEnabled && <MenuLink to="/ranked" label="Ranked" />}
-            {(isAdmin || isLead) && <MenuLink to="/admin" label="Admin" />}
+            <RequireLead>
+              <MenuLink to="/admin" label="Admin" />
+            </RequireLead>
             <div className="my-3 border-t border-border/60" />
             <label className="flex items-center gap-2 px-3 py-2 text-sm select-none cursor-pointer">
               <span className="text-muted uppercase tracking-caps">Ranked mode</span>

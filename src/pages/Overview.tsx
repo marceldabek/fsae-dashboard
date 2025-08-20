@@ -10,7 +10,7 @@ import ProgressBar from "../components/ProgressBar";
 import SwipeCarousel from "../components/SwipeCarousel";
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, Area } from "recharts";
 import AttendanceCard from "../components/AttendanceCard";
-import { useAdminStatus } from "../hooks/useAdminStatus";
+import { RequireLead } from "../lib/roles";
 
 function StatCard({ label, value }: { label: string; value: string | number }) {
   return (
@@ -213,8 +213,7 @@ export default function Overview() {
     return () => window.removeEventListener("keydown", handleKey);
   }, []);
   const uid = user?.uid || null;
-  const { isAdmin, isLead, rolesLoaded } = useAdminStatus();
-  const canCreate = isLead || isAdmin;
+  // ...existing code...
 
   async function handleCreateProject() {
     if (!prName.trim()) return;
@@ -313,7 +312,7 @@ export default function Overview() {
   {/* Project cards section */}
       <div className="mt-6 mb-2 flex items-center w-full" style={{ display: 'flex' }}>
         <h2 className="text-lg font-semibold">Projects</h2>
-        {canCreate && (
+        <RequireLead>
           <button
             aria-label="Create project"
             onClick={()=> setShowCreateProject(true)}
@@ -325,7 +324,7 @@ export default function Overview() {
             </svg>
             <span className="sr-only">Add project</span>
           </button>
-        )}
+        </RequireLead>
         <div className="flex-1" />
         {/* Hide completed switch, styled like admin page ranked pool switch */}
   <label className="relative inline-flex items-center cursor-pointer select-none outline-none focus:outline-none" style={{ marginLeft: 8 }}>
