@@ -1,10 +1,10 @@
 
 /* tailwindcss v3.4.7 | @tailwind directives for VS Code IntelliSense */
+
+@import "./app-viewport.css";
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-@import "./app-viewport.css";
 
 /* Shared form control utility for consistent input sizing */
 .form-control {
