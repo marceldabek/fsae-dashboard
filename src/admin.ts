@@ -27,12 +27,19 @@ export function hasAdminPageAccess(uid?: string | null): boolean {
 }
 
 // Utility to test tab visibility
-export type AdminTab = "people" | "projects" | "settings" | "ranked";
-export function canViewAdminTab(uid: string | null | undefined, tab: AdminTab): boolean {
-	if (isAdminUid(uid)) return true; // full admins see all tabs
-	if (!isLeadUid(uid)) return false; // no access
-	// Leads: hide only settings & ranked tabs
-	return tab === "people" || tab === "projects";
+export type AdminTab = 'people'|'projects'|'settings'|'ranked';
+
+// Centralized tab access rules
+const TABS_FOR_ADMIN: AdminTab[] = ['people', 'projects', 'settings', 'ranked'];
+const TABS_FOR_LEAD: AdminTab[] = ['people', 'projects'];
+
+export function canViewAdminTab(roleOrUid: string | null | {role?: string}, tab: AdminTab): boolean {
+	// Normalize to role string
+	const role = typeof roleOrUid === 'string' ? undefined : roleOrUid?.role;
+	if (!role) return false; // while unknown, don’t decide
+	if (role === 'admin') return TABS_FOR_ADMIN.includes(tab);
+	if (role === 'lead') return TABS_FOR_LEAD.includes(tab);
+	return false;
 }
 
 // Runtime setter used by the app shell to populate roles from Firestore at startup.

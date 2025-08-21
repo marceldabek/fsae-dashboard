@@ -1,6 +1,7 @@
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { subscribeAdminRoleChanges } from "../admin";
+import { useRoles, RequireLead } from "../lib/roles";
 import { signIn, signOutUser } from "../auth";
 import { useEffect, useState } from "react";
 import TeamLogo from "./TeamLogo";
@@ -91,12 +92,14 @@ export default function Layout() {
           </div>
           <nav className="px-2 py-3 text-base">
             <MenuLink to="/" label="Overview" />
-              <MenuLink to="/members" label="Members" />
+            <MenuLink to="/members" label="Members" />
             <MenuLink to="/stats" label="Stats" />
             <MenuLink to="/timeline" label="Timeline" />
             {/* Show Ranked entry only when Ranked mode is enabled */}
             {rankedEnabled && <MenuLink to="/ranked" label="Ranked" />}
-            <MenuLink to="/admin" label="Admin" />
+            <RequireLead>
+              <MenuLink to="/admin" label="Admin" />
+            </RequireLead>
             <div className="my-3 border-t border-border/60" />
             <label className="flex items-center gap-2 px-3 py-2 text-sm select-none cursor-pointer">
               <span className="text-muted uppercase tracking-caps">Ranked mode</span>

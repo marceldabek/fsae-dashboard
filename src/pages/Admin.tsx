@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import PersonSelectPopover from "../components/PersonSelectPopover";
 import TaskCreateCard from "../components/TaskCreateCard";
 import { useAuth } from "../hooks/useAuth";
-import { RequireLead, RequireAdmin } from "../lib/roles";
+import { RequireLead, RequireAdmin, useRoles } from "../lib/roles";
 import { canViewAdminTab, AdminTab } from "../admin";
 import type { Person, Project, RankLevel, RankedSettings } from "../types";
 import {
@@ -74,6 +74,19 @@ export default function Admin() {
   const [admShowSubsystemMenu, setAdmShowSubsystemMenu] = useState(false);
   const [admShowSortMenu, setAdmShowSortMenu] = useState(false);
   const [activeTab, setActiveTab] = useState<AdminTab>("people");
+  const { role, ready: roleReady } = useRoles();
+  const [deniedTab, setDeniedTab] = useState<AdminTab | null>(null);
+
+  const safeSetActiveTab = (next: AdminTab) => {
+    if (!roleReady) return; // ignore clicks until we know
+    if (canViewAdminTab({ role: role ?? undefined }, next)) {
+      setDeniedTab(null);
+      setActiveTab(next);
+    } else {
+      setDeniedTab(next);
+      setActiveTab('people');
+    }
+  };
   const [showResetModal, setShowResetModal] = useState(false);
   const [resetPassword, setResetPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -267,12 +280,16 @@ export default function Admin() {
     return () => window.removeEventListener("keydown", handleKey);
   }, []);
 
-  // Ensure activeTab always permitted for current role
+  // Clamp activeTab to allowed tabs, waiting for roles to load
   useEffect(() => {
-    if (!canViewAdminTab(uid, activeTab)) {
-      setActiveTab("people");
+    if (!roleReady) return;
+    const safeRole = role ?? undefined;
+    if (!canViewAdminTab({ role: safeRole }, activeTab)) {
+      setDeniedTab(activeTab);
+      // Prefer 'projects' for leads; else fall back to 'people'
+      setActiveTab(canViewAdminTab({ role: safeRole }, 'projects') ? 'projects' : 'people');
     }
-  }, [uid, activeTab]);
+  }, [roleReady, role, activeTab]);
 
   // Gate entire page: allow leads (limited) & full admins
   return (
@@ -294,37 +311,43 @@ export default function Admin() {
           <nav className="flex gap-2 sm:gap-3 h-11 items-end min-w-max whitespace-nowrap" role="tablist">
             <button
               className={`px-3 py-2 rounded-t font-medium text-sm transition border-b-2 ${activeTab === "people" ? "border-accent text-accent" : "border-transparent text-muted hover:text-accent/80"}`}
-              onClick={() => setActiveTab("people")}
+              onClick={() => safeSetActiveTab("people")}
               role="tab"
               aria-selected={activeTab === "people"}
+              disabled={!roleReady}
             >People</button>
             <button
               className={`px-3 py-2 rounded-t font-medium text-sm transition border-b-2 ${activeTab === "projects" ? "border-accent text-accent" : "border-transparent text-muted hover:text-accent/80"}`}
-              onClick={() => setActiveTab("projects")}
+              onClick={() => safeSetActiveTab("projects")}
               role="tab"
               aria-selected={activeTab === "projects"}
+              disabled={!roleReady}
             >Projects & Tasks</button>
             <RequireAdmin>
               <button
                 className={`px-3 py-2 rounded-t font-medium text-sm transition border-b-2 ${activeTab === "settings" ? "border-accent text-accent" : "border-transparent text-muted hover:text-accent/80"}`}
-                onClick={() => setActiveTab("settings")}
+                onClick={() => safeSetActiveTab("settings")}
                 role="tab"
                 aria-selected={activeTab === "settings"}
+                disabled={!roleReady}
               >Global Settings</button>
               <button
                 className={`px-3 py-2 rounded-t font-medium text-sm transition border-b-2 ${activeTab === "ranked" ? "border-accent text-accent" : "border-transparent text-muted hover:text-accent/80"}`}
-                onClick={() => setActiveTab("ranked")}
+                onClick={() => safeSetActiveTab("ranked")}
                 role="tab"
                 aria-selected={activeTab === "ranked"}
+                disabled={!roleReady}
               >Ranked Settings</button>
             </RequireAdmin>
           </nav>
         </div>
 
-        {/* Auto-correct activeTab if role changes (e.g., demoted while viewing restricted tab) */}
-        { !canViewAdminTab(uid, activeTab) && (
-          <div className="mt-4 text-xs text-red-300">You no longer have access to the {activeTab} tab. Showing People tab.</div>
-        ) }
+        {/* Banner for denied tab attempts */}
+        {roleReady && deniedTab && !canViewAdminTab({ role: role ?? undefined }, deniedTab) && (
+          <div className="mt-4 text-xs text-red-300">
+            You don’t have access to the {deniedTab} tab. Showing People.
+          </div>
+        )}
 
         {activeTab === 'people' && (
           <div role="tabpanel" className="mt-4">

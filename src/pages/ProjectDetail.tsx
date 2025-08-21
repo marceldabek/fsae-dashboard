@@ -15,9 +15,9 @@ export default function ProjectDetail() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   // Delete project and redirect
   const handleDeleteProject = async () => {
-    if (!project) return;
-    await deleteProject(project.id);
-    window.location.href = "/overview";
+  if (!project) return;
+  await deleteProject(project.id);
+  window.location.href = "https://marceldabek.github.io/fsae-dashboard/";
   };
   const { id } = useParams();
   const [project, setProject] = useState<Project | null>(null);

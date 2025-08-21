@@ -25,6 +25,7 @@ export type Project = {
   // Subsystem this project belongs to (e.g. "Aero", "Business", etc.)
   subsystem?: string;
   archived?: boolean; // soft-archive flag
+  created_at?: number; // timestamp for when the project was created
 };
 
 export type Task = {

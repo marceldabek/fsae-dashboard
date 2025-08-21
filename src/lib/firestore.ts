@@ -274,15 +274,16 @@ export async function addPerson(p: Omit<Person, "id"> & { id?: string }) {
 }
 
 export async function addProject(pr: Omit<Project, "id"> & { id?: string }) {
+  const now = Date.now();
   if (pr.id) {
     const ref = doc(db, "projects", pr.id);
-  await setDoc(ref, pruneUndefined({ ...pr, id: pr.id }), { merge: true }); // create-or-merge
-  bustCache(["projects"]);
+    await setDoc(ref, pruneUndefined({ ...pr, id: pr.id, created_at: pr.created_at ?? now }), { merge: true }); // create-or-merge
+    bustCache(["projects"]);
     return pr.id;
   } else {
-  const ref = await addDoc(collection(db, "projects"), pruneUndefined(pr as any));
+    const ref = await addDoc(collection(db, "projects"), pruneUndefined({ ...pr, created_at: now } as any));
     await updateDoc(ref, { id: ref.id });
-  bustCache(["projects"]);
+    bustCache(["projects"]);
     return ref.id;
   }
 }
@@ -493,10 +494,14 @@ export async function applyRankedPromotionsDemotions(people: Person[], tasks: Ta
 // Danger zone: remove all people, projects, and tasks documents.
 export async function fullSystemReset() {
   // Note: Firestore charges per document delete; ensure admin-only access in security rules.
-  const [peopleSnap, projectsSnap, tasksSnap] = await Promise.all([
+  // This will delete all people, projects, tasks, attendance, logs, and ranked data except settings and admin/lead UIDs.
+  const [peopleSnap, projectsSnap, tasksSnap, attendanceSnap, logsSnap, rankedSnap] = await Promise.all([
     getDocs(collection(db, "people")),
     getDocs(collection(db, "projects")),
     getDocs(collection(db, "tasks")),
+    getDocs(collection(db, "attendance")),
+    getDocs(collection(db, "logs")),
+    getDocs(collection(db, "ranked")),
   ]);
 
   // Delete tasks first (downstream of projects/people conceptually)
@@ -504,11 +509,18 @@ export async function fullSystemReset() {
   for (const d of tasksSnap.docs) deletes.push(deleteDoc(doc(db, "tasks", d.id)));
   for (const d of projectsSnap.docs) deletes.push(deleteDoc(doc(db, "projects", d.id)));
   for (const d of peopleSnap.docs) deletes.push(deleteDoc(doc(db, "people", d.id)));
+  for (const d of attendanceSnap.docs) deletes.push(deleteDoc(doc(db, "attendance", d.id)));
+  for (const d of logsSnap.docs) deletes.push(deleteDoc(doc(db, "logs", d.id)));
+  for (const d of rankedSnap.docs) {
+    // Only delete ranked docs that are not settings (preserve settings)
+    if (d.id !== "settings") deletes.push(deleteDoc(doc(db, "ranked", d.id)));
+  }
   await Promise.all(deletes);
 
   // Clear caches
   bustCache(["people", "projects", "tasks"]);
   bustCacheByPrefix("tasks:project:");
+  bustCache(["ranked:settings"]);
 }
 
 // ---- Anonymous visit tracking (privacy-friendly) ----

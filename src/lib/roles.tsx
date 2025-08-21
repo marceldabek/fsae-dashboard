@@ -58,6 +58,28 @@ export function installRolesListener(onChange: (r: Roles | null) => void) {
 // Guards
 import React from "react";
 
+export function useRoles(): { role: 'admin'|'lead'|'member'|null, ready: boolean } {
+  const [roles, setRoles] = React.useState<Roles | null>(last);
+  const [ready, setReady] = React.useState(false);
+
+  React.useEffect(() => {
+    const unsub = installRolesListener((r) => {
+      setRoles(r);
+      setReady(true);
+    });
+    return () => { if (typeof unsub === 'function') unsub(); };
+  }, []);
+
+  const role = React.useMemo(() => {
+    if (!roles) return null;
+    if (roles.isAdmin) return 'admin';
+    if (roles.isLead) return 'lead';
+    return 'member';
+  }, [roles]);
+
+  return { role, ready };
+}
+
 export function RequireLead({ children }: { children: React.ReactNode }) {
   const [r, setR] = React.useState<Roles | null>(last);
   React.useEffect(() => installRolesListener(setR), []);
