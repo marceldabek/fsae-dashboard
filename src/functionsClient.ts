@@ -24,14 +24,4 @@ if (import.meta.env.DEV && typeof window !== 'undefined') {
 
 // Typed callable wrapper
 interface AdminRolesFull { isAdmin: boolean; isLead: boolean; adminUids?: string[]; leadUids?: string[]; }
-export const callGetAdminRoles = httpsCallable<undefined, AdminRolesFull>(functionsClient, 'getAdminRoles');
-
-export async function loadAdminRoles(): Promise<AdminRolesFull | null> {
-  try {
-    const res = await callGetAdminRoles();
-    return res?.data || null;
-  } catch (e) {
-    console.warn('[functions] getAdminRoles failed', e);
-    return null;
-  }
-}
+export const callGetAdminRoles = httpsCallable<undefined, unknown>(functionsClient, 'getAdminRoles');

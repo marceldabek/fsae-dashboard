@@ -16,24 +16,24 @@ setGlobalOptions({ region: "us-central1", maxInstances: 10 });
 
 // ---------- Roles ----------
 
-const toUidArray = (v: unknown): string[] =>
-  Array.isArray(v) ? v.map((s) => String(s).trim()).filter(Boolean) : [];
-
-/** Callable: returns { uid, isAdmin, isLead, adminUids, leadUids } */
+// ALWAYS return uid, isAdmin, isLead, adminUids, leadUids, version
 export const getAdminRoles = onCall(async (request) => {
   const uid = request.auth?.uid;
   if (!uid) throw new HttpsError("unauthenticated", "Must be signed in");
 
+  type RoleDoc = { uids?: unknown; leads?: unknown };
+  const toUidArray = (v: unknown) =>
+    Array.isArray(v) ? v.map(x => String(x).trim()).filter(Boolean) : [];
+
   const db = admin.firestore();
-  const [adminsSnap, leadsSnap] = await Promise.all([
+  const [asnap, lsnap] = await Promise.all([
     db.doc("config/admins").get(),
     db.doc("config/leads").get(),
   ]);
 
-  const adminData = (adminsSnap.data() as any) ?? {};
-  const leadData = (leadsSnap.data() as any) ?? {};
+  const adminData = (asnap.data() as RoleDoc) ?? {};
+  const leadData = (lsnap.data() as RoleDoc) ?? {};
 
-  // Accept 'uids' or accidental 'leads' field names
   const adminUids = toUidArray(adminData.uids ?? adminData.leads);
   const leadUids = toUidArray(leadData.uids ?? leadData.leads);
 
@@ -43,12 +43,10 @@ export const getAdminRoles = onCall(async (request) => {
 
   console.log("roles-debug", {
     project: process.env.GCLOUD_PROJECT,
-    uid: me,
-    adminCount: adminUids.length,
-    leadCount: leadUids.length,
-    firstLead: leadUids[0],
+    uid: me, adminCount: adminUids.length, leadCount: leadUids.length,
   });
-  return { uid: me, isAdmin, isLead, adminUids, leadUids, version: "cf-roles-v1" };
+
+  return { uid: me, isAdmin, isLead, adminUids, leadUids, version: "cf-roles-v2" };
 });
 
 // ---------- Ranked mode server-side automation ----------

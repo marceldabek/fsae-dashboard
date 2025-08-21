@@ -55,24 +55,13 @@ export function subscribeAdminRoleChanges(listener: () => void) {
 // Fetch roles via callable function and update runtime lists.
 // Falls back to Firestore doc read if full lists not returned (non-admin caller).
 import { getAuth } from 'firebase/auth';
-import { loadAdminRoles } from './functionsClient';
+import { fetchRoles } from './lib/roles';
 
 // Fetch roles via callable function and update runtime lists (static imports to avoid chunk warning).
 export async function loadRuntimeAdminsViaFunctions() {
 	try {
-		const data: any = await loadAdminRoles();
-		if (!data) return;
-		if (Array.isArray(data.adminUids) || Array.isArray(data.leadUids)) {
-			setRuntimeAdmins(data.adminUids || [], data.leadUids || []);
-			return;
-		}
-		const auth = getAuth();
-		const uid = auth.currentUser?.uid;
-		if (uid) {
-			const admins = data.isAdmin ? [uid] : [];
-			const leads = data.isLead ? [uid] : [];
-			setRuntimeAdmins(admins, leads);
-		}
+		const data = await fetchRoles();
+		setRuntimeAdmins(data.adminUids, data.leadUids);
 	} catch (e) {
 		console.warn('[roles] loadRuntimeAdminsViaFunctions failed', e);
 	}

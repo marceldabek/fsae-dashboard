@@ -29,6 +29,16 @@ export default function Layout() {
 
   // Load ranked setting once
   // rankedEnabled managed by hook; no manual effect needed
+  async function debugRolesCall() {
+    try {
+      const { fetchRoles } = await import("../lib/roles");
+      const r = await fetchRoles();
+      alert(JSON.stringify(r, null, 2));
+    } catch (e) {
+      alert("roles failed: " + (e as any)?.message);
+    }
+  }
+
   return (
   <div className="min-h-[100dvh] bg-bg bg-app-gradient text-text">
       {/* iOS PWA safe area top spacer to avoid visual gap under the status bar */}
@@ -38,6 +48,11 @@ export default function Layout() {
           <Link to="/" className="flex items-center h-10">
             <TeamLogo className="h-8 w-auto" />
           </Link>
+          {/* TEMPORARY: Debug roles button */}
+          <button
+            style={{ marginLeft: 16, padding: "4px 12px", borderRadius: 6, background: "#eee", color: "#222", fontSize: 12, border: "1px solid #ccc" }}
+            onClick={debugRolesCall}
+          >Debug Roles</button>
           {/* Hamburger button */}
           <button
             aria-label={menuOpen ? "Close menu" : "Open menu"}

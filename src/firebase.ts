@@ -50,7 +50,7 @@ export const db = (globalThis as any).__FSAE_FIRESTORE__
       }));
 
 // Export Functions instance (default region). Adjust region if you deploy elsewhere.
-export const functions = getFunctions(app);
+export const functions = getFunctions(app, 'us-central1');
 
 // In local development, automatically connect to the Functions emulator if running.
 // This project uses a custom functions emulator port (5002) per firebase.json.
