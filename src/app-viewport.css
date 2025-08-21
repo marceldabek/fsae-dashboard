@@ -1,0 +1,11 @@
+/* Dynamic viewport height for app wrappers */
+:root {
+  /* modern browsers */
+  --app-dvh: 100dvh;
+  /* fallback for older iOS set via JS below */
+  --app-vh: 100vh;
+}
+
+.app, .page, .screen {
+  min-height: var(--app-dvh, var(--app-vh));
+}

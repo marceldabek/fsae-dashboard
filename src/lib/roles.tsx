@@ -24,11 +24,10 @@ export async function fetchRoles(): Promise<Roles> {
       typeof d.isLead !== "boolean" ||
       !Array.isArray(d.adminUids) ||
       !Array.isArray(d.leadUids)) {
-    console.error("[roles] BAD SHAPE from server:", d);
     throw new Error("Roles function did not return the full shape");
   }
 
-  console.log("[roles] server", d.version, d);
+  // ...no logging...
   return {
     uid: d.uid,
     isAdmin: d.isAdmin,
@@ -49,8 +48,8 @@ export function installRolesListener(onChange: (r: Roles | null) => void) {
       last = await fetchRoles();
       onChange(last);
     } catch (e) {
-      console.warn("[roles] fetch failed; treating as no roles", e);
-      last = { uid: u.uid, isAdmin: false, isLead: false, adminUids: [], leadUids: [] };
+      // Quietly treat as no roles
+      last = { uid: u?.uid ?? "", isAdmin: false, isLead: false, adminUids: [], leadUids: [] };
       onChange(last);
     }
   });

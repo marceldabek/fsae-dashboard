@@ -4,6 +4,18 @@
 @tailwind components;
 @tailwind utilities;
 
+@import "./app-viewport.css";
+
+/* Shared form control utility for consistent input sizing */
+.form-control {
+	font-size: 16px;
+}
+
+/* Safe-area padding for fixed bottom bars/footers */
+.bottom-bar, .footer-fixed {
+	padding-bottom: env(safe-area-inset-bottom);
+}
+
 html, body, #root { height: 100%; }
 
 /* Custom horizontal scrollbar (mobile) for Admin tab bar */
@@ -37,6 +49,20 @@ html, body, #root { height: 100%; }
 
 @media (min-width: 640px) {
 	.h-scroll-tabs::-webkit-scrollbar { height: 8px; }
+}
+
+/* iOS: don't auto-scale text */
+html { -webkit-text-size-adjust: 100%; }
+
+/* Prevent focus-zoom by keeping form controls ≥16px */
+input, textarea, select, button {
+	font-size: 16px;
+	line-height: 1.4;
+}
+
+/* Reduce double-tap-to-zoom delays on interactive elements */
+body, a, button, [role="button"] {
+	touch-action: manipulation;
 }
 
 /* Optional: gradient backdrop if desired via a parent class */

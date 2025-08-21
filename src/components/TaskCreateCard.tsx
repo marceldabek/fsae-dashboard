@@ -47,7 +47,7 @@ export default function TaskCreateCard({ people, projects = [], fixedProjectId, 
       {!hideTitle && <h3 className="text-sm font-semibold">Add Task</h3>}
       {!fixedProjectId && (
         <select
-          className="px-3 h-10 rounded text-sm w-full dark-select"
+            className="px-3 h-10 rounded text-sm w-full dark-select form-control"
           value={projectId}
           onChange={e=>setProjectId(e.target.value)}
         >
@@ -56,14 +56,14 @@ export default function TaskCreateCard({ people, projects = [], fixedProjectId, 
         </select>
       )}
       <input
-  className="px-3 h-10 rounded text-sm w-full bg-surface/60 border border-border focus:outline-none"
+    className="px-3 h-10 rounded text-sm w-full bg-surface/60 border border-border focus:outline-none form-control"
         placeholder="Description"
         value={desc}
         onChange={e => setDesc(e.target.value)}
       />
       <div className="flex gap-2">
         <select
-          className="px-3 h-10 rounded text-sm dark-select flex-1 min-w-0"
+            className="px-3 h-10 rounded text-sm dark-select flex-1 min-w-0 form-control"
           value={status}
           onChange={e => setStatus(e.target.value as any)}
         >
@@ -72,17 +72,17 @@ export default function TaskCreateCard({ people, projects = [], fixedProjectId, 
           <option>Complete</option>
         </select>
         <PersonSelectPopover
-          mode="single"
-          people={people}
+            mode="single"
+            people={people}
             selectedId={assignee || null}
             onSelect={(id)=> setAssignee(id || "")}
             triggerLabel={assignee ? (people.find(p=>p.id===assignee)?.name || 'Assignee') : 'Assign to…'}
-            buttonClassName="px-3 h-10 rounded text-sm bg-white/10 border border-white/20 flex items-center hover:bg-white/15 whitespace-nowrap"
+            buttonClassName="px-3 h-10 rounded text-sm bg-white/10 border border-white/20 flex items-center hover:bg-white/15 whitespace-nowrap form-control"
             maxItems={5}
         />
       </div>
       <select
-        className="px-3 h-10 rounded text-sm dark-select w-full"
+    className="px-3 h-10 rounded text-sm dark-select w-full form-control"
         value={(points as any)}
         onChange={(e)=> setPoints((e.target.value? Number(e.target.value) : "") as any)}
       >

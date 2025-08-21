@@ -63,6 +63,6 @@ export async function loadRuntimeAdminsViaFunctions() {
 		const data = await fetchRoles();
 		setRuntimeAdmins(data.adminUids, data.leadUids);
 	} catch (e) {
-		console.warn('[roles] loadRuntimeAdminsViaFunctions failed', e);
+		// Silently fail
 	}
 }

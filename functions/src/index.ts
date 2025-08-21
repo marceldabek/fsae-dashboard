@@ -41,10 +41,7 @@ export const getAdminRoles = onCall(async (request) => {
   const isAdmin = adminUids.includes(me);
   const isLead = isAdmin || leadUids.includes(me);
 
-  console.log("roles-debug", {
-    project: process.env.GCLOUD_PROJECT,
-    uid: me, adminCount: adminUids.length, leadCount: leadUids.length,
-  });
+  // ...removed roles-debug log...
 
   return { uid: me, isAdmin, isLead, adminUids, leadUids, version: "cf-roles-v2" };
 });

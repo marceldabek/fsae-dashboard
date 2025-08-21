@@ -4,9 +4,12 @@ import { createRoot } from 'react-dom/client'
 import { RouterProvider } from "react-router-dom";
 import router from "./router";
 import './index.css'
+import { installViewportVhFix } from './utils/viewportVhFix';
 import { refreshAllCaches, recordAnonymousVisit } from "./lib/firestore";
-import { setRuntimeAdmins, loadRuntimeAdminsViaFunctions } from './admin';
+import { setRuntimeAdmins } from './admin';
 import { listenAuth } from './auth';
+
+installViewportVhFix();
 
 // Register SW only in production (original simpler behavior)
 if ("serviceWorker" in navigator && import.meta.env.PROD) {
@@ -44,7 +47,7 @@ root.render(
   listenAuth(async (u) => {
     if (!u) { setRuntimeAdmins([], []); return; }
     // Rely solely on backend callable for role population (no Firestore doc fallback)
-    await loadRuntimeAdminsViaFunctions();
+  // ...existing code...
   });
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible") {

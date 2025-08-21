@@ -351,11 +351,11 @@ export default function Admin() {
                   <div className="text-sm font-semibold text-white">Quick attendance</div>
 
                   <input
-                    type="date"
-                    className="px-2.5 py-1.5 rounded text-sm bg-white/5 border border-white/10 w-full"
-                    value={attendanceDate}
-                    onChange={(e)=>setAttendanceDate(e.target.value)}
-                  />
+                      type="date"
+                      className="px-2.5 py-1.5 rounded text-sm bg-white/5 border border-white/10 w-full max-w-xs mx-auto block"
+                      value={attendanceDate}
+                      onChange={(e)=>setAttendanceDate(e.target.value)}
+                    />
 
                   <div className="grid grid-cols-2 gap-2 items-stretch">
                     <div>

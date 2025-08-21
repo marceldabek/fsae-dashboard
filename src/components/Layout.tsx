@@ -1,7 +1,6 @@
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { subscribeAdminRoleChanges } from "../admin";
-import { RequireLead } from "../lib/roles";
 import { signIn, signOutUser } from "../auth";
 import { useEffect, useState } from "react";
 import TeamLogo from "./TeamLogo";
@@ -29,15 +28,7 @@ export default function Layout() {
 
   // Load ranked setting once
   // rankedEnabled managed by hook; no manual effect needed
-  async function debugRolesCall() {
-    try {
-      const { fetchRoles } = await import("../lib/roles");
-      const r = await fetchRoles();
-      alert(JSON.stringify(r, null, 2));
-    } catch (e) {
-      alert("roles failed: " + (e as any)?.message);
-    }
-  }
+  // ...existing code...
 
   return (
   <div className="min-h-[100dvh] bg-bg bg-app-gradient text-text">
@@ -48,11 +39,7 @@ export default function Layout() {
           <Link to="/" className="flex items-center h-10">
             <TeamLogo className="h-8 w-auto" />
           </Link>
-          {/* TEMPORARY: Debug roles button */}
-          <button
-            style={{ marginLeft: 16, padding: "4px 12px", borderRadius: 6, background: "#eee", color: "#222", fontSize: 12, border: "1px solid #ccc" }}
-            onClick={debugRolesCall}
-          >Debug Roles</button>
+          {/* ...existing code... */}
           {/* Hamburger button */}
           <button
             aria-label={menuOpen ? "Close menu" : "Open menu"}
@@ -109,9 +96,7 @@ export default function Layout() {
             <MenuLink to="/timeline" label="Timeline" />
             {/* Show Ranked entry only when Ranked mode is enabled */}
             {rankedEnabled && <MenuLink to="/ranked" label="Ranked" />}
-            <RequireLead>
-              <MenuLink to="/admin" label="Admin" />
-            </RequireLead>
+            <MenuLink to="/admin" label="Admin" />
             <div className="my-3 border-t border-border/60" />
             <label className="flex items-center gap-2 px-3 py-2 text-sm select-none cursor-pointer">
               <span className="text-muted uppercase tracking-caps">Ranked mode</span>
