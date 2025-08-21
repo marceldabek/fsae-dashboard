@@ -684,7 +684,7 @@ export default function Admin() {
           </div>
         )}
 
-  {activeTab === 'settings' && canViewAdminTab(uid,'settings') && (
+  {activeTab === 'settings' && roleReady && (
         <div role="tabpanel" className="mt-4">
           <section className="space-y-2">
             <h2 className="font-semibold">Global Settings</h2>
@@ -846,7 +846,7 @@ export default function Admin() {
         </div>
       )}
 
-  {activeTab === 'ranked' && canViewAdminTab(uid,'ranked') && (
+  {activeTab === 'ranked' && roleReady && (
         <div role="tabpanel" className="mt-4">
           <section className="space-y-2">
             <h2 className="font-semibold mb-2">Ranked Settings</h2>
