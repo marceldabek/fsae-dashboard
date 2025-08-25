@@ -86,17 +86,17 @@ export default function TaskCreateCard({ people, projects = [], fixedProjectId, 
         value={(points as any)}
         onChange={(e)=> setPoints((e.target.value? Number(e.target.value) : "") as any)}
       >
-        <option value="">Points (by estimated hours)</option>
-        <option value="1">1 pt ~ 0.5 hr</option>
-        <option value="3">3 pts ~ 1 hr</option>
-        <option value="10">10 pts ~ 3 hrs</option>
-        <option value="6">6 pts ~ 2 hrs</option>
-        <option value="15">15 pts ~ 5 hrs</option>
-        <option value="40">40 pts ~ 10 hrs</option>
-        <option value="65">65 pts ~ 15 hrs</option>
-        <option value="98">98 pts ~ 20 hrs</option>
-        <option value="150">150 pts ~ 25 hrs</option>
-        <option value="200">200 pts ~ 30 hrs</option>
+  <option value="">Points (by estimated hours)</option>
+  <option value="1">1 pt ~ 0.5 hr</option>
+  <option value="3">3 pts ~ 1 hr</option>
+  <option value="6">6 pts ~ 2 hrs</option>
+  <option value="10">10 pts ~ 3 hrs</option>
+  <option value="15">15 pts ~ 5 hrs</option>
+  <option value="40">40 pts ~ 10 hrs</option>
+  <option value="65">65 pts ~ 15 hrs</option>
+  <option value="98">98 pts ~ 20 hrs</option>
+  <option value="150">150 pts ~ 25 hrs</option>
+  <option value="200">200 pts ~ 30 hrs</option>
       </select>
       <button
         onClick={handleSave}

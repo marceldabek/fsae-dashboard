@@ -346,14 +346,28 @@ const canEdit = false; // Replace with new guard logic if needed
                 const isEditing = editTaskId === t.id;
                 return (
                   <li key={t.id} className="relative flex flex-col justify-between gap-2 rounded bg-surface border border-border p-3 pr-10 flex-1 min-w-[280px] md:w-[calc(50%-0.75rem)] xl:w-[calc(33.333%-0.75rem)]">
-                    <div className="min-w-0 flex items-center">
-                      <div className="font-medium text-sm truncate flex items-center" title={t.description}>
+                    <div className="min-w-0 flex flex-wrap items-center gap-2">
+                      <div className="font-medium text-sm break-words flex-1" title={t.description}>
                         {t.description}
-                        {/* Only leads/admins can edit tasks */}
-                        <RequireLead>
+                      </div>
+                    </div>
+                    <div className="text-tick text-muted flex gap-2 items-center mt-0.5">
+                      {/* Only leads/admins can assign tasks */}
+                      <RequireLead>
+                        <div className="flex items-center gap-1">
+                          <PersonSelectPopover
+                            mode="single"
+                            people={allPeople}
+                            selectedId={t.assignee_id || null}
+                            onSelect={(id) => handleAssign(t, id || "")}
+                            triggerLabel={t.assignee_id ? (allPeople.find(p => p.id === t.assignee_id)?.name || 'Assignee') : 'Unassigned'}
+                            buttonClassName="px-2 py-0.5 rounded bg-surface/60 border border-border text-tick text-sm whitespace-nowrap"
+                            maxItems={5}
+                            disabled={isEditing}
+                          />
                           {!isEditing && (
                             <button
-                              className="ml-2 p-1 rounded hover:bg-white/10"
+                              className="p-1 rounded hover:bg-white/10"
                               title="Edit task"
                               onClick={() => setEditTaskId(t.id)}
                             >
@@ -362,34 +376,14 @@ const canEdit = false; // Replace with new guard logic if needed
                           )}
                           {isEditing && (
                             <button
-                              className="ml-2 p-1 rounded hover:bg-white/10"
+                              className="p-1 rounded hover:bg-white/10"
                               title="Close edit"
                               onClick={() => setEditTaskId(null)}
                             >
                               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                             </button>
                           )}
-                        </RequireLead>
-                      </div>
-                    </div>
-                    <div className="text-tick text-muted flex gap-2 items-center mt-0.5">
-                      <span>{t.status}</span>
-                      <span>·</span>
-                      {/* Only leads/admins can assign tasks */}
-                      <RequireLead>
-                        <PersonSelectPopover
-                          mode="single"
-                          people={allPeople}
-                          selectedId={t.assignee_id || null}
-                          onSelect={(id) => handleAssign(t, id || "")}
-                          triggerLabel={t.assignee_id ? (allPeople.find(p => p.id === t.assignee_id)?.name || 'Assignee') : 'Unassigned'}
-                          buttonClassName="px-2 py-0.5 rounded bg-surface/60 border border-border text-tick text-sm whitespace-nowrap"
-                          maxItems={5}
-                          disabled={isEditing}
-                        />
-                      </RequireLead>
-                      <RequireLead>
-                        <span className="px-2 py-0.5 rounded bg-transparent">{assignee ? `@${assignee.name}` : "Unassigned"}</span>
+                        </div>
                       </RequireLead>
                     </div>
                     {rankedEnabled && (
