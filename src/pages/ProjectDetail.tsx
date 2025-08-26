@@ -12,6 +12,7 @@ import { RequireLead } from "../lib/roles";
 import type { Person, Project, Task } from "../types";
 
 export default function ProjectDetail() {
+  const [showDescription, setShowDescription] = useState(true);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   // Delete project and redirect
   const handleDeleteProject = async () => {
@@ -153,7 +154,7 @@ const canEdit = false; // Replace with new guard logic if needed
       <div className="space-y-4">
         <div className="relative">
           <div className="min-w-0 space-y-1">
-            <h1 className="text-2xl font-semibold leading-tight tracking-tight break-words pr-0 max-w-[calc(100%-110px)]">{project.name}</h1>
+            <h1 className="text-lg font-semibold leading-tight tracking-tight break-words pr-0 max-w-[calc(100%-110px)]">{project.name}</h1>
             {project.subsystem && (
               <div className="text-[11px] font-medium text-muted/70 uppercase tracking-caps mt-0.5">{project.subsystem}</div>
             )}
@@ -218,18 +219,46 @@ const canEdit = false; // Replace with new guard logic if needed
               </RequireLead>
           </div>
            {/* Description box - always below buttons, with 32px margin above title */}
-           <div className="mb-0" style={{ marginTop: '32px' }}>
-             <span className="text-muted-foreground uppercase tracking-caps text-[11px] block">Description</span>
-             <div className="rounded-lg border border-border bg-card dark:bg-surface p-3 text-[13px] text-muted-foreground mb-0" style={{minHeight: '32px'}}>
-               {project.description ? project.description : <span className="text-muted-foreground/40">No description provided.</span>}
-             </div>
+           <div className="mb-0" style={{ marginTop: '24px' }}>
+             <button
+               className="text-muted-foreground uppercase tracking-caps text-xs block w-full text-left focus:outline-none"
+               style={{ marginBottom: '4px' }}
+               onClick={() => setShowDescription(prev => !prev)}
+             >
+               Description
+               <span className="ml-2 inline-block align-middle">
+                 {showDescription ? '▲' : '▼'}
+               </span>
+             </button>
+             {showDescription && (
+               <div className="rounded-lg border border-border bg-card dark:bg-surface p-3 text-[13px] text-muted-foreground mb-0" style={{minHeight: '32px'}}>
+                 {project.description ? project.description : <span className="text-muted-foreground/40">No description provided.</span>}
+               </div>
+             )}
            </div>
-          {/* Add 16px spacing above owners/due date section */}
           <div style={{ marginTop: '16px' }}>
             <div className="flex items-center justify-between gap-2 mb-2">
-              <span className="text-muted-foreground uppercase tracking-caps text-[11px]">Owners</span>
+              <div className="flex items-center gap-2">
+                <span className="text-muted-foreground uppercase tracking-caps text-xs">Owners</span>
+                <RequireLead>
+                  {!((project as any).archived) && (
+                    <PersonSelectPopover
+                      mode="multi"
+                      people={allPeople}
+                      selectedIds={ownerIds}
+                      onAdd={handleAddOwner}
+                      onRemove={handleRemoveOwner}
+                      triggerLabel="Add/Remove"
+                      triggerContent={<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>}
+                      buttonClassName="inline-flex items-center justify-center h-4 w-4 rounded-md border border-accent/40 bg-accent/15 hover:bg-accent/25 text-accent transition"
+                      disabled={ownersBusy}
+                      maxItems={5}
+                    />
+                  )}
+                </RequireLead>
+              </div>
               {dueDateLabel && (
-                <span className="text-muted-foreground uppercase tracking-caps text-[11px] ml-auto text-right">{dueDateLabel}</span>
+                <span className="text-muted-foreground uppercase tracking-caps text-xs ml-auto text-right">{dueDateLabel}</span>
               )}
             </div>
             <div className="flex flex-wrap items-start gap-2 text-[13px] leading-snug">
@@ -243,23 +272,6 @@ const canEdit = false; // Replace with new guard logic if needed
               ) : (
                 <span className="px-2 py-0.5 rounded bg-surface/80 border border-border text-tick text-sm whitespace-nowrap font-medium">N/A</span>
               )}
-              {/* Only leads/admins can edit owners */}
-              <RequireLead>
-                {!((project as any).archived) && (
-                  <PersonSelectPopover
-                    mode="multi"
-                    people={allPeople}
-                    selectedIds={ownerIds}
-                    onAdd={handleAddOwner}
-                    onRemove={handleRemoveOwner}
-                    triggerLabel="Add/Remove"
-                    triggerContent={<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>}
-                    buttonClassName="inline-flex items-center justify-center h-5 w-5 rounded-md border border-accent/40 bg-accent/15 hover:bg-accent/25 text-accent transition"
-                    disabled={ownersBusy}
-                    maxItems={5}
-                  />
-                )}
-              </RequireLead>
             </div>
           </div>
         </div>
@@ -278,7 +290,7 @@ const canEdit = false; // Replace with new guard logic if needed
           <section className="space-y-2">
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
-                <h2 className="font-semibold text-base leading-tight">Tasks</h2>
+                <h2 className="font-semibold text-xs uppercase tracking-caps text-muted-foreground leading-tight">TASKS</h2>
                 {/* Only leads/admins can add tasks */}
                 <RequireLead>
                   {!(project as any).archived && (
@@ -297,15 +309,34 @@ const canEdit = false; // Replace with new guard logic if needed
                 </RequireLead>
               </div>
               <label className="flex items-center gap-2 select-none cursor-pointer group">
-                <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-caps">Hide completed</span>
-                <span className="relative inline-block h-6 w-11 rounded-full bg-white/15 transition-colors peer-checked:bg-accent/70">
+                <span className="text-xs font-medium text-muted-foreground uppercase tracking-caps">Hide completed</span>
+                <span className="relative inline-flex h-6 w-11 select-none ml-auto">
                   <input
                     type="checkbox"
                     checked={hideCompleted}
-                    onChange={e=>setHideCompleted(e.target.checked)}
+                    onChange={e => setHideCompleted(e.target.checked)}
                     className="peer sr-only"
+                    onMouseUp={e => e.currentTarget.blur()}
                   />
-                  <span className="absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform duration-200 peer-checked:translate-x-5" />
+                  {/* track */}
+                  <span
+                    className="
+                      pointer-events-none block h-6 w-11 rounded-full border border-border
+                      bg-black/15 dark:bg-white/15
+                      transition-colors
+                      peer-checked:bg-[#64C7C9]
+                      peer-focus-visible:ring-2 peer-focus-visible:ring-[#64C7C9]/60 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-background
+                    "
+                  />
+                  {/* knob (the moving dot) */}
+                  <span
+                    className="
+                      pointer-events-none absolute left-0.5 top-0.5 h-5 w-5 rounded-full
+                      bg-white dark:bg-background shadow
+                      transition-transform
+                      peer-checked:translate-x-5
+                    "
+                  />
                 </span>
               </label>
             </div>
@@ -386,7 +417,7 @@ const canEdit = false; // Replace with new guard logic if needed
                       </RequireLead>
                     </div>
                     {rankedEnabled && (
-                      <span className="absolute top-2 right-3 text-tick text-muted font-semibold text-[12px] opacity-80">+{pts} · {ptsToHours(pts)}h</span>
+                      <span className="absolute top-2 right-3 text-tick text-muted font-semibold text-[8px] opacity-80">+{pts} · {ptsToHours(pts)}h</span>
                     )}
                     {/* Only leads/admins can edit task details and delete tasks */}
                     <RequireLead>
@@ -445,12 +476,6 @@ const canEdit = false; // Replace with new guard logic if needed
             <div className="fixed inset-0 z-[120] flex items-center justify-center">
               <div className="absolute inset-0 bg-black/55 backdrop-blur-sm" onClick={()=> setShowAddTask(false)} />
               <div className="relative w-[95vw] max-w-md rounded-2xl border border-white/10 bg-card dark:bg-surface backdrop-blur-sm shadow-2xl p-5 text-foreground">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-lg font-semibold">Add Task</h3>
-                  <button onClick={()=> setShowAddTask(false)} aria-label="Close" className="h-8 w-8 inline-flex items-center justify-center rounded hover:bg-white/10">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#E5E7EB" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                  </button>
-                </div>
                 <TaskCreateCard
                   people={allPeople}
                   fixedProjectId={project.id}

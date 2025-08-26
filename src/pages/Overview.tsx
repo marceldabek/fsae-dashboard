@@ -345,8 +345,8 @@ export default function Overview() {
                 pointer-events-none block h-6 w-11 rounded-full border border-border
                 bg-black/15 dark:bg-white/15
                 transition-colors
-                peer-checked:bg-accent/70
-                peer-focus-visible:ring-2 peer-focus-visible:ring-accent/60 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-background
+                peer-checked:bg-[#64C7C9]
+                peer-focus-visible:ring-2 peer-focus-visible:ring-[#64C7C9]/60 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-background
               "
             />
 

@@ -57,7 +57,7 @@ export default function TaskCreateCard({ people, projects = [], fixedProjectId, 
       )}
       <input
   className="px-3 h-9 rounded text-xs w-full bg-surface text-foreground border border-border placeholder:text-muted-foreground placeholder:text-xs focus:outline-none form-control"
-        placeholder="Description"
+  placeholder="Task title"
         value={desc}
         onChange={e => setDesc(e.target.value)}
       />

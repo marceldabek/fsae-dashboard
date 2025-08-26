@@ -110,7 +110,7 @@ function Layout({ children }: { children?: ReactNode }) {
             </RequireLead>
             <div className="my-3 border-t border-border/60" />
             <label className="flex items-center gap-2 px-3 py-2 text-sm select-none cursor-pointer">
-              <span className="text-sm text-muted-foreground tracking-caps">Ranked mode</span>
+              <span className="text-sm text-muted-foreground tracking-caps uppercase">RANKED MODE</span>
               {/* Toggle */}
               <span className="relative inline-flex h-6 w-11 select-none ml-auto">
                 {/* hidden checkbox drives styles */}
@@ -127,8 +127,8 @@ function Layout({ children }: { children?: ReactNode }) {
                     pointer-events-none block h-6 w-11 rounded-full border border-border
                     bg-black/15 dark:bg-white/15
                     transition-colors
-                    peer-checked:bg-accent/70
-                    peer-focus-visible:ring-2 peer-focus-visible:ring-accent/60 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-background
+                    peer-checked:bg-[#64C7C9]
+                    peer-focus-visible:ring-2 peer-focus-visible:ring-[#64C7C9]/60 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-background
                   "
                 />
 
@@ -144,7 +144,7 @@ function Layout({ children }: { children?: ReactNode }) {
               </span>
             </label>
             <label className="flex items-center gap-2 px-3 py-2 text-sm select-none cursor-pointer">
-              <span className="text-sm text-muted-foreground tracking-caps">Dark mode</span>
+              <span className="text-sm text-muted-foreground tracking-caps uppercase">DARK MODE</span>
               {/* Toggle */}
               <span className="relative inline-flex h-6 w-11 select-none ml-auto">
                 {/* hidden checkbox drives styles */}
@@ -161,8 +161,8 @@ function Layout({ children }: { children?: ReactNode }) {
                     pointer-events-none block h-6 w-11 rounded-full border border-border
                     bg-black/15 dark:bg-white/15
                     transition-colors
-                    peer-checked:bg-accent/70
-                    peer-focus-visible:ring-2 peer-focus-visible:ring-accent/60 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-background
+                    peer-checked:bg-[#64C7C9]
+                    peer-focus-visible:ring-2 peer-focus-visible:ring-[#64C7C9]/60 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-background
                   "
                 />
 
