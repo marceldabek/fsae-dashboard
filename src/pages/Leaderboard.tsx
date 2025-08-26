@@ -35,8 +35,8 @@ export default function Leaderboard() {
       {loading ? (
         <div>Loading...</div>
       ) : (
-        <table className="min-w-full text-sm bg-white text-black border border-gray-200 rounded-lg overflow-hidden">
-          <thead className="bg-gray-50 text-gray-700">
+  <table className="min-w-full text-sm bg-card dark:bg-surface text-foreground border border-border rounded-lg overflow-hidden">
+          <thead className="bg-card dark:bg-surface text-muted-foreground">
             <tr>
               <th className="py-2 px-2 border-b text-left">Name</th>
               <th className="w-36 py-2 px-2 border-b text-center">Tasks Completed</th>
@@ -44,7 +44,7 @@ export default function Leaderboard() {
           </thead>
           <tbody>
             {leaderboard.map((person, idx) => (
-              <tr key={person.id} className={idx === 0 ? "bg-yellow-50" : ""}>
+              <tr key={person.id} className={idx === 0 ? "bg-accent/10" : ""}>
                 <td className="py-2 px-2 border-b">
                   <div className="max-w-[180px] sm:max-w-[260px] truncate">{person.name}</div>
                 </td>

@@ -49,6 +49,7 @@ export const router = createBrowserRouter([
             <Timeline />
           </Suspense>
         ),
+        handle: { fullBleed: true },
       },
       {
         path: "ranked",

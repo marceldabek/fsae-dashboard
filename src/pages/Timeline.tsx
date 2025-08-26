@@ -1,61 +1,90 @@
-import { useEffect, useState } from "react";
-import { fetchProjects, fetchTasks } from "../lib/firestore";
-import type { Project, Task } from "../types";
+import React, { useState } from 'react';
+import {
+  GanttCreateMarkerTrigger,
+  GanttFeatureItem,
+  GanttFeatureList,
+  GanttFeatureListGroup,
+  GanttHeader,
+  GanttMarker,
+  GanttProvider,
+  GanttTimeline,
+  GanttToday,
+} from '@/components/ui/kibo-ui/GanttDropIn';
 
-export default function Timeline() {
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [loading, setLoading] = useState(true);
+const initialFeatures = [
+  {
+    id: '1',
+    name: 'Design Phase',
+    startAt: new Date(2025, 7, 1),
+    endAt: new Date(2025, 7, 10),
+    status: { id: 'todo', name: 'To Do', color: '#f59e42' },
+  },
+  {
+    id: '2',
+    name: 'Development',
+    startAt: new Date(2025, 7, 11),
+    endAt: new Date(2025, 7, 20),
+    status: { id: 'inprogress', name: 'In Progress', color: '#3b82f6' },
+  },
+  {
+    id: '3',
+    name: 'Testing',
+    startAt: new Date(2025, 7, 21),
+    endAt: new Date(2025, 7, 25),
+    status: { id: 'done', name: 'Done', color: '#10b981' },
+  },
+];
 
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      try {
-        const [projs, tks] = await Promise.all([
-          fetchProjects(),
-          fetchTasks(),
-        ]);
-        if (!alive) return;
-        setProjects(projs);
-        setTasks(tks);
-      } finally {
-        if (alive) setLoading(false);
-      }
-    })();
-    return () => { alive = false; };
-  }, []);
+const initialMarkers = [
+  { id: 'm1', date: new Date(2025, 7, 5), label: 'Kickoff' },
+  { id: 'm2', date: new Date(2025, 7, 15), label: 'Review' },
+];
 
-  if (loading) return <div className="text-sm text-muted">Loading…</div>;
+export default function GanttTimelineExample() {
+  const [features, setFeatures] = useState(initialFeatures);
+  const [markers, setMarkers] = useState(initialMarkers);
+
+  const handleAddFeature = (date: Date) => {
+    const newFeature = {
+      id: String(features.length + 1),
+      name: `New Feature ${features.length + 1}`,
+      startAt: date,
+      endAt: new Date(date.getFullYear(), date.getMonth(), date.getDate() + 3),
+      status: { id: 'todo', name: 'To Do', color: '#f59e42' },
+    };
+    setFeatures([...features, newFeature]);
+  };
+
+  const handleCreateMarker = (date: Date) => {
+    const newMarker = {
+      id: `m${markers.length + 1}`,
+      date,
+      label: `Marker ${markers.length + 1}`,
+    };
+    setMarkers([...markers, newMarker]);
+  };
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-semibold">Timeline</h1>
-  <p className="text-sm text-muted">Lightweight scaffold to manage projects and tasks in a time-ordered list. Future: full calendar or external integration.</p>
-
-      <div className="space-y-4">
-        {projects.map(p => (
-          <section key={p.id} className="border border-border rounded-md bg-overlay-6 p-4">
-            <h2 className="font-medium text-lg">{p.name}</h2>
-            {p.description && <p className="text-sm text-muted mb-2">{p.description}</p>}
-            <ul className="mt-2 space-y-2">
-              {tasks.filter(t => t.project_id === p.id)
-                .sort((a, b) => (a.created_at || 0) - (b.created_at || 0))
-                .map(t => (
-                <li key={t.id} className="flex items-start gap-2">
-                  <span className={`mt-1 h-2 w-2 rounded-full ${t.status === "Complete" ? "bg-green-400" : t.status === "In Progress" ? "bg-yellow-300" : "bg-gray-400"}`} />
-                  <div>
-                    <div className="text-sm">{t.description}</div>
-                    <div className="text-xs text-muted uppercase tracking-caps">
-                      {t.created_at ? new Date(t.created_at).toLocaleString() : "No date"}
-                      {t.completed_at ? ` → completed ${new Date(t.completed_at).toLocaleString()}` : ""}
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </section>
-        ))}
+    <GanttProvider range="monthly" zoom={100} onAddItem={handleAddFeature}>
+      <div style={{ display: 'flex', flexDirection: 'column', height: 500 }}>
+        <GanttHeader />
+        <div style={{ position: 'relative', flex: 1 }}>
+          <GanttTimeline>
+            <GanttFeatureList>
+              <GanttFeatureListGroup>
+                {features.map((feature) => (
+                  <GanttFeatureItem key={feature.id} {...feature} />
+                ))}
+              </GanttFeatureListGroup>
+            </GanttFeatureList>
+            {markers.map((marker) => (
+              <GanttMarker key={marker.id} {...marker} />
+            ))}
+            <GanttToday />
+            <GanttCreateMarkerTrigger onCreateMarker={handleCreateMarker} />
+          </GanttTimeline>
+        </div>
       </div>
-    </div>
+    </GanttProvider>
   );
 }

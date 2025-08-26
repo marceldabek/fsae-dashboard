@@ -43,11 +43,11 @@ export default function TaskCreateCard({ people, projects = [], fixedProjectId, 
   const disable = !desc.trim() || saving || !(fixedProjectId || projectId);
 
   const content = (
-    <div className="space-y-3 text-white">
-      {!hideTitle && <h3 className="text-sm font-semibold">Add Task</h3>}
+  <div className="space-y-3">
+      {!hideTitle && <h3 className="text-xs font-semibold">Add Task</h3>}
       {!fixedProjectId && (
         <select
-            className="px-3 h-10 rounded text-sm w-full dark-select form-control"
+            className="px-3 h-9 rounded text-xs w-full dark-select bg-surface text-foreground border border-border placeholder:text-muted-foreground form-control"
           value={projectId}
           onChange={e=>setProjectId(e.target.value)}
         >
@@ -56,14 +56,14 @@ export default function TaskCreateCard({ people, projects = [], fixedProjectId, 
         </select>
       )}
       <input
-    className="px-3 h-10 rounded text-sm w-full bg-surface/60 border border-border focus:outline-none form-control"
+  className="px-3 h-9 rounded text-xs w-full bg-surface text-foreground border border-border placeholder:text-muted-foreground placeholder:text-xs focus:outline-none form-control"
         placeholder="Description"
         value={desc}
         onChange={e => setDesc(e.target.value)}
       />
       <div className="flex gap-2">
         <select
-            className="px-3 h-10 rounded text-sm dark-select flex-1 min-w-0 form-control"
+            className="px-3 h-9 rounded text-xs dark-select flex-1 min-w-0 bg-surface text-foreground border border-border placeholder:text-muted-foreground form-control"
           value={status}
           onChange={e => setStatus(e.target.value as any)}
         >
@@ -77,12 +77,12 @@ export default function TaskCreateCard({ people, projects = [], fixedProjectId, 
             selectedId={assignee || null}
             onSelect={(id)=> setAssignee(id || "")}
             triggerLabel={assignee ? (people.find(p=>p.id===assignee)?.name || 'Assignee') : 'Assign to…'}
-            buttonClassName="px-3 h-10 rounded text-sm bg-white/10 border border-white/20 flex items-center hover:bg-white/15 whitespace-nowrap form-control"
+            buttonClassName="px-3 h-9 rounded text-[10px] bg-surface text-foreground border border-border flex items-center hover:bg-surface/80 whitespace-nowrap form-control"
             maxItems={5}
         />
       </div>
       <select
-    className="px-3 h-10 rounded text-sm dark-select w-full form-control"
+  className="px-3 h-9 rounded text-xs dark-select w-full bg-surface text-foreground border border-border placeholder:text-muted-foreground form-control"
         value={(points as any)}
         onChange={(e)=> setPoints((e.target.value? Number(e.target.value) : "") as any)}
       >
@@ -101,7 +101,7 @@ export default function TaskCreateCard({ people, projects = [], fixedProjectId, 
       <button
         onClick={handleSave}
         disabled={disable}
-        className="w-full h-10 rounded bg-white/10 border border-white/20 text-sm font-medium hover:bg-white/15 disabled:opacity-40 disabled:cursor-not-allowed transition"
+  className="w-full h-9 rounded bg-surface text-foreground border border-border text-xs font-medium hover:bg-surface/80 disabled:opacity-40 disabled:cursor-not-allowed transition"
       >{saving ? 'Saving…' : 'Save'}</button>
     </div>
   );
@@ -109,6 +109,6 @@ export default function TaskCreateCard({ people, projects = [], fixedProjectId, 
   if (unstyled) return content;
 
   return (
-    <div className={"rounded-2xl bg-white/5 border border-white/10 p-4 " + className}>{content}</div>
+    <div className={"rounded-2xl bg-card border border-border p-4 " + className}>{content}</div>
   );
 }

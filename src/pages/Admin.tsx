@@ -354,28 +354,28 @@ export default function Admin() {
             <div className="grid md:grid-cols-2 gap-6">
               <section className="space-y-2">
                 {/* Create profile card */}
-                <div className="form-section p-4 space-y-3">
-                  <div className="text-sm font-semibold text-white">Create profile</div>
-                  <input className="px-3 py-2 rounded w-full" placeholder="Name" value={pName} onChange={(e) => setPName(e.target.value)} />
-                  <input className="px-3 py-2 rounded w-full" placeholder="Discord (e.g., username)" value={pDiscord} onChange={(e) => setPDiscord(e.target.value)} />
+                <div className="form-section rounded-2xl bg-card border border-border p-4 space-y-3">
+                  <div className="text-sm font-semibold text-foreground">Create profile</div>
+                  <input className="px-3 py-2 rounded w-full bg-surface text-foreground border border-border placeholder:text-muted-foreground text-sm" placeholder="Name" value={pName} onChange={(e) => setPName(e.target.value)} />
+                  <input className="px-3 py-2 rounded w-full bg-surface text-foreground border border-border placeholder:text-muted-foreground text-sm" placeholder="Discord (e.g., username)" value={pDiscord} onChange={(e) => setPDiscord(e.target.value)} />
                   <button
                     onClick={async()=>{
                       if(!pName.trim()) { showToast('Enter a name'); return; }
                       await handleCreatePerson();
                     }}
                     disabled={!pName.trim()}
-                    className={`px-3 py-2 rounded w-full border border-border text-sm text-center ${pName.trim() ? 'bg-overlay-6' : 'bg-overlay-6 opacity-50 cursor-not-allowed'}`}>
+                    className={`px-3 py-2 rounded w-full border border-border text-sm text-center ${pName.trim() ? 'bg-surface' : 'bg-surface opacity-50 cursor-not-allowed'}`}>
                     Create profile
                   </button>
                 </div>
 
                 {/* Quick attendance card */}
-                <div className="form-section p-4 space-y-3">
-                  <div className="text-sm font-semibold text-white">Quick attendance</div>
+                <div className="form-section rounded-2xl bg-card border border-border p-4 space-y-3">
+                  <div className="text-sm font-semibold text-foreground">Quick attendance</div>
 
                   <input
                       type="date"
-                      className="px-2.5 py-1.5 rounded text-sm bg-white/5 border border-white/10 w-full max-w-xs mx-auto block"
+                      className="px-2.5 py-1.5 rounded text-sm bg-surface text-foreground border border-border w-full max-w-xs mx-auto block placeholder:text-muted-foreground"
                       value={attendanceDate}
                       onChange={(e)=>setAttendanceDate(e.target.value)}
                     />
@@ -437,7 +437,7 @@ export default function Admin() {
                 <div className="flex items-center justify-between mb-2">
                   <h2 className="font-semibold truncate">Edit profiles</h2>
                   <div className="ml-4">
-                    <input className="px-3 py-2 rounded text-sm w-44 sm:w-56" placeholder="Search people…" value={peopleSearch} onChange={(e)=>setPeopleSearch(e.target.value)} />
+                    <input className="px-3 py-2 rounded text-sm w-44 sm:w-56 bg-surface text-foreground border border-border placeholder:text-muted-foreground" placeholder="Search people…" value={peopleSearch} onChange={(e)=>setPeopleSearch(e.target.value)} />
                   </div>
                 </div>
                 <div className="space-y-4">
@@ -449,24 +449,24 @@ export default function Admin() {
                     })
                     .sort((a,b)=>a.name.localeCompare(b.name))
                     .map((p) => (
-                      <details key={p.id} className="rounded-xl bg-white/5 border border-white/10">
+                      <details key={p.id} className="rounded-xl bg-card border border-border">
                         <summary className="cursor-pointer font-medium px-3 py-2 flex items-center justify-between gap-2">
                           <span className="truncate">{p.name}</span>
                           {/* Constrain role text so long roles don't widen card */}
-                          <span className="text-xs text-muted ml-2 max-w-[8rem] md:max-w-[10rem] min-w-0 truncate uppercase tracking-caps">{p.role || p.year || ""}</span>
+                          <span className="text-xs text-muted-foreground ml-2 max-w-[8rem] md:max-w-[10rem] min-w-0 truncate uppercase tracking-caps">{p.role || p.year || ""}</span>
                         </summary>
                         <div className="px-3 pb-3 mt-1 grid sm:grid-cols-2 gap-4">
-                          <input className="px-3 py-2 rounded" value={p.name} onChange={(e) => setPeople((prev) => prev.map((x) => (x.id === p.id ? { ...x, name: e.target.value } : x)))} />
-                          <select className="px-3 py-2 rounded dark-select" value={p.year || "Senior"} onChange={(e) => setPeople((prev) => prev.map((x) => (x.id === p.id ? { ...x, year: e.target.value } : x)))}>
+                          <input className="px-3 py-2 rounded bg-surface text-foreground border border-border placeholder:text-muted-foreground" value={p.name} onChange={(e) => setPeople((prev) => prev.map((x) => (x.id === p.id ? { ...x, name: e.target.value } : x)))} />
+                          <select className="px-3 py-2 rounded dark-select bg-surface text-foreground border border-border" value={p.year || "Senior"} onChange={(e) => setPeople((prev) => prev.map((x) => (x.id === p.id ? { ...x, year: e.target.value } : x)))}>
                             <option>Freshman</option>
                             <option>Sophomore</option>
                             <option>Junior</option>
                             <option>Senior</option>
                             <option>Graduate</option>
                           </select>
-                          <input className="px-3 py-2 rounded" placeholder="Role" value={p.role || ""} onChange={(e) => setPeople((prev) => prev.map((x) => (x.id === p.id ? { ...x, role: e.target.value } : x)))} />
-                          <input className="px-3 py-2 rounded" placeholder="Discord" value={p.discord || ""} onChange={(e) => setPeople((prev) => prev.map((x) => (x.id === p.id ? { ...x, discord: e.target.value } : x)))} />
-                          <input className="px-3 py-2 rounded sm:col-span-2" placeholder="Skills (comma-separated)" value={(p.skills || []).join(", ")} onChange={(e) => setPeople((prev) => prev.map((x) => x.id === p.id ? { ...x, skills: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) } : x))} />
+                          <input className="px-3 py-2 rounded bg-surface text-foreground border border-border placeholder:text-muted-foreground" placeholder="Role" value={p.role || ""} onChange={(e) => setPeople((prev) => prev.map((x) => (x.id === p.id ? { ...x, role: e.target.value } : x)))} />
+                          <input className="px-3 py-2 rounded bg-surface text-foreground border border-border placeholder:text-muted-foreground" placeholder="Discord" value={p.discord || ""} onChange={(e) => setPeople((prev) => prev.map((x) => (x.id === p.id ? { ...x, discord: e.target.value } : x)))} />
+                          <input className="px-3 py-2 rounded sm:col-span-2 bg-surface text-foreground border border-border placeholder:text-muted-foreground" placeholder="Skills (comma-separated)" value={(p.skills || []).join(", ")} onChange={(e) => setPeople((prev) => prev.map((x) => x.id === p.id ? { ...x, skills: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) } : x))} />
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:col-span-2 items-end">
                             <div>
                               <label className="text-xs text-muted uppercase tracking-caps">Rank</label>
@@ -508,12 +508,12 @@ export default function Admin() {
             <div className="grid lg:grid-cols-2 gap-6">
               <section className="space-y-2">
               <h2 className="font-semibold">Create Project & Assign Owners</h2>
-              <div className="form-section p-4 space-y-3">
-                <input className="px-3 py-2 rounded w-full" placeholder="Project name" value={prName} onChange={(e) => setPrName(e.target.value)} />
-                <input className="px-3 py-2 rounded w-full" placeholder="Design link (optional)" value={prDesign} onChange={(e) => setPrDesign(e.target.value)} />
-                <textarea className="px-3 py-2 rounded w-full" placeholder="Project description (optional)" value={prDesc} onChange={(e) => setPrDesc(e.target.value)} />
+              <div className="form-section rounded-2xl bg-card border border-border p-4 space-y-3">
+                <input className="px-3 py-2 rounded w-full bg-surface text-foreground border border-border text-xs placeholder:text-muted-foreground placeholder:text-xs" placeholder="Project name" value={prName} onChange={(e) => setPrName(e.target.value)} />
+                <input className="px-3 py-2 rounded w-full bg-surface text-foreground border border-border text-xs placeholder:text-muted-foreground placeholder:text-xs" placeholder="Design link (optional)" value={prDesign} onChange={(e) => setPrDesign(e.target.value)} />
+                <textarea className="px-3 py-2 rounded w-full bg-surface text-foreground border border-border text-xs placeholder:text-muted-foreground placeholder:text-xs" placeholder="Project description (optional)" value={prDesc} onChange={(e) => setPrDesc(e.target.value)} />
                 <div className="flex flex-col sm:flex-row gap-2">
-                  <select className="px-3 py-2 rounded w-full dark-select" value={prSubsystem} onChange={(e)=>setPrSubsystem(e.target.value)}>
+                  <select className="px-3 py-2 rounded w-full dark-select bg-surface text-foreground border border-border text-xs" value={prSubsystem} onChange={(e)=>setPrSubsystem(e.target.value)}>
                     <option value="">Select subsystem…</option>
                     <option>Aero</option>
                     <option>Business</option>
@@ -529,10 +529,10 @@ export default function Admin() {
                     <option>Powertrain IC</option>
                     <option>Suspension</option>
                   </select>
-                  <input type="date" className="px-3 py-2 rounded w-full" value={prDue} onChange={(e) => setPrDue(e.target.value)} />
+                  <input type="date" className="px-3 py-2 rounded w-full bg-surface text-foreground border border-border text-xs placeholder:text-muted-foreground placeholder:text-xs" value={prDue} onChange={(e) => setPrDue(e.target.value)} />
                 </div>
                 <div className="flex items-center gap-2">
-                  <div className="text-sm text-muted uppercase tracking-caps">Owners</div>
+                  <div className="text-xs text-muted-foreground uppercase tracking-caps">Owners</div>
                   <PersonSelectPopover
                     mode="multi"
                     people={people}
@@ -540,7 +540,7 @@ export default function Admin() {
                     onAdd={(id)=> toggleOwner(id)}
                     onRemove={(id)=> toggleOwner(id)}
                     triggerLabel={prOwners.length ? `${prOwners.length} selected` : 'Add/Remove'}
-                    buttonClassName="ml-auto text-[11px] px-2 py-1 rounded bg-white/10 border border-white/20"
+                    buttonClassName="ml-auto text-[10px] px-2 py-1 rounded bg-surface border border-border"
                     maxItems={5}
                   />
                 </div>
@@ -550,7 +550,7 @@ export default function Admin() {
                     await handleCreateProject();
                   }}
                   disabled={!prName.trim()}
-                  className={`w-full px-3 py-2 rounded border border-border text-sm text-center ${prName.trim() ? 'bg-overlay-6' : 'bg-overlay-6 opacity-50 cursor-not-allowed'}`}>
+                  className={`w-full px-3 py-2 rounded border border-border text-xs text-center ${prName.trim() ? 'bg-surface' : 'bg-surface opacity-50 cursor-not-allowed'}`}>
                   Save Project
                 </button>
               </div>
@@ -570,7 +570,7 @@ export default function Admin() {
                 <div className="flex items-center justify-between">
                   <h2 className="font-semibold">Projects</h2>
                   <input
-                    className="toolbar-input px-3 py-1.5 rounded-md text-xs font-medium border border-overlay-10 bg-overlay-6 w-28 sm:w-44 placeholder:text-muted focus:outline-none focus-visible:outline-none"
+                    className="toolbar-input px-3 py-1.5 rounded-md text-xs font-medium border border-border bg-surface w-28 sm:w-44 placeholder:text-muted-foreground focus:outline-none focus-visible:outline-none"
                     placeholder="Search projects…"
                     value={projectsSearch}
                     onChange={(e)=>setProjectsSearch(e.target.value)}
@@ -582,12 +582,12 @@ export default function Admin() {
                     <div className="relative w-full">
                       <button
                         onClick={() => { setAdmShowSubsystemMenu(v=>!v); setAdmShowSortMenu(false); }}
-                        className="toolbar-btn px-3 py-1.5 rounded-md text-xs font-medium border border-white/10 bg-white/5 hover:bg-white/10 w-full text-left"
+                        className="toolbar-btn px-3 py-1.5 rounded-md text-xs font-medium border border-border bg-surface hover:bg-surface/80 w-full text-left"
                       >
                         Subsystems: <span className="font-semibold">{admSelectedSubsystems.length ? `${admSelectedSubsystems.length} selected` : "All"}</span>
                       </button>
                       <div className={`absolute left-0 z-20 mt-1 w-64 rounded-md border border-overlay-10 bg-bg/95 shadow-xl overflow-hidden transition transform origin-top ${admShowSubsystemMenu ? "opacity-100 scale-100" : "opacity-0 scale-95 pointer-events-none"}`}>
-                        <div className="px-3 py-2 border-b border-white/10">
+                        <div className="px-3 py-2 border-b border-border">
                           <button
                             className="w-full px-3 py-2 rounded-md text-xs sm:text-sm font-semibold bg-red-500/15 hover:bg-red-500/25 text-red-200 focus:outline-none focus-visible:outline-none"
                             onClick={() => setAdmSelectedSubsystems([])}
@@ -597,13 +597,13 @@ export default function Admin() {
                         </div>
                         <div className="max-h-60 overflow-auto p-1">
                           {subsystems.length === 0 && (
-                            <div className="px-3 py-2 text-xs text-muted uppercase tracking-caps">No subsystems</div>
+                            <div className="px-3 py-2 text-xs text-muted-foreground uppercase tracking-caps">No subsystems</div>
                           )}
                           {subsystems.map(s => {
                             const checked = admSelectedSubsystems.includes(s);
                             const count = subsystemCounts.get(s) ?? 0;
                             return (
-                              <label key={s} className="flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-white/10 cursor-pointer">
+                              <label key={s} className="flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-surface/80 cursor-pointer">
                                 <input
                                   type="checkbox"
                                   className="accent-accent"
@@ -611,7 +611,7 @@ export default function Admin() {
                                   onChange={() => setAdmSelectedSubsystems(prev => checked ? prev.filter(x=>x!==s) : [...prev, s])}
                                 />
                                 <span className="truncate">{s}</span>
-                                <span className="ml-auto inline-flex items-center justify-center rounded-full bg-white/10 px-2 py-0.5 text-[10px]">{count}</span>
+                                <span className="ml-auto inline-flex items-center justify-center rounded-full bg-surface/60 px-2 py-0.5 text-[10px]">{count}</span>
                               </label>
                             );
                           })}
@@ -624,7 +624,7 @@ export default function Admin() {
                     <div className="relative w-full">
                       <button
                         onClick={() => { setAdmShowSortMenu(v=>!v); setAdmShowSubsystemMenu(false); }}
-                        className="toolbar-btn px-3 py-1.5 rounded-md text-xs font-medium border border-white/10 bg-white/5 hover:bg-white/10 w-full text-left"
+                        className="toolbar-btn px-3 py-1.5 rounded-md text-xs font-medium border border-border bg-surface hover:bg-surface/80 w-full text-left"
                       >
                         Sort: <span className="font-semibold">{sortLabel(admSortBy)} {dirSymbol}</span>
                       </button>
@@ -632,7 +632,7 @@ export default function Admin() {
                         {(["subsystem","name","due"] as const).map(v => (
                           <button
                             key={v}
-                            className={`w-full text-left px-3 py-2 text-xs hover:bg-white/10 ${admSortBy === v ? "bg-white/10" : ""}`}
+                            className={`w-full text-left px-3 py-2 text-xs hover:bg-surface/80 ${admSortBy === v ? "bg-surface/60" : ""}`}
                             onClick={() => {
                               if (admSortBy === v) setAdmSortDir(d => d === "asc" ? "desc" : "asc");
                               else setAdmSortBy(v);
@@ -650,14 +650,14 @@ export default function Admin() {
               </div>
               <div className="grid md:grid-cols-2 gap-2">
                 {projectsToShow.map((p) => (
-                    <details key={p.id} className="form-section p-3">
+                    <details key={p.id} className="form-section rounded-2xl bg-card border border-border p-3">
                       <summary className="cursor-pointer font-medium">{p.name}</summary>
                       <div className="mt-2 space-y-3">
-                        <input className="px-3 py-2 rounded w-full" value={p.name} onChange={(e) => setProjects((prev) => prev.map((x) => (x.id === p.id ? { ...x, name: e.target.value } : x)))} />
-                        <input className="px-3 py-2 rounded w-full" placeholder="Design link" value={p.design_link || ""} onChange={(e) => setProjects((prev) => prev.map((x) => (x.id === p.id ? { ...x, design_link: e.target.value } : x)))} />
-                        <textarea className="px-3 py-2 rounded w-full" placeholder="Description" value={p.description || ""} onChange={(e) => setProjects((prev) => prev.map((x) => (x.id === p.id ? { ...x, description: e.target.value } : x)))} />
+                        <input className="px-3 py-2 rounded w-full bg-surface text-foreground border border-border placeholder:text-muted-foreground text-xs" value={p.name} onChange={(e) => setProjects((prev) => prev.map((x) => (x.id === p.id ? { ...x, name: e.target.value } : x)))} />
+                        <input className="px-3 py-2 rounded w-full bg-surface text-foreground border border-border placeholder:text-muted-foreground text-xs" placeholder="Design link" value={p.design_link || ""} onChange={(e) => setProjects((prev) => prev.map((x) => (x.id === p.id ? { ...x, design_link: e.target.value } : x)))} />
+                        <textarea className="px-3 py-2 rounded w-full bg-surface text-foreground border border-border placeholder:text-muted-foreground text-xs" placeholder="Description" value={p.description || ""} onChange={(e) => setProjects((prev) => prev.map((x) => (x.id === p.id ? { ...x, description: e.target.value } : x)))} />
                         <div className="flex flex-col sm:flex-row gap-3">
-                          <select className="px-3 py-2 rounded w-full dark-select" value={p.subsystem || ""} onChange={(e)=> setProjects(prev=>prev.map(x=>x.id===p.id?{...x, subsystem: e.target.value || undefined}:x))}>
+                          <select className="px-3 py-2 rounded w-full dark-select bg-surface text-foreground border border-border text-xs" value={p.subsystem || ""} onChange={(e)=> setProjects(prev=>prev.map(x=>x.id===p.id?{...x, subsystem: e.target.value || undefined}:x))}>
                             <option value="">Subsystem…</option>
                             <option>Aero</option>
                             <option>Business</option>
@@ -673,9 +673,9 @@ export default function Admin() {
                             <option>Powertrain IC</option>
                             <option>Suspension</option>
                           </select>
-                          <input type="date" className="px-3 py-2 rounded w-full" value={p.due_date || ""} onChange={(e) => setProjects((prev) => prev.map((x) => (x.id === p.id ? { ...x, due_date: e.target.value } : x)))} />
+                          <input type="date" className="px-3 py-2 rounded w-full bg-surface text-foreground border border-border placeholder:text-muted-foreground text-xs" value={p.due_date || ""} onChange={(e) => setProjects((prev) => prev.map((x) => (x.id === p.id ? { ...x, due_date: e.target.value } : x)))} />
                         </div>
-                        <button className="px-3 py-2 rounded bg-accent text-black border border-accent hover:bg-accent/90 w-full" onClick={async () => { await updateProject(p.id, p); showToast("Project updated"); }}>Save Changes</button>
+                        <button className="px-3 py-2 rounded bg-accent text-foreground border border-accent hover:bg-accent/90 w-full text-xs" onClick={async () => { await updateProject(p.id, p); showToast("Project updated"); }}>Save Changes</button>
                       </div>
                     </details>
                   ))}
@@ -688,21 +688,21 @@ export default function Admin() {
         <div role="tabpanel" className="mt-4">
           <section className="space-y-2">
             <h2 className="font-semibold">Global Settings</h2>
-            <div className="form-section wide p-4 space-y-2">
+            <div className="form-section rounded-2xl bg-card border border-border p-4 space-y-2">
               <label className="text-sm block">Rulebook PDF URL</label>
-              <input className="px-3 py-2 rounded w-full" placeholder="https://…/rulebook.pdf" value={ruleUrl} onChange={(e) => setRuleUrl(e.target.value)} />
+              <input className="px-3 py-2 rounded w-full bg-surface text-foreground border border-border placeholder:text-muted-foreground" placeholder="https://…/rulebook.pdf" value={ruleUrl} onChange={(e) => setRuleUrl(e.target.value)} />
               <label className="text-sm block">Team SharePoint URL</label>
-              <input className="px-3 py-2 rounded w-full" placeholder="https://…sharepoint.com/sites/FSAE/…" value={shareUrl} onChange={(e) => setShareUrl(e.target.value)} />
-              <button onClick={handleSaveSettings} className="mt-2 px-3 py-2 rounded bg-accent text-black border border-accent hover:bg-accent/90">Save Settings</button>
+              <input className="px-3 py-2 rounded w-full bg-surface text-foreground border border-border placeholder:text-muted-foreground" placeholder="https://…sharepoint.com/sites/FSAE/…" value={shareUrl} onChange={(e) => setShareUrl(e.target.value)} />
+              <button onClick={handleSaveSettings} className="mt-2 px-3 py-2 rounded bg-accent text-foreground border border-accent hover:bg-accent/90">Save Settings</button>
             </div>
             {/* Retrieve archived project */}
             <ArchivedProjectRestore />
-            <div className="form-section wide p-4 mt-4 border border-red-500/30 bg-red-500/10 rounded-xl">
-              <h3 className="font-semibold text-red-200">Danger zone</h3>
-              <p className="text-sm text-red-200/80">This will permanently delete ALL people, projects, and tasks. This action cannot be undone.</p>
+            <div className="form-section wide p-4 mt-4 border border-destructive/30 bg-destructive/10 rounded-xl">
+              <h3 className="font-semibold text-foreground">Danger zone</h3>
+              <p className="text-sm text-muted-foreground">This will permanently delete ALL people, projects, and tasks. This action cannot be undone.</p>
               <button
                 onClick={() => { setResetPassword(""); setShowResetModal(true); }}
-                className="mt-3 inline-flex items-center gap-2 px-3 py-2 rounded border border-red-500/50 bg-red-600/20 hover:bg-red-600/30 text-red-100"
+                className="mt-3 inline-flex items-center gap-2 px-3 py-2 rounded border border-border bg-card hover:bg-card/80 text-foreground"
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
                 Full system reset
@@ -712,7 +712,7 @@ export default function Admin() {
           {/* Seed data import */}
           <section className="space-y-2 mt-6">
             <h2 className="font-semibold">Seed data (Excel)</h2>
-            <div className="form-section wide p-4 space-y-3">
+            <div className="form-section rounded-2xl bg-card border border-border p-4 space-y-3">
               <p className="text-sm text-muted">
                 Provide an Excel file with sheets named "People", "Projects", and "Tasks". Columns:
                 <br />People: Name, Year, Role, Skills, Discord
@@ -1107,24 +1107,24 @@ function ArchivedProjectRestore() {
   const archived = all.filter(p=> (p as any).archived);
   const filtered = archived.filter(p => p.name.toLowerCase().includes(q.toLowerCase()));
   return (
-    <div className="form-section wide p-4 mt-6 space-y-3">
+    <div className="form-section rounded-2xl bg-card border border-border p-4 mt-6 space-y-3">
       <h3 className="text-sm font-semibold">Retrieve archived project</h3>
-  <p className="text-xs text-muted uppercase tracking-caps">Restore a previously archived project (brings it back into lists).</p>
+      <p className="text-xs text-muted-foreground uppercase tracking-caps">Restore a previously archived project (brings it back into lists).</p>
       {archived.length === 0 ? (
-  <p className="text-xs text-muted italic uppercase tracking-caps">No archived projects yet.</p>
+        <p className="text-xs text-muted-foreground italic uppercase tracking-caps">No archived projects yet.</p>
       ) : (
         <input
-          className="px-3 py-2 rounded w-full"
+          className="px-3 py-2 rounded w-full bg-surface text-foreground border border-border placeholder:text-muted-foreground"
           placeholder="Search archived projects…"
           value={q}
           onChange={e=>setQ(e.target.value)}
         />
       )}
-  {loading && <div className="text-xs text-muted uppercase tracking-caps">Loading…</div>}
+      {loading && <div className="text-xs text-muted-foreground uppercase tracking-caps">Loading…</div>}
       {archived.length > 0 && (
         <ul className="space-y-2 max-h-64 overflow-auto pr-1">
           {filtered.slice(0,25).map(p => (
-            <li key={p.id} className="flex items-center gap-3 text-sm px-2 py-2 rounded bg-white/5 border border-white/10">
+            <li key={p.id} className="flex items-center gap-3 text-sm px-2 py-2 rounded bg-surface border border-border">
               <span className="truncate flex-1">{p.name}</span>
               <button
                 disabled={restoring === p.id}
@@ -1134,7 +1134,6 @@ function ArchivedProjectRestore() {
                     const { updateProject } = await import("../lib/firestore");
                     await updateProject(p.id, { archived: false } as any);
                     setAll(prev => prev.map(x=> x.id===p.id ? { ...x, archived: false } : x));
-                    // Use alert fallback here since top-level showToast is out of scope
                     (window as any).alert?.("Project restored");
                   } catch (e) {
                     console.error(e);
@@ -1143,12 +1142,12 @@ function ArchivedProjectRestore() {
                     setRestoring(null);
                   }
                 }}
-                className="px-3 py-1.5 rounded text-xs font-medium border border-accent/50 bg-accent/20 hover:bg-accent/30 disabled:opacity-50"
+                className="px-3 py-1.5 rounded text-xs font-medium border border-accent bg-accent text-foreground hover:bg-accent/90 disabled:opacity-50"
               >Restore</button>
             </li>
           ))}
           {filtered.length === 0 && !loading && (
-            <li className="text-xs text-muted px-2 py-1 uppercase tracking-caps">No archived projects match.</li>
+            <li className="text-xs text-muted-foreground px-2 py-1 uppercase tracking-caps">No archived projects match.</li>
           )}
         </ul>
       )}

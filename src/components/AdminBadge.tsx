@@ -13,7 +13,7 @@ export default function AdminBadge() {
     <div className="fixed bottom-4 right-4 flex gap-2 z-50">
       <Link
         to="/admin"
-        className="px-3 py-2 rounded-full bg-white text-black font-medium shadow-lg hover:bg-gray-100"
+  className="px-3 py-2 rounded-full bg-card text-foreground font-medium shadow-lg hover:bg-card/80"
       >
         Admin →
       </Link>

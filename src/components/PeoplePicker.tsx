@@ -27,7 +27,7 @@ export default function PeoplePicker({
   return (
     <div className="space-y-2">
       <input
-        className="px-3 py-2 rounded bg-white text-black text-sm w-full"
+  className="px-3 py-2 rounded bg-card text-foreground text-sm w-full"
         placeholder="Search by name or skill…"
         value={q}
         onChange={e=>setQ(e.target.value)}

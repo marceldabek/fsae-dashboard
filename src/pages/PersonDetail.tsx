@@ -143,18 +143,18 @@ export default function PersonDetail() {
   }
 
   return (
-    <div className="max-w-2xl mx-auto mt-6 space-y-6">
+  <div className="max-w-2xl mx-auto mt-6 space-y-6">
       {/* Profile Card */}
-      <div className="rounded-2xl bg-white/5 border border-white/10 p-4 flex flex-col gap-1.5 relative">
+  <div className="rounded-2xl bg-card border border-border p-4 flex flex-col gap-1.5 relative">
         <div className="flex items-start justify-between gap-4">
           <div className="flex-1 min-w-0">
             <div className="text-xl font-semibold leading-tight truncate flex items-center gap-2">
               <span className="truncate">{person.name}</span>
             </div>
             {person.discord && (
-              <div className="text-xs text-muted leading-snug truncate uppercase tracking-caps">@{person.discord.replace(/^@/, '')}</div>
+              <div className="text-xs text-muted-foreground leading-snug truncate uppercase tracking-caps">@{person.discord.replace(/^@/, '')}</div>
             )}
-            <div className="text-xs text-muted leading-snug uppercase tracking-caps">{person.year || person.role}</div>
+            <div className="text-xs text-muted-foreground leading-snug uppercase tracking-caps">{person.year || person.role}</div>
           </div>
           {rankedEnabled && person.rank && (
             <img src={rankIcon(person.rank)} alt={person.rank} className="shrink-0 h-20 w-20 md:h-24 md:w-24 object-contain -mt-2" />
@@ -164,15 +164,15 @@ export default function PersonDetail() {
         <div className="mt-3 grid grid-cols-5 text-center">
           <div className="flex flex-col items-center">
             <div className="text-lg font-semibold">{numProjects}</div>
-            <div className="text-xs text-muted uppercase tracking-caps">Projects</div>
+            <div className="text-xs text-muted-foreground uppercase tracking-caps">Projects</div>
           </div>
           <div className="flex flex-col items-center">
             <div className="text-lg font-semibold">{numTasks}</div>
-            <div className="text-xs text-muted uppercase tracking-caps">Tasks</div>
+            <div className="text-xs text-muted-foreground uppercase tracking-caps">Tasks</div>
           </div>
           <div className="flex flex-col items-center">
             <div className="text-lg font-semibold">{numTasksTodo}</div>
-            <div className="text-xs text-muted uppercase tracking-caps">To Do</div>
+            <div className="text-xs text-muted-foreground uppercase tracking-caps">To Do</div>
           </div>
           <div className="flex flex-col items-center">
             <div className="text-lg font-semibold flex items-center gap-1">
@@ -183,17 +183,17 @@ export default function PersonDetail() {
                 </svg>
               )}
             </div>
-            <div className="text-xs text-muted uppercase tracking-caps">Streak</div>
+            <div className="text-xs text-muted-foreground uppercase tracking-caps">Streak</div>
           </div>
           <div className="flex flex-col items-center">
             <div className="text-lg font-semibold">{taskHours}</div>
-            <div className="text-xs text-muted uppercase tracking-caps">Hrs</div>
+            <div className="text-xs text-muted-foreground uppercase tracking-caps">Hrs</div>
           </div>
         </div>
       </div>
 
       {/* Quick Links Card */}
-      <div className="rounded-2xl bg-white/5 border border-white/10 p-4">
+  <div className="rounded-2xl bg-card border border-border p-4">
         <h2 className="font-semibold mb-2">Quick Links</h2>
         <ul className="list-disc pl-5 text-sm">
           {(() => {
@@ -205,7 +205,7 @@ export default function PersonDetail() {
       </div>
 
       {/* Projects Card */}
-      <div className="rounded-2xl bg-white/5 border border-white/10 p-4">
+  <div className="rounded-2xl bg-card border border-border p-4">
         <h2 className="font-semibold mb-2">Projects</h2>
         <ul className="space-y-3">
           {displayProjects.map(p => {
@@ -234,16 +234,16 @@ export default function PersonDetail() {
               return s;
             })();
             return (
-              <li key={p.id} className="rounded-xl bg-white/10 border border-white/10 p-3">
+              <li key={p.id} className="rounded-xl bg-surface border border-border p-3">
                 <div className="flex items-start justify-between">
                   <div className="flex flex-col gap-0 min-w-0">
                     <Link className="text-base md:text-lg font-normal truncate" to={`/project/${p.id}`}>{p.name}</Link>
                     {p.subsystem && (
-                      <div className="text-xs uppercase tracking-caps text-muted leading-tight truncate mb-2" style={{marginBottom: '8px'}}>{p.subsystem}</div>
+                      <div className="text-xs uppercase tracking-caps text-muted-foreground leading-tight truncate mb-2" style={{marginBottom: '8px'}}>{p.subsystem}</div>
                     )}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    <div className="text-sm text-muted">{done}/{total}</div>
+                    <div className="text-sm text-muted-foreground">{done}/{total}</div>
                       {/* Design link removed as requested */}
                   </div>
                 </div>
@@ -264,7 +264,7 @@ export default function PersonDetail() {
                     const day = date.getDate();
                     const suffix = (n: number) => n === 1 || n === 21 || n === 31 ? 'st' : n === 2 || n === 22 ? 'nd' : n === 3 || n === 23 ? 'rd' : 'th';
                     return (
-                      <div className="text-xs text-muted uppercase tracking-caps" style={{marginTop: 0}}>{weekday}, {month} {day}{suffix(day)}</div>
+                      <div className="text-xs text-muted-foreground uppercase tracking-caps" style={{marginTop: 0}}>{weekday}, {month} {day}{suffix(day)}</div>
                     );
                   }
                   return null;
@@ -273,12 +273,12 @@ export default function PersonDetail() {
                 {ptasksAll.filter(t => t.status !== 'Complete').length > 0 && (
                   <ul className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-1">
                     {ptasksAll.filter(t => t.status !== 'Complete').map(t => {
-                      const color = t.status === "In Progress" ? "bg-yellow-400" : "bg-red-500";
+                      const color = t.status === "In Progress" ? "bg-warning" : "bg-destructive";
                       return (
                         <li key={t.id} className="relative flex flex-col justify-between gap-2 rounded bg-surface border border-border p-3">
                           <div className="min-w-0">
                             <div className="font-medium text-sm truncate" title={t.description}>{t.description}</div>
-                            <div className="text-tick text-muted flex gap-2 items-center mt-0.5">
+                            <div className="text-tick text-muted-foreground flex gap-2 items-center mt-0.5">
                               <span className="capitalize">{t.status}</span>
                               <span>·</span>
                               <span>{t.assignee_id ? `@${(people.find(pp => pp.id === t.assignee_id)?.name) || 'Assignee'}` : 'Unassigned'}</span>
@@ -301,7 +301,7 @@ export default function PersonDetail() {
       </div>
 
       {/* Badges Card (placed under Projects and above Ranked History) */}
-      <div className="rounded-2xl bg-white/5 border border-white/10 p-4">
+  <div className="rounded-2xl bg-card border border-border p-4">
         <h2 className="font-semibold mb-2">Badges</h2>
         {person.skills && person.skills.length > 0 ? (
           <div className="flex flex-wrap gap-2">
@@ -310,14 +310,14 @@ export default function PersonDetail() {
             ))}
           </div>
         ) : (
-          <div className="text-xs text-muted uppercase tracking-caps">No badges yet.</div>
+          <div className="text-xs text-muted-foreground uppercase tracking-caps">No badges yet.</div>
         )}
       </div>
 
   {/* Bottom two-column area: Ranked History (left) & Points History (right) - only when ranked is enabled */}
   {rankedEnabled ? (
     <div className="grid md:grid-cols-2 gap-6">
-      <div className="rounded-2xl bg-white/5 border border-white/10 p-4 relative">
+  <div className="rounded-2xl bg-card border border-border p-4 relative">
         <div className="flex items-center mb-2">
           <h2 className="font-semibold flex-1">Ranked History</h2>
           <button
@@ -329,17 +329,17 @@ export default function PersonDetail() {
           </button>
         </div>
         {history.length === 0 ? (
-          <div className="text-xs text-muted uppercase tracking-caps">No rank changes yet.</div>
+          <div className="text-xs text-muted-foreground uppercase tracking-caps">No rank changes yet.</div>
         ) : (
           <ul className="space-y-2 text-sm">
             {history.map((h, i) => (
               <li key={i} className="flex items-center gap-2">
-                <span className="text-xs text-muted w-24 uppercase tracking-caps">{formatMonthDay(h.ts)}</span>
+                <span className="text-xs text-muted-foreground w-24 uppercase tracking-caps">{formatMonthDay(h.ts)}</span>
                 <span className="inline-flex items-center gap-1">
                   <img src={rankIcon(h.from)} alt={h.from} className="h-4 w-4 object-contain" />
                   <span>{h.from}</span>
                 </span>
-                <span className="text-muted">→</span>
+                <span className="text-muted-foreground">→</span>
                 <span className="inline-flex items-center gap-1">
                   <img src={rankIcon(h.to)} alt={h.to} className="h-4 w-4 object-contain" />
                   <span>{h.to}</span>
@@ -349,10 +349,10 @@ export default function PersonDetail() {
           </ul>
         )}
       </div>
-      <div className="rounded-2xl bg-white/5 border border-white/10 p-4">
+  <div className="rounded-2xl bg-card border border-border p-4">
         <h2 className="font-semibold mb-2">Points History</h2>
         {logs.length === 0 ? (
-          <div className="text-xs text-muted uppercase tracking-caps">No point events yet.</div>
+          <div className="text-xs text-muted-foreground uppercase tracking-caps">No point events yet.</div>
         ) : (
           <ul className="space-y-2 text-sm max-h-72 overflow-auto pr-1">
             {logs
@@ -360,9 +360,9 @@ export default function PersonDetail() {
               .slice(0, 100)
               .map((l, i) => (
                 <li key={l.id || i} className="flex items-start gap-2">
-                  <span className="text-xs text-muted w-24 shrink-0 uppercase tracking-caps">{formatMonthDay(l.ts)}</span>
+                  <span className="text-xs text-muted-foreground w-24 shrink-0 uppercase tracking-caps">{formatMonthDay(l.ts)}</span>
                   <span className="flex-1">
-                    <span className="text-white/90">{formatLogNote(l)}</span>{' '}
+                    <span className="text-foreground">{formatLogNote(l)}</span>{' '}
                     {typeof l.points === 'number' && <span className="text-accent font-semibold">(+{l.points})</span>}
                   </span>
                 </li>

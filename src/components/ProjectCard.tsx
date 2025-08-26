@@ -53,8 +53,8 @@ export default function ProjectCard({
   );
 
   const container = compact
-    ? "rounded-xl bg-white/5 border border-white/10 p-2.5"
-    : "rounded-2xl bg-white/5 border border-white/10 p-3";
+  ? "rounded-xl bg-card dark:bg-surface border border-white/10 p-2.5"
+  : "rounded-2xl bg-card dark:bg-surface border border-white/10 p-3";
   const nameClass = compact
     ? "text-base font-semibold hover:underline mb-0"
     : "text-lg font-semibold hover:underline mb-0";
@@ -81,7 +81,7 @@ export default function ProjectCard({
                 href={project.design_link}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center px-1.5 py-0 rounded bg-white/10 text-xs border border-[#24304F] transition outline outline-2 outline-[#24304F] font-normal"
+                className="inline-flex items-center px-1.5 py-0 rounded bg-card dark:bg-surface text-xs border border-[#24304F] transition outline outline-2 outline-[#24304F] font-normal"
                 style={{
                   background: "rgba(255,255,255,0.10)",
                   borderColor: "#24304F",
@@ -118,7 +118,7 @@ export default function ProjectCard({
               <span className="text-[10px] uppercase tracking-wide opacity-80">OWNERS</span>
               {owners.length > 0 ? (
                 <span
-                  className="px-1.5 py-0.5 rounded bg-white/10 whitespace-normal break-words text-[10px] leading-none"
+                  className="px-1.5 py-0.5 rounded bg-card dark:bg-surface whitespace-normal break-words text-[10px] leading-none"
                   style={{ paddingTop: "1px", paddingBottom: "1px" }}
                 >
                   {owners.length}

@@ -14,10 +14,10 @@ import { RequireLead } from "../lib/roles";
 
 function StatCard({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="rounded-xl bg-white/5 border border-white/10 p-3 text-center flex flex-col items-center justify-center min-w-0">
+    <div className="rounded-xl bg-card dark:bg-surface border border-white/10 p-3 text-center flex flex-col items-center justify-center min-w-0">
       {/* Make value text match total task completion font */}
       <div className="text-xl font-semibold leading-tight">{value}</div>
-  <div className="mt-1 text-xs uppercase text-muted font-medium whitespace-nowrap overflow-hidden text-ellipsis leading-snug" title={label}>{label}</div>
+  <div className="mt-1 text-xs tracking-caps text-muted uppercase opacity-80 whitespace-nowrap overflow-hidden text-ellipsis leading-snug" title={label}>{label}</div>
     </div>
   );
 }
@@ -251,9 +251,9 @@ export default function Overview() {
           </div>
 
           {/* Progress bar with matching stat typography */}
-  <div className="rounded-xl bg-white/5 border border-white/10 p-2 pb-3">
+  <div className="rounded-xl bg-card dark:bg-surface border border-border p-2 pb-3">
             <div className="flex items-center justify-between mb-2">
-              <div className="text-xs tracking-caps text-muted uppercase">Total Task Completion</div>
+              <div className="text-xs tracking-caps text-muted uppercase opacity-80">Total Task Completion</div>
               {/* Keep completion percentage prominent */}
               <div className="text-xl font-semibold leading-tight">{completion}%</div>
             </div>
@@ -269,36 +269,36 @@ export default function Overview() {
             dots
           >
             {/* Slide 0: AttendanceCard */}
-            <AttendanceCard
-              title="Attendance"
-              weekData={weekData}
-              monthData={monthData}
-              className="h-48 sm:h-56"
-            />
+              <AttendanceCard
+                title="Attendance"
+                weekData={weekData}
+                monthData={monthData}
+                className="h-56"
+              />
 
             {/* Slide 1: Leaderboard */}
-            <div className="relative max-w-[390px] w-full mx-auto rounded-2xl p-5 md:p-6 border bg-white/5 text-text border-white/10 overflow-hidden h-48 sm:h-56 flex flex-col">
+            <div className="relative max-w-[390px] w-full mx-auto rounded-2xl p-5 md:p-6 border bg-card dark:bg-surface text-foreground border-white/10 overflow-hidden h-56 flex flex-col">
               <h2 className="text-xs md:text-sm mb-2 text-muted uppercase tracking-caps" style={{ fontWeight: 400 }}>All-Time Leaderboard</h2>
               <div className="h-full overflow-hidden">
-                <table className="w-full table-fixed text-xs sm:text-sm">
+                <table className="mx-auto w-full table-fixed text-xs sm:text-sm">
                   <thead>
                     <tr>
-                      <th className="w-8 py-1.5 px-2 text-center text-muted uppercase tracking-caps" style={{ fontWeight: 400 }}>#</th>
-                      <th className="py-1.5 px-2 text-left text-muted uppercase tracking-caps" style={{ fontWeight: 400 }}>Name</th>
-                      <th className="w-24 md:w-28 py-1.5 px-2 text-center text-muted uppercase tracking-caps" style={{ fontWeight: 400 }}>Tasks</th>
+                      <th className="w-8 py-1 px-2 text-center text-muted uppercase tracking-caps" style={{ fontWeight: 400 }}>#</th>
+                      <th className="py-1 px-2 text-left text-muted uppercase tracking-caps" style={{ fontWeight: 400 }}>Name</th>
+                      <th className="w-24 md:w-28 py-1 px-2 text-center text-muted uppercase tracking-caps" style={{ fontWeight: 400 }}>Tasks</th>
                     </tr>
                   </thead>
                   <tbody className="align-middle">
-                    {leaderboard.slice(0, 5).map((person, idx) => (
+                    {leaderboard.slice(0, 7).map((person, idx) => (
                       <tr key={person.id} className={idx === 0 ? "bg-yellow-100/40" : ""}>
-                        <td className="py-1.5 px-2 text-center">{idx + 1}</td>
-                        <td className="py-1.5 px-2">
-                          <div className="truncate flex items-center gap-1">
+                        <td className="py-1 px-2 text-center">{idx + 1}</td>
+                        <td className="py-1 px-2">
+                          <div className="truncate flex items-center gap-1 mb-0.5">
                             {person.name}
                             {idx === 0 && <TrophyIcon />}
                           </div>
                         </td>
-                        <td className="py-1.5 px-2 text-center">{person.completed}</td>
+                        <td className="py-1 px-2 text-center">{person.completed}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -328,20 +328,36 @@ export default function Overview() {
         <div className="flex-1" />
         {/* Hide completed switch, styled like admin page ranked pool switch */}
   <label className="relative inline-flex items-center cursor-pointer select-none outline-none focus:outline-none" style={{ marginLeft: 8 }}>
-          <input
-            type="checkbox"
-            checked={hideCompleted}
-            onChange={e => setHideCompleted(e.target.checked)}
-            className="sr-only peer outline-none focus:outline-none"
-            onMouseUp={e => e.currentTarget.blur()}
-          />
-          <span
-            className="w-10 h-6 flex items-center bg-white/10 border border-white/20 rounded-full transition peer-checked:bg-accent/60 peer-focus:ring-2 peer-focus:ring-accent/60 relative"
-            style={{ minWidth: 40 }}
-          >
+          {/* Toggle */}
+          <span className="relative inline-flex h-6 w-11 select-none ml-auto">
+            {/* hidden checkbox drives styles */}
+            <input
+              type="checkbox"
+              checked={hideCompleted}
+              onChange={e => setHideCompleted(e.target.checked)}
+              className="peer sr-only"
+              onMouseUp={e => e.currentTarget.blur()}
+            />
+
+            {/* track */}
             <span
-              className={`absolute w-4 h-4 bg-white rounded-full shadow transition-transform ${hideCompleted ? 'translate-x-5' : 'translate-x-1'}`}
-              style={{ top: '50%', transform: `${hideCompleted ? 'translateX(20px)' : 'translateX(4px)'} translateY(-50%)`, transition: 'transform 0.2s' }}
+              className="
+                pointer-events-none block h-6 w-11 rounded-full border border-border
+                bg-black/15 dark:bg-white/15
+                transition-colors
+                peer-checked:bg-accent/70
+                peer-focus-visible:ring-2 peer-focus-visible:ring-accent/60 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-background
+              "
+            />
+
+            {/* knob (the moving dot) */}
+            <span
+              className="
+                pointer-events-none absolute left-0.5 top-0.5 h-5 w-5 rounded-full
+                bg-white dark:bg-background shadow
+                transition-transform
+                peer-checked:translate-x-5
+              "
             />
           </span>
           <span className="sr-only">Hide completed projects</span>
@@ -349,22 +365,22 @@ export default function Overview() {
       </div>
   <div className="flex items-center gap-4 text-[10px] text-muted mb-1 uppercase tracking-caps">
         <div className="flex items-center gap-1" title="Grey = To-do / Not started">
-          <span className="w-2 h-2 rounded-full bg-gray-400" /> To-do / Not started
+          <span className="w-2 h-2 rounded-full" style={{ background: '#BDC0C3' }} /> To-do / Not started
         </div>
-        <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-yellow-400" /> In Progress</div>
-        <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500" /> Complete</div>
+  <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full" style={{ background: '#64C7C9' }} /> In Progress</div>
+  <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full" style={{ background: '#34D399' }} /> Complete</div>
       </div>
       {/* Toolbar: Subsystem multi-select + Sort dropdown */}
   <div className="grid grid-cols-2 gap-2 w-full">
         <div className="relative min-w-0">
           <button
             onClick={() => { setShowSubsystemMenu(v=>!v); setShowSortMenu(false); }}
-            className="px-3 py-1.5 rounded-md text-xs font-medium border border-white/10 bg-white/5 hover:bg-white/10 w-full"
+            className="px-3 py-1.5 rounded-md text-xs font-medium border border-border bg-card dark:bg-surface hover:bg-card/80 w-full"
           >
             Subsystems: <span className="font-semibold">{selectedSubsystems.length ? `${selectedSubsystems.length} selected` : "All"}</span>
           </button>
           {/* Subsystem popover: searchable multi-select with checkboxes */}
-          <div className={`absolute z-20 mt-1 w-64 rounded-md border border-overlay-10 bg-bg/95 shadow-xl overflow-hidden transition transform origin-top ${showSubsystemMenu ? "opacity-100 scale-100" : "opacity-0 scale-95 pointer-events-none"}`}>
+          <div className={`absolute z-20 mt-1 w-64 rounded-md border border-border bg-card dark:bg-surface shadow-xl overflow-hidden transition transform origin-top ${showSubsystemMenu ? "opacity-100 scale-100" : "opacity-0 scale-95 pointer-events-none"}`}>
             <div className="px-3 py-2 border-b border-white/10">
               <button
                 className="w-full px-3 py-2 rounded-md text-xs sm:text-sm font-semibold bg-red-500/15 hover:bg-red-500/25 text-red-200 focus:outline-none focus-visible:outline-none"
@@ -381,7 +397,7 @@ export default function Overview() {
                 const checked = selectedSubsystems.includes(s);
                 const count = subsystemCounts.get(s) ?? 0;
                 return (
-                  <label key={s} className="flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-white/10 cursor-pointer focus:outline-none focus-visible:outline-none">
+                  <label key={s} className="flex items-center gap-2 px-2 py-1.5 text-xs rounded hover:bg-card/80 cursor-pointer focus:outline-none focus-visible:outline-none">
                     <input
                       type="checkbox"
                       className="accent-accent focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0"
@@ -391,7 +407,7 @@ export default function Overview() {
                       }}
                     />
                     <span className="truncate">{s}</span>
-                    <span className="ml-auto inline-flex items-center justify-center rounded-full bg-white/10 px-2 py-0.5 text-[10px]">{count}</span>
+                    <span className="ml-auto inline-flex items-center justify-center rounded-full bg-surface/80 px-2 py-0.5 text-[10px]">{count}</span>
                   </label>
                 );
               })}
@@ -402,16 +418,16 @@ export default function Overview() {
         <div className="relative min-w-0">
           <button
             onClick={() => { setShowSortMenu(v=>!v); setShowSubsystemMenu(false); }}
-            className="px-3 py-1.5 rounded-md text-xs font-medium border border-white/10 bg-white/5 hover:bg-white/10 w-full"
+            className="px-3 py-1.5 rounded-md text-xs font-medium border border-border bg-card dark:bg-surface hover:bg-card/80 w-full"
           >
             Sort: <span className="font-semibold">{sortLabel(sortBy)} {dirSymbol}</span>
           </button>
           {/* Sort popover */}
-          <div className={`absolute z-20 mt-1 w-48 rounded-md border border-overlay-10 bg-bg/95 shadow-xl overflow-hidden transition transform origin-top ${showSortMenu ? "opacity-100 scale-100" : "opacity-0 scale-95 pointer-events-none"}`}>
+          <div className={`absolute z-20 mt-1 w-48 rounded-md border border-border bg-card dark:bg-surface shadow-xl overflow-hidden transition transform origin-top ${showSortMenu ? "opacity-100 scale-100" : "opacity-0 scale-95 pointer-events-none"}`}>
             {(["name","subsystem","due","progress"] as const).map(v => (
               <button
                 key={v}
-                className={`w-full text-left px-3 py-2 text-xs hover:bg-white/10 ${sortBy === v ? "bg-white/10" : ""}`}
+                className={`w-full text-left px-3 py-2 text-xs hover:bg-surface/80 ${sortBy === v ? "bg-surface/80" : ""}`}
                 onClick={() => {
                   if (sortBy === v) {
                     setSortDir(d => d === "asc" ? "desc" : "asc");
@@ -438,7 +454,7 @@ export default function Overview() {
           value={projectSearch}
           onChange={handleSearchChange}
           placeholder="Search projects..."
-          className="px-3 py-1.5 rounded-md text-xs font-medium border border-white/10 bg-white/5 focus:bg-white/10 w-full focus:outline-none"
+          className="px-3 py-1.5 rounded-md text-xs font-medium border border-border bg-card dark:bg-surface focus:bg-card/80 w-full focus:outline-none"
         />
       </div>
   <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">
@@ -457,7 +473,7 @@ export default function Overview() {
   {showCreateProject && (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={()=> setShowCreateProject(false)} />
-      <div className="relative w-[95vw] max-w-lg rounded-2xl border border-white/10 bg-bg/95 backdrop-blur-sm shadow-2xl p-5 overflow-auto max-h-[92vh]">
+      <div className="relative w-[95vw] max-w-lg rounded-2xl border border-border bg-card dark:bg-surface shadow-2xl p-5 overflow-auto max-h-[92vh]">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-lg font-semibold">Create Project</h3>
           <button onClick={()=> setShowCreateProject(false)} aria-label="Close" className="h-8 w-8 inline-flex items-center justify-center rounded hover:bg-white/10">
@@ -465,11 +481,11 @@ export default function Overview() {
           </button>
         </div>
         <div className="space-y-3">
-          <input className="px-3 py-2 rounded w-full" placeholder="Project name" value={prName} onChange={e=>setPrName(e.target.value)} />
-          <input className="px-3 py-2 rounded w-full" placeholder="Design link (optional)" value={prDesign} onChange={e=>setPrDesign(e.target.value)} />
-          <textarea className="px-3 py-2 rounded w-full" placeholder="Project description (optional)" value={prDesc} onChange={e=>setPrDesc(e.target.value)} />
+          <input className="px-3 py-2 rounded w-full bg-surface text-foreground border border-border placeholder:text-muted-foreground focus:outline-none" placeholder="Project name" value={prName} onChange={e=>setPrName(e.target.value)} />
+          <input className="px-3 py-2 rounded w-full bg-surface text-foreground border border-border placeholder:text-muted-foreground focus:outline-none" placeholder="Design link (optional)" value={prDesign} onChange={e=>setPrDesign(e.target.value)} />
+          <textarea className="px-3 py-2 rounded w-full bg-surface text-foreground border border-border placeholder:text-muted-foreground focus:outline-none" placeholder="Project description (optional)" value={prDesc} onChange={e=>setPrDesc(e.target.value)} />
           <div className="flex flex-col sm:flex-row gap-2">
-            <select className="px-3 py-2 rounded w-full dark-select" value={prSubsystem} onChange={e=>setPrSubsystem(e.target.value)}>
+            <select className="px-3 py-2 rounded w-full bg-surface text-foreground border border-border dark-select placeholder:text-muted-foreground focus:outline-none" value={prSubsystem} onChange={e=>setPrSubsystem(e.target.value)}>
               <option value="">Select subsystem…</option>
               <option>Aero</option>
               <option>Business</option>
@@ -485,10 +501,10 @@ export default function Overview() {
               <option>Powertrain IC</option>
               <option>Suspension</option>
             </select>
-            <input type="date" className="px-3 py-2 rounded w-full" value={prDue} onChange={e=>setPrDue(e.target.value)} />
+            <input type="date" className="px-3 py-2 rounded w-full bg-surface text-foreground border border-border focus:outline-none" value={prDue} onChange={e=>setPrDue(e.target.value)} />
           </div>
           <div className="flex items-center gap-2">
-            <div className="text-sm text-muted uppercase tracking-caps">Owners</div>
+            <div className="text-sm text-muted-foreground uppercase tracking-caps">Owners</div>
             <PersonSelectPopover
               mode="multi"
               people={people}
@@ -496,14 +512,14 @@ export default function Overview() {
               onAdd={(id)=> toggleOwner(id)}
               onRemove={(id)=> toggleOwner(id)}
               triggerLabel={prOwners.length ? `${prOwners.length} selected` : 'Add/Remove'}
-              buttonClassName="ml-auto text-[11px] px-2 py-1 rounded bg-white/10 border border-white/20"
+              buttonClassName="ml-auto text-[11px] px-2 py-1 rounded bg-surface text-foreground border border-border"
               maxItems={5}
             />
           </div>
           <button
             onClick={handleCreateProject}
             disabled={!prName.trim() || savingProject}
-            className={`w-full px-3 py-2 rounded border border-border text-sm text-center ${prName.trim() ? 'bg-overlay-6 hover:bg-overlay-5' : 'bg-overlay-6 opacity-50 cursor-not-allowed'}`}
+            className={`w-full px-3 py-2 rounded border border-border text-sm text-center ${prName.trim() ? 'bg-card dark:bg-surface hover:bg-card/80' : 'bg-card dark:bg-surface opacity-50 cursor-not-allowed'}`}
           >{savingProject ? 'Saving…' : 'Save Project'}</button>
         </div>
       </div>

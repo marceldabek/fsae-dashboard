@@ -32,7 +32,7 @@ export default function PersonSelectPopover(props: PersonSelectPopoverProps) {
 		onRemove,
 		triggerLabel,
 		triggerContent,
-		buttonClassName = "px-3 py-2 rounded bg-white/10 border border-white/20 text-sm hover:bg-white/15 transition",
+		buttonClassName = "px-3 py-2 rounded bg-card/80 border border-white/20 text-sm hover:bg-card transition",
 		disabled = false,
 		maxItems = 8,
 		allowUnassign = true,
@@ -95,15 +95,15 @@ export default function PersonSelectPopover(props: PersonSelectPopoverProps) {
 								value={q}
 								onChange={e => setQ(e.target.value)}
 								placeholder="Search people…"
-								className="w-full px-2 py-1.5 rounded bg-white/10 text-sm focus:outline-none"
+								className="w-full px-2 py-1.5 rounded bg-card/80 text-sm focus:outline-none"
 							/>
-							<button onClick={() => setOpen(false)} className="text-[11px] px-2 py-1 rounded bg-white/10 border border-white/20 hover:bg-white/15">Close</button>
+							<button onClick={() => setOpen(false)} className="text-[11px] px-2 py-1 rounded bg-card/80 border border-white/20 hover:bg-card">Close</button>
 						</div>
 						<ul className={`space-y-1 text-sm ${allowScroll ? 'max-h-60 overflow-auto' : ''}`}>
 							{mode === "single" && allowUnassign && (
 								<li>
 									<button
-										className={`w-full text-left px-2 py-1 rounded hover:bg-white/5 text-[13px] ${!selectedId ? 'bg-white/10' : ''}`}
+										className={`w-full text-left px-2 py-1 rounded hover:bg-card text-[13px] ${!selectedId ? 'bg-card/80' : ''}`}
 										onClick={() => { onSelect?.(null); setOpen(false); }}
 									>Unassigned</button>
 								</li>
@@ -111,7 +111,7 @@ export default function PersonSelectPopover(props: PersonSelectPopoverProps) {
 							{filtered.slice(0, maxItems).map(p => {
 								const selected = mode === "single" ? p.id === selectedId : selectedSet.has(p.id);
 								return (
-									<li key={p.id} className="flex items-center gap-2 justify-between px-2 py-1 rounded hover:bg-white/5">
+									<li key={p.id} className="flex items-center gap-2 justify-between px-2 py-1 rounded hover:bg-card">
 										<div className="min-w-0">
 											<div className="truncate text-sm font-medium">{p.name}</div>
 											{p.skills && p.skills.length > 0 && (<div className="text-xs text-muted truncate uppercase tracking-caps">{p.skills.join(', ')}</div>)}

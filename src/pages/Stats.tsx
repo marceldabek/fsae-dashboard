@@ -240,7 +240,7 @@ export default function Stats() {
     if (firstNonZero > 2) return dailyAnalytics.slice(firstNonZero - 1);
     return dailyAnalytics;
   }, [dailyAnalytics]);
-  if (loading) return <div className="text-sm text-muted">Loading stats…</div>;
+  if (loading) return <div className="text-sm text-muted-foreground">Loading stats…</div>;
 
   return (
     <div className="space-y-6">
@@ -302,26 +302,26 @@ export default function Stats() {
   <Section title="Subsystem status" subtitle="Task counts">
         <div className="space-y-2">
           <div className="text-xs text-muted flex flex-wrap items-center gap-3 uppercase tracking-caps">
-            <span className="font-semibold text-white">Legend</span>
+            <span className="font-semibold text-foreground">Legend</span>
             <span className="flex items-center gap-1 normal-case"><span className="w-3 h-3 rounded-sm bg-success inline-block" /> <span className="text-[11px]">Complete</span></span>
             <span className="flex items-center gap-1 normal-case"><span className="w-3 h-3 rounded-sm bg-warning inline-block" /> <span className="text-[11px]">In&nbsp;Progress</span></span>
             <span className="flex items-center gap-1 normal-case"><span className="w-3 h-3 rounded-sm bg-muted/40 inline-block" /> <span className="text-[11px]">Todo</span></span>
-            <span className="text-[11px] text-muted/70 ml-auto md:ml-4 normal-case font-normal tracking-normal">Left→Right: Complete · In Progress · Todo</span>
+            <span className="text-[11px] text-muted-foreground ml-auto md:ml-4 normal-case font-normal tracking-normal">Left→Right: Complete · In Progress · Todo</span>
           </div>
           <ul className="space-y-2">
             {subsystemSegments.map(row => (
               <li key={row.subsystem} className="flex items-center gap-3">
                 <div className="w-32 md:w-40 text-sm truncate">{row.subsystem}</div>
-                <div className="flex-1 h-3 rounded bg-overlay-6 overflow-hidden flex">
+                <div className="flex-1 h-3 rounded bg-surface overflow-hidden flex">
                   <div className="h-full" style={{ flexGrow: row.done, flexBasis: 0, background: '#34D399' }} />
                   <div className="h-full" style={{ flexGrow: row.progress, flexBasis: 0, background: '#FACC15' }} />
                   <div className="h-full" style={{ flexGrow: row.todo, flexBasis: 0, background: 'rgba(255,255,255,0.25)' }} />
                 </div>
-                <div className="hidden md:block w-28 text-right text-xs text-muted">{row.done}/{row.total} done</div>
+                <div className="hidden md:block w-28 text-right text-xs text-muted-foreground">{row.done}/{row.total} done</div>
               </li>
             ))}
             {subsystemSegments.length === 0 && (
-              <li className="text-sm text-muted">No subsystem data</li>
+              <li className="text-sm text-muted-foreground">No subsystem data</li>
             )}
           </ul>
         </div>
@@ -390,7 +390,7 @@ export default function Stats() {
             </LineChart>
           </ResponsiveContainer>
         </div>
-  <p className="mt-2 text-tick text-muted">Exponential smoothing (α=0.3) dampens spikes from large task completions while keeping trends clear. Raw totals (previous chart) remain the authoritative sum.</p>
+  <p className="mt-2 text-tick text-muted-foreground">Exponential smoothing (α=0.3) dampens spikes from large task completions while keeping trends clear. Raw totals (previous chart) remain the authoritative sum.</p>
       </Section>
 
   <Section title="Daily visits" subtitle="Last 30 days">
@@ -424,9 +424,9 @@ export default function Stats() {
 
 function Section({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
   return (
-    <section className="rounded-lg border border-border bg-overlay-6 p-4">
+    <section className="rounded-lg border border-border bg-card dark:bg-surface p-4">
       {/* Section title shrinks on narrow phones */}
-      <h2 className="text-base sm:text-lg font-semibold uppercase tracking-caps mb-1">{title}</h2>
+      <h2 className="text-base sm:text-lg font-semibold uppercase tracking-caps mb-1 text-foreground">{title}</h2>
       {subtitle && <div className="text-[11px] sm:text-xs text-muted mb-3 -mt-1">{subtitle}</div>}
       {!subtitle && <div className="mb-3" />}
       {children}
@@ -436,10 +436,10 @@ function Section({ title, subtitle, children }: { title: string; subtitle?: stri
 
 function StatCard({ label, value }: { label: string; value: number | string }) {
   return (
-    <div className="rounded-md border border-border bg-overlay-6 p-3 h-full flex flex-col justify-between">
+    <div className="rounded-md border border-border bg-card dark:bg-surface p-3 h-full flex flex-col justify-between">
       <div className="text-[11px] sm:text-xs text-muted uppercase tracking-caps font-semibold">{label}</div>
       {/* Value size responsive: smaller on very small screens */}
-      <div className="text-lg sm:text-2xl font-bold text-center leading-tight">{value}</div>
+      <div className="text-lg sm:text-2xl font-bold text-center leading-tight text-foreground">{value}</div>
     </div>
   );
 }

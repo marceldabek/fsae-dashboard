@@ -92,7 +92,7 @@ export default function AttendanceCard(props: AttendanceCardProps) {
 
   return (
     <div
-      className={`relative max-w-[390px] w-full mx-auto rounded-2xl p-5 md:p-6 border bg-surface text-text border-border overflow-hidden h-full flex flex-col ${className ?? ""}`}
+  className={`relative max-w-[390px] w-full mx-auto rounded-2xl p-5 md:p-6 border bg-card dark:bg-surface text-foreground border-border overflow-hidden h-full flex flex-col ${className ?? ""}`}
       style={{ background: theme.card, borderColor: theme.border, color: theme.text }}
     >
       {/* Header row */}
@@ -103,10 +103,10 @@ export default function AttendanceCard(props: AttendanceCardProps) {
           <div className="mt-1 text-[11px] opacity-70">{isMeetingDay ? "Today" : "Last meeting"}</div>
         </div>
         <div className="flex items-center gap-2">
-      <button onClick={() => setView("week")} className={`px-1.5 py-0.5 rounded bg-white/10 text-xs border transition ${view === "week" ? "opacity-100" : "opacity-70 hover:opacity-100"}`} style={{ borderColor: theme.border }}>
+  <button onClick={() => setView("week")} className={`px-1 py-0.5 rounded bg-card/80 text-foreground border transition text-[11px] ${view === "week" ? "opacity-100" : "opacity-70 hover:opacity-100"}`} style={{ borderColor: theme.border }}>
         Week
       </button>
-      <button onClick={() => setView("month")} className={`px-1.5 py-0.5 rounded bg-white/10 text-xs border transition ${view === "month" ? "opacity-100" : "opacity-70 hover:opacity-100"}`} style={{ borderColor: theme.border }}>
+  <button onClick={() => setView("month")} className={`px-1 py-0.5 rounded bg-card/80 text-foreground border transition text-[11px] ${view === "month" ? "opacity-100" : "opacity-70 hover:opacity-100"}`} style={{ borderColor: theme.border }}>
         Month
       </button>
         </div>

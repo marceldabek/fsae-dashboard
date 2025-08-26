@@ -134,18 +134,18 @@ const canEdit = false; // Replace with new guard logic if needed
 
   // derive due date label once
   const dueDateLabel = (() => {
-    if (!project.due_date) return null;
-    let date: Date | null = null;
-    const s = project.due_date;
-    const m = s.match(/(\d{4})[\/-]?(\d{2})[\/-]?(\d{2})/);
-    if (m) { const [, y, mo, d] = m; date = new Date(Number(y), Number(mo) - 1, Number(d)); }
-    else if (!isNaN(Date.parse(s))) { date = new Date(s); }
-    if (!date) return null;
-    const weekday = date.toLocaleString('en-US', { weekday: 'short' });
-    const month = date.toLocaleString('en-US', { month: 'short' });
-    const day = date.getDate();
-    const suffix = (n: number) => n === 1 || n === 21 || n === 31 ? 'st' : n === 2 || n === 22 ? 'nd' : n === 3 || n === 23 ? 'rd' : 'th';
-    return `Due ${weekday} ${month} ${day}${suffix(day)}`;
+  if (!project.due_date) return null;
+  let date: Date | null = null;
+  const s = project.due_date;
+  const m = s.match(/(\d{4})[\/\-]?(\d{2})[\/\-]?(\d{2})/);
+  if (m) { const [, y, mo, d] = m; date = new Date(Number(y), Number(mo) - 1, Number(d)); }
+  else if (!isNaN(Date.parse(s))) { date = new Date(s); }
+  if (!date) return null;
+  const weekday = date.toLocaleString('en-US', { weekday: 'short' });
+  const month = date.toLocaleString('en-US', { month: 'short' });
+  const day = date.getDate();
+  const suffix = (n: number) => n === 1 || n === 21 || n === 31 ? 'st' : n === 2 || n === 22 ? 'nd' : n === 3 || n === 23 ? 'rd' : 'th';
+  return `${weekday} ${month} ${day}${suffix(day)}`;
   })();
 
   return (
@@ -177,14 +177,14 @@ const canEdit = false; // Replace with new guard logic if needed
                   <div className="relative">
                     <button
                       onClick={()=> setShowArchiveConfirm(true)}
-                      className="w-[68px] inline-flex items-center justify-center h-6 rounded-md border border-yellow-400/50 bg-yellow-400/15 hover:bg-yellow-400/25 text-yellow-200 text-[11px] font-medium whitespace-nowrap transition"
+                      className="w-[68px] inline-flex items-center justify-center h-6 rounded-md border border-accent/40 bg-accent/10 hover:bg-accent/20 text-accent text-[11px] font-medium whitespace-nowrap transition"
                     >Archive</button>
                     {showArchiveConfirm && (
                       <div className="absolute right-0 mt-2 w-72 rounded bg-surface border border-border p-3 shadow-lg z-20">
                         <div className="text-sm">Archive this project? You can re-enable it from the Admin page.</div>
                         <div className="flex gap-2 mt-3">
-                          <button className="px-3 py-1 rounded bg-red-600 text-white" onClick={async ()=>{ if(!project) return; await archiveProject(project.id); setProject(p=> p ? ({...p, archived: true} as any) : p); setShowArchiveConfirm(false); setToast('Project archived — re-enable from Admin'); setTimeout(()=>setToast(''),3000); }}>Confirm</button>
-                          <button className="px-3 py-1 rounded bg-overlay-6 border border-border" onClick={()=> setShowArchiveConfirm(false)}>Cancel</button>
+                          <button className="px-3 py-1 rounded bg-destructive text-destructive-foreground" onClick={async ()=>{ if(!project) return; await archiveProject(project.id); setProject(p=> p ? ({...p, archived: true} as any) : p); setShowArchiveConfirm(false); setToast('Project archived — re-enable from Admin'); setTimeout(()=>setToast(''),3000); }}>Confirm</button>
+                          <button className="px-3 py-1 rounded bg-card dark:bg-surface border border-border" onClick={()=> setShowArchiveConfirm(false)}>Cancel</button>
                         </div>
                       </div>
                     )}
@@ -194,15 +194,15 @@ const canEdit = false; // Replace with new guard logic if needed
                   <div className="relative">
                     <button
                       onClick={() => setShowDeleteConfirm(true)}
-                      className="w-[68px] inline-flex items-center justify-center h-6 rounded-md border border-red-700/50 bg-red-700/20 hover:bg-red-700/30 text-red-200 text-[11px] font-medium whitespace-nowrap transition"
+                      className="w-[68px] inline-flex items-center justify-center h-6 rounded-md border border-destructive/40 bg-destructive/10 hover:bg-destructive/20 text-destructive text-[11px] font-medium whitespace-nowrap transition"
                       title="Delete project"
                     >Delete</button>
                     {showDeleteConfirm && (
                       <div className="absolute right-0 mt-2 w-72 rounded bg-surface border border-border p-3 shadow-lg z-30">
                         <div className="text-sm">Delete this project permanently? This cannot be undone.</div>
                         <div className="flex gap-2 mt-3">
-                          <button className="px-3 py-1 rounded bg-red-700 text-white" onClick={handleDeleteProject}>Confirm Delete</button>
-                          <button className="px-3 py-1 rounded bg-overlay-6 border border-border" onClick={()=> setShowDeleteConfirm(false)}>Cancel</button>
+                          <button className="px-3 py-1 rounded bg-destructive text-destructive-foreground" onClick={handleDeleteProject}>Confirm Delete</button>
+                          <button className="px-3 py-1 rounded bg-card dark:bg-surface border border-border" onClick={()=> setShowDeleteConfirm(false)}>Cancel</button>
                         </div>
                       </div>
                     )}
@@ -213,23 +213,23 @@ const canEdit = false; // Replace with new guard logic if needed
               {/* Only leads/admins see archived badge */}
               <RequireLead>
                 {(project as any).archived && (
-                  <span className="inline-flex items-center h-7 w-[68px] justify-center rounded border border-yellow-400/40 bg-yellow-400/10 text-xs text-yellow-300 font-semibold uppercase tracking-wide">Archived</span>
+                  <span className="inline-flex items-center h-7 w-[68px] justify-center rounded border border-accent/40 bg-accent/10 text-xs text-accent font-semibold uppercase tracking-wide">Archived</span>
                 )}
               </RequireLead>
           </div>
            {/* Description box - always below buttons, with 32px margin above title */}
            <div className="mb-0" style={{ marginTop: '32px' }}>
-             <span className="text-muted/70 uppercase tracking-caps text-[11px] block">Description</span>
-             <div className="rounded-lg border border-white/15 bg-bg/80 p-3 text-[13px] text-muted/40 mb-0" style={{minHeight: '32px'}}>
-               {project.description ? project.description : <span className="text-muted/20">No description provided.</span>}
+             <span className="text-muted-foreground uppercase tracking-caps text-[11px] block">Description</span>
+             <div className="rounded-lg border border-border bg-card dark:bg-surface p-3 text-[13px] text-muted-foreground mb-0" style={{minHeight: '32px'}}>
+               {project.description ? project.description : <span className="text-muted-foreground/40">No description provided.</span>}
              </div>
            </div>
           {/* Add 16px spacing above owners/due date section */}
           <div style={{ marginTop: '16px' }}>
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-muted/70 uppercase tracking-caps text-[11px]">Owners</span>
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <span className="text-muted-foreground uppercase tracking-caps text-[11px]">Owners</span>
               {dueDateLabel && (
-                <span className="text-[11px] text-muted/70 uppercase tracking-caps whitespace-nowrap ml-auto text-right">{dueDateLabel}</span>
+                <span className="text-muted-foreground uppercase tracking-caps text-[11px] ml-auto text-right">{dueDateLabel}</span>
               )}
             </div>
             <div className="flex flex-wrap items-start gap-2 text-[13px] leading-snug">
@@ -237,11 +237,11 @@ const canEdit = false; // Replace with new guard logic if needed
                 owners.map(o => (
                   <span
                     key={o.id}
-                    className="px-2 py-0.5 rounded bg-surface/60 border border-border text-tick text-sm whitespace-nowrap font-medium"
+                    className="px-2 py-0.5 rounded bg-surface/80 border border-border text-tick text-sm whitespace-nowrap font-medium"
                   >{o.name}</span>
                 ))
               ) : (
-                <span className="px-2 py-0.5 rounded bg-surface/60 border border-border text-tick text-sm whitespace-nowrap font-medium">N/A</span>
+                <span className="px-2 py-0.5 rounded bg-surface/80 border border-border text-tick text-sm whitespace-nowrap font-medium">N/A</span>
               )}
               {/* Only leads/admins can edit owners */}
               <RequireLead>
@@ -297,32 +297,31 @@ const canEdit = false; // Replace with new guard logic if needed
                 </RequireLead>
               </div>
               <label className="flex items-center gap-2 select-none cursor-pointer group">
-                <span className="text-[11px] font-medium text-muted uppercase tracking-caps">Hide completed</span>
-                <span className="relative inline-block w-10 h-6 align-middle select-none">
+                <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-caps">Hide completed</span>
+                <span className="relative inline-block h-6 w-11 rounded-full bg-white/15 transition-colors peer-checked:bg-accent/70">
                   <input
                     type="checkbox"
                     checked={hideCompleted}
                     onChange={e=>setHideCompleted(e.target.checked)}
-                    className="peer absolute w-10 h-6 opacity-0 cursor-pointer z-10"
+                    className="peer sr-only"
                   />
-                  <span className="block w-10 h-6 rounded-full transition bg-surface border border-border peer-checked:bg-accent/70" />
-                  <span className="absolute left-1 top-1 w-4 h-4 rounded-full bg-muted transition-all duration-200 peer-checked:translate-x-4 peer-checked:bg-accent shadow" />
+                  <span className="absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform duration-200 peer-checked:translate-x-5" />
                 </span>
               </label>
             </div>
           {/* Status Dot Legend - moved above task cards */}
           <div className="flex justify-between items-center w-full max-w-xs mx-auto mb-2" style={{minWidth: '250px', maxWidth: '390px'}}>
             <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-gray-400 inline-block" aria-hidden></span>
-              <span className="text-[11px] text-muted uppercase tracking-caps font-medium">To-do / Not started</span>
+              <span className="w-2 h-2 rounded-full inline-block" aria-hidden style={{ background: '#BDC0C3' }}></span>
+              <span className="text-[11px] uppercase tracking-caps font-medium">To-do / Not started</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-yellow-400 inline-block" aria-hidden></span>
-              <span className="text-[11px] text-muted uppercase tracking-caps font-medium">In Progress</span>
+              <span className="w-2 h-2 rounded-full inline-block" aria-hidden style={{ background: '#FACC15' }}></span>
+              <span className="text-[11px] uppercase tracking-caps font-medium">In Progress</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-green-500 inline-block" aria-hidden></span>
-              <span className="text-[11px] text-muted uppercase tracking-caps font-medium">Complete</span>
+              <span className="w-2 h-2 rounded-full inline-block" aria-hidden style={{ background: '#34D399' }}></span>
+              <span className="text-[11px] uppercase tracking-caps font-medium">Complete</span>
             </div>
           </div>
             <ul className={canEdit ? "flex flex-wrap gap-3" : "space-y-2"}>
@@ -345,13 +344,13 @@ const canEdit = false; // Replace with new guard logic if needed
                 };
                 const isEditing = editTaskId === t.id;
                 return (
-                  <li key={t.id} className="relative flex flex-col justify-between gap-2 rounded bg-surface border border-border p-3 pr-10 flex-1 min-w-[280px] md:w-[calc(50%-0.75rem)] xl:w-[calc(33.333%-0.75rem)]">
+                  <li key={t.id} className="relative flex flex-col justify-between gap-2 rounded bg-card dark:bg-surface border border-border p-3 pr-10 flex-1 min-w-[280px] md:w-[calc(50%-0.75rem)] xl:w-[calc(33.333%-0.75rem)]">
                     <div className="min-w-0 flex flex-wrap items-center gap-2">
                       <div className="font-medium text-sm break-words flex-1" title={t.description}>
                         {t.description}
                       </div>
                     </div>
-                    <div className="text-tick text-muted flex gap-2 items-center mt-0.5">
+                    <div className="text-tick text-muted-foreground flex gap-2 items-center mt-0.5">
                       {/* Only leads/admins can assign tasks */}
                       <RequireLead>
                         <div className="flex items-center gap-1">
@@ -361,13 +360,13 @@ const canEdit = false; // Replace with new guard logic if needed
                             selectedId={t.assignee_id || null}
                             onSelect={(id) => handleAssign(t, id || "")}
                             triggerLabel={t.assignee_id ? (allPeople.find(p => p.id === t.assignee_id)?.name || 'Assignee') : 'Unassigned'}
-                            buttonClassName="px-2 py-0.5 rounded bg-surface/60 border border-border text-tick text-sm whitespace-nowrap"
+                            buttonClassName="px-2 py-0.5 rounded bg-surface/80 border border-border text-tick text-sm whitespace-nowrap"
                             maxItems={5}
                             disabled={isEditing}
                           />
                           {!isEditing && (
                             <button
-                              className="p-1 rounded hover:bg-white/10"
+                              className="p-1 rounded hover:bg-card/80"
                               title="Edit task"
                               onClick={() => setEditTaskId(t.id)}
                             >
@@ -387,7 +386,7 @@ const canEdit = false; // Replace with new guard logic if needed
                       </RequireLead>
                     </div>
                     {rankedEnabled && (
-                      <span className="absolute top-2 right-3 text-tick text-muted font-semibold">+{pts} · {ptsToHours(pts)}h</span>
+                      <span className="absolute top-2 right-3 text-tick text-muted font-semibold text-[12px] opacity-80">+{pts} · {ptsToHours(pts)}h</span>
                     )}
                     {/* Only leads/admins can edit task details and delete tasks */}
                     <RequireLead>
@@ -395,14 +394,14 @@ const canEdit = false; // Replace with new guard logic if needed
                         <div className="w-full flex flex-col gap-1 text-xs mt-2">
                           <div className="flex items-center justify-between w-full gap-2 flex-wrap">
                             <div className="flex w-full gap-1.5 flex-wrap">
-                                <button onClick={() => handleUpdate(t, "Todo")} className="inline-flex items-center gap-1 px-2.5 h-7 rounded border text-[11px] font-medium border-white/15 bg-white/5 hover:bg-white/10 transition justify-center flex-1 sm:flex-none sm:justify-start">
+                                <button onClick={() => handleUpdate(t, "Todo")} className="inline-flex items-center gap-1 px-2.5 h-7 rounded border text-[11px] font-medium border-border bg-card dark:bg-surface hover:bg-card/80 transition justify-center flex-1 sm:flex-none sm:justify-start">
                                   <span className="w-1.5 h-1.5 rounded-full bg-red-400"/> Todo
                                 </button>
-                                <button onClick={() => handleUpdate(t, "In Progress")} className="inline-flex items-center gap-1 px-2.5 h-7 rounded border text-[11px] font-medium border-white/15 bg-white/5 hover:bg-white/10 transition whitespace-nowrap justify-center flex-1 sm:flex-none sm:justify-start">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-yellow-300"/> In Progress
+                                <button onClick={() => handleUpdate(t, "In Progress")} className="inline-flex items-center gap-1 px-2.5 h-7 rounded border text-[11px] font-medium border-border bg-card dark:bg-surface hover:bg-card/80 transition whitespace-nowrap justify-center flex-1 sm:flex-none sm:justify-start">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-accent"/> In Progress
                                 </button>
-                                <button onClick={() => handleUpdate(t, "Complete")} className="inline-flex items-center gap-1 px-2.5 h-7 rounded border text-[11px] font-medium border-white/15 bg-white/5 hover:bg-white/10 transition justify-center flex-1 sm:flex-none sm:justify-start">
-                                  <span className="w-1.5 h-1.5 rounded-full bg-green-400"/> Complete
+                                <button onClick={() => handleUpdate(t, "Complete")} className="inline-flex items-center gap-1 px-2.5 h-7 rounded border text-[11px] font-medium border-border bg-card dark:bg-surface hover:bg-card/80 transition justify-center flex-1 sm:flex-none sm:justify-start">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-success"/> Complete
                                 </button>
                               </div>
                             <div />
@@ -411,7 +410,7 @@ const canEdit = false; // Replace with new guard logic if needed
                           <div className="flex items-center justify-between w-full gap-2 flex-wrap">
                             <div className="flex items-center gap-2 w-full">
                               <select
-                                className="h-7 px-2.5 rounded bg-surface/60 border border-border text-xs text-text dark-select flex-[2] w-full sm:flex-none sm:w-auto"
+                                className="h-7 px-2.5 rounded bg-surface/60 border border-border text-xs text-foreground dark-select flex-[2] w-full sm:flex-none sm:w-auto"
                                 value={t.ranked_points || ""}
                                 onChange={e=>updateTask(t.id, { ranked_points: e.target.value ? Number(e.target.value) : undefined }).then(reloadTasks)}
                               >
@@ -445,7 +444,7 @@ const canEdit = false; // Replace with new guard logic if needed
           {showAddTask && createPortal(
             <div className="fixed inset-0 z-[120] flex items-center justify-center">
               <div className="absolute inset-0 bg-black/55 backdrop-blur-sm" onClick={()=> setShowAddTask(false)} />
-              <div className="relative w-[95vw] max-w-md rounded-2xl border border-white/10 bg-bg/95 backdrop-blur-sm shadow-2xl p-5 text-white">
+              <div className="relative w-[95vw] max-w-md rounded-2xl border border-white/10 bg-card dark:bg-surface backdrop-blur-sm shadow-2xl p-5 text-foreground">
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-lg font-semibold">Add Task</h3>
                   <button onClick={()=> setShowAddTask(false)} aria-label="Close" className="h-8 w-8 inline-flex items-center justify-center rounded hover:bg-white/10">

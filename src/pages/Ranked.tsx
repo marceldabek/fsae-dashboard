@@ -163,19 +163,19 @@ export default function Ranked() {
           const promos = Math.floor((promoPct/100) * list.length);
           const demos = Math.floor((demoPct/100) * list.length);
           return (
-            <div key={level} className="form-section p-0">
+            <div key={level} className="form-section rounded-lg border border-border overflow-hidden p-0">
               <div className="px-3 py-2 flex items-center gap-2 border-b border-white/10 bg-white/5">
                 <img alt={level} src={rankIcon(level)} className="h-6 w-6 object-contain" />
                 <h2 className="font-semibold">{level}</h2>
                 <span className="ml-auto text-xs text-muted uppercase tracking-caps">{list.length} in pool</span>
               </div>
-      <table className="w-full text-[13px] sm:text-sm">
+              <table className="w-full text-[13px] sm:text-sm">
                 <thead className="text-xs text-muted uppercase tracking-caps border-b border-border/60">
                   <tr>
-        <th className="text-left px-2 py-2 w-6">#</th>
-        <th className="text-left px-2 py-2">Name</th>
-        <th className="text-right px-2 py-2 w-12">Pts</th>
-        <th className="text-right px-2 py-2 w-12">Δ</th>
+                    <th className="text-left px-2 py-2 w-6">#</th>
+                    <th className="text-left px-2 py-2">Name</th>
+                    <th className="text-right px-2 py-2 w-12">Pts</th>
+                    <th className="text-right px-2 py-2 w-12">Δ</th>
                   </tr>
                 </thead>
                 <tbody>

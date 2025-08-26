@@ -1,6 +1,17 @@
 <!doctype html>
 <html lang="en">
 <head>
+  <script>
+  (() => {
+    try {
+      const stored = localStorage.getItem("theme");
+      const prefers = window.matchMedia("(prefers-color-scheme: dark)").matches;
+      const theme = stored ?? (prefers ? "dark" : "light");
+      document.documentElement.classList.toggle("dark", theme === "dark");
+      document.documentElement.style.colorScheme = theme;
+    } catch {}
+  })();
+  </script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>UCONN FSAE</title>
@@ -14,12 +25,12 @@
   <meta name="apple-mobile-web-app-title" content="UCONN FSAE">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <meta name="theme-color" content="#06152e" />
-  <!-- Modern font: Inter -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <script type="module" crossorigin src="/fsae-dashboard/assets/index-BRFZUbbs.js"></script>
-  <link rel="stylesheet" crossorigin href="/fsae-dashboard/assets/index-YC67cbng.css">
+    <!-- Modern font: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script type="module" crossorigin src="/fsae-dashboard/assets/index-DOgIhJG7.js"></script>
+  <link rel="stylesheet" crossorigin href="/fsae-dashboard/assets/index-D1nDkuKx.css">
 </head>
 <body class="bg-uconn-blue text-uconn-text font-sans">
   <div id="root"></div>

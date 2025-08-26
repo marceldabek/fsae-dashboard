@@ -1,4 +1,4 @@
-import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
+import { Link, NavLink, Outlet, useLocation, useMatches } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { subscribeAdminRoleChanges } from "../admin";
 import { useRoles, RequireLead } from "../lib/roles";
@@ -8,10 +8,18 @@ import TeamLogo from "./TeamLogo";
 import { fetchRankedSettings, setRankedSettings } from "../lib/firestore";
 import { useRankedEnabled } from "../hooks/useRankedEnabled";
 
-export default function Layout() {
+import { ReactNode } from 'react';
+import { useTheme } from "@/hooks/useTheme";
+
+function Layout({ children }: { children?: ReactNode }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [rankedEnabled, updateRankedEnabled] = useRankedEnabled();
   const location = useLocation();
+  const matches = useMatches();
+  const fullBleedFromHandle = matches.some(m => (m.handle as any)?.fullBleed);
+  const isTimeline = location.pathname.startsWith('/timeline');
+  const fullBleed = fullBleedFromHandle || isTimeline;
+  const { theme, toggle } = useTheme();
 
   // Close menu on route change
   useEffect(() => {
@@ -32,10 +40,10 @@ export default function Layout() {
   // ...existing code...
 
   return (
-  <div className="min-h-[100dvh] bg-bg bg-app-gradient text-text">
+  <div className="min-h-[100dvh] bg-background bg-app-gradient text-foreground">
       {/* iOS PWA safe area top spacer to avoid visual gap under the status bar */}
-  <div style={{ height: 'env(safe-area-inset-top)' }} className="bg-black" />
-  <header className="sticky top-0 z-40 bg-bg/90 backdrop-blur border-b border-border">
+      <div style={{ height: 'env(safe-area-inset-top)' }} className="bg-black" />
+  <header className="sticky top-0 z-50 w-full bg-background/90 backdrop-blur border-b border-border">
         <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
           <Link to="/" className="flex items-center h-10">
             <TeamLogo className="h-8 w-auto" />
@@ -74,7 +82,7 @@ export default function Layout() {
         />
         {/* Panel */}
         <aside
-          className={`absolute right-0 top-0 h-full w-[18rem] max-w-[85vw] bg-bg/95 border-l border-border shadow-xl transition-transform duration-300 ease-out ${menuOpen ? "translate-x-0" : "translate-x-full"}`}
+          className={`absolute right-0 top-0 h-full w-[18rem] max-w-[85vw] bg-background/95 border-l border-border shadow-xl transition-transform duration-300 ease-out ${menuOpen ? "translate-x-0" : "translate-x-full"}`}
         >
           <div className="h-14 px-4 flex items-center justify-between border-b border-border/60">
             <span className="text-sm font-medium text-muted uppercase tracking-caps">Menu</span>
@@ -102,16 +110,71 @@ export default function Layout() {
             </RequireLead>
             <div className="my-3 border-t border-border/60" />
             <label className="flex items-center gap-2 px-3 py-2 text-sm select-none cursor-pointer">
-              <span className="text-muted uppercase tracking-caps">Ranked mode</span>
-              <span className="relative inline-block w-10 h-6 align-middle select-none ml-auto">
+              <span className="text-sm text-muted-foreground tracking-caps">Ranked mode</span>
+              {/* Toggle */}
+              <span className="relative inline-flex h-6 w-11 select-none ml-auto">
+                {/* hidden checkbox drives styles */}
                 <input
                   type="checkbox"
                   checked={rankedEnabled}
                   onChange={(e)=>updateRankedEnabled(e.target.checked)}
-                  className="peer absolute w-10 h-6 opacity-0 cursor-pointer z-10"
+                  className="peer sr-only"
                 />
-                <span className="block w-10 h-6 rounded-full transition-colors bg-surface border border-border peer-checked:bg-accent/70" />
-                <span className="absolute left-1 top-1 w-4 h-4 rounded-full bg-muted transition-transform duration-200 peer-checked:translate-x-4 peer-checked:bg-accent shadow" />
+
+                {/* track */}
+                <span
+                  className="
+                    pointer-events-none block h-6 w-11 rounded-full border border-border
+                    bg-black/15 dark:bg-white/15
+                    transition-colors
+                    peer-checked:bg-accent/70
+                    peer-focus-visible:ring-2 peer-focus-visible:ring-accent/60 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-background
+                  "
+                />
+
+                {/* knob (the moving dot) */}
+                <span
+                  className="
+                    pointer-events-none absolute left-0.5 top-0.5 h-5 w-5 rounded-full
+                    bg-white dark:bg-background shadow
+                    transition-transform
+                    peer-checked:translate-x-5
+                  "
+                />
+              </span>
+            </label>
+            <label className="flex items-center gap-2 px-3 py-2 text-sm select-none cursor-pointer">
+              <span className="text-sm text-muted-foreground tracking-caps">Dark mode</span>
+              {/* Toggle */}
+              <span className="relative inline-flex h-6 w-11 select-none ml-auto">
+                {/* hidden checkbox drives styles */}
+                <input
+                  type="checkbox"
+                  checked={theme === "dark"}
+                  onChange={toggle}
+                  className="peer sr-only"
+                />
+
+                {/* track */}
+                <span
+                  className="
+                    pointer-events-none block h-6 w-11 rounded-full border border-border
+                    bg-black/15 dark:bg-white/15
+                    transition-colors
+                    peer-checked:bg-accent/70
+                    peer-focus-visible:ring-2 peer-focus-visible:ring-accent/60 peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-background
+                  "
+                />
+
+                {/* knob (the moving dot) */}
+                <span
+                  className="
+                    pointer-events-none absolute left-0.5 top-0.5 h-5 w-5 rounded-full
+                    bg-white dark:bg-background shadow
+                    transition-transform
+                    peer-checked:translate-x-5
+                  "
+                />
               </span>
             </label>
             {useAuth() ? (
@@ -129,11 +192,21 @@ export default function Layout() {
           </div>
         </aside>
       </div>
-    <main className="max-w-6xl mx-auto px-4 py-6"><Outlet /></main>
-  <footer className="py-6 text-center text-xs text-muted uppercase tracking-caps">© UConn FSAE</footer>
+      <main
+        className={
+          fullBleed
+            ? 'w-full h-[calc(100vh-4rem)] p-0 m-0 overflow-hidden'
+            : 'max-w-6xl mx-auto px-4 py-6'
+        }
+      >
+        {fullBleed ? children ?? <Outlet /> : <Outlet />}
+      </main>
+      <footer className="py-6 text-center text-xs text-muted uppercase tracking-caps">© UConn FSAE</footer>
     </div>
   );
 }
+
+export default Layout;
 
 // Slide-over menu link with subtle hover animation
 function MenuLink({ to, label }: { to: string; label: string }) {

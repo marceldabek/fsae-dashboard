@@ -39,7 +39,7 @@ export default function Dashboard() {
 
       {/* Leaderboard section */}
       <div className="mb-8">
-        <div className="rounded-2xl bg-white/5 border border-white/10 p-4">
+  <div className="rounded-2xl bg-card dark:bg-surface border border-white/10 p-4">
           <h2 className="text-xl font-bold mb-2">Leaderboard</h2>
           <div className="overflow-x-auto">
             <table className="min-w-[320px] w-full text-sm">

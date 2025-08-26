@@ -105,7 +105,7 @@ export default function SwipeCarousel({
               <button
                 key={i}
                 aria-label={`Show slide ${i + 1}`}
-                className={`w-2.5 h-2.5 rounded-full transition ${index === i ? "bg-white" : "bg-white/30 hover:bg-white/60"}`}
+                className={`w-2.5 h-2.5 rounded-full border border-border transition ${index === i ? "bg-foreground" : "bg-muted-foreground/40 hover:bg-foreground/70"}`}
                 onClick={() => setIndex(i)}
               />
             ))}
