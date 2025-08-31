@@ -295,6 +295,22 @@ export async function updatePerson(id: string, patch: Partial<Person>) {
   bustCache(["people"]);
 }
 
+export async function deletePerson(id: string) {
+  // Best-effort: delete attendance and logs for this person first
+  try {
+    const qAttendance = query(collection(db, "attendance"), where("person_id", "==", id));
+    const attendanceSnap = await getDocs(qAttendance);
+    await Promise.all(attendanceSnap.docs.map(d => deleteDoc(doc(db, "attendance", d.id))));
+  } catch {}
+  try {
+    const qLogs = query(collection(db, "logs"), where("person_id", "==", id));
+    const logsSnap = await getDocs(qLogs);
+    await Promise.all(logsSnap.docs.map(d => deleteDoc(doc(db, "logs", d.id))));
+  } catch {}
+  await deleteDoc(doc(db, "people", id));
+  bustCache(["people"]);
+}
+
 export async function updateProject(id: string, patch: Partial<Project>) {
   const ref = doc(db, "projects", id);
   await updateDoc(ref, pruneUndefined(patch as any));

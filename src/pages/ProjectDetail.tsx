@@ -231,7 +231,7 @@ const canEdit = false; // Replace with new guard logic if needed
                </span>
              </button>
              {showDescription && (
-               <div className="rounded-lg border border-border bg-card dark:bg-surface p-3 text-[13px] text-muted-foreground mb-0" style={{minHeight: '32px'}}>
+               <div className="rounded-lg border border-border bg-card dark:bg-surface p-3 text-xs text-muted-foreground mb-0" style={{minHeight: '32px'}}>
                  {project.description ? project.description : <span className="text-muted-foreground/40">No description provided.</span>}
                </div>
              )}
@@ -382,29 +382,34 @@ const canEdit = false; // Replace with new guard logic if needed
                       </div>
                     </div>
                     <div className="text-tick text-muted-foreground flex gap-2 items-center mt-0.5">
-                      {/* Only leads/admins can assign tasks */}
+                      {/* Show assignee name to all users */}
+                      {!isEditing && (
+                        <span className="text-tiny">
+                          {assignee ? assignee.name : 'Unassigned'}
+                        </span>
+                      )}
+                      {/* Only leads/admins can edit tasks */}
                       <RequireLead>
-                        <div className="flex items-center gap-1">
-                          <PersonSelectPopover
-                            mode="single"
-                            people={allPeople}
-                            selectedId={t.assignee_id || null}
-                            onSelect={(id) => handleAssign(t, id || "")}
-                            triggerLabel={t.assignee_id ? (allPeople.find(p => p.id === t.assignee_id)?.name || 'Assignee') : 'Unassigned'}
-                            buttonClassName="px-2 py-0.5 rounded bg-surface/80 border border-border text-tick text-sm whitespace-nowrap"
-                            maxItems={5}
-                            disabled={isEditing}
-                          />
-                          {!isEditing && (
-                            <button
-                              className="p-1 rounded hover:bg-card/80"
-                              title="Edit task"
-                              onClick={() => setEditTaskId(t.id)}
-                            >
-                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
-                            </button>
-                          )}
-                          {isEditing && (
+                        {!isEditing && (
+                          <button
+                            className="p-1 rounded hover:bg-card/80"
+                            title="Edit task"
+                            onClick={() => setEditTaskId(t.id)}
+                          >
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
+                          </button>
+                        )}
+                        {isEditing && (
+                          <div className="flex items-center gap-1">
+                            <PersonSelectPopover
+                              mode="single"
+                              people={allPeople}
+                              selectedId={t.assignee_id || null}
+                              onSelect={(id) => handleAssign(t, id || "")}
+                              triggerLabel={t.assignee_id ? (allPeople.find(p => p.id === t.assignee_id)?.name || 'Assignee') : 'Unassigned'}
+                              buttonClassName="px-2 py-0.5 rounded bg-surface/80 border border-border text-tick text-sm whitespace-nowrap"
+                              maxItems={5}
+                            />
                             <button
                               className="p-1 rounded hover:bg-white/10"
                               title="Close edit"
@@ -412,8 +417,8 @@ const canEdit = false; // Replace with new guard logic if needed
                             >
                               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                             </button>
-                          )}
-                        </div>
+                          </div>
+                        )}
                       </RequireLead>
                     </div>
                     {rankedEnabled && (

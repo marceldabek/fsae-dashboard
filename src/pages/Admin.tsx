@@ -21,6 +21,7 @@ import {
   addAttendance,
   fetchRecentLogs,
   setRankedSettings as setRankedSettingsFs,
+  deletePerson,
 } from "../lib/firestore";
 import { functions } from "../firebase";
 import { httpsCallable } from "firebase/functions";
@@ -300,7 +301,7 @@ export default function Admin() {
         {/* Tab bar without filled background; keeps underline across full width */}
         {toast && (
           <div
-            className="fixed bottom-4 left-4 z-50 px-4 py-2 rounded shadow-lg animate-fade-in bg-accent/90 border border-accent-weak/60 font-medium text-[13px] leading-snug text-bg"
+            className="fixed bottom-4 left-4 z-50 px-4 py-2 rounded shadow-lg animate-fade-in bg-accent/90 border border-accent-weak/60 font-medium text-[13px] leading-snug text-foreground"
           >
             {toast}
           </div>
@@ -399,6 +400,15 @@ export default function Admin() {
                         className={`w-full px-2.5 py-1.5 rounded border border-border text-sm text-center ${attendeeIds.length ? 'bg-overlay-6' : 'bg-overlay-6 opacity-50 cursor-not-allowed'}`}
                         disabled={attendeeIds.length === 0}
                         onClick={async()=>{
+                          console.log('Role check:', { role, roleReady });
+                          if (!roleReady) {
+                            showToast('Loading user permissions...');
+                            return;
+                          }
+                          if (role !== 'admin') {
+                            showToast(`Only admins can mark attendance. Your role: ${role || 'none'}`);
+                            return;
+                          }
                           if(!attendeeIds || attendeeIds.length === 0) { showToast('Select at least one person'); return; }
                           const date = attendanceDate || new Date().toISOString().slice(0,10);
                           try {
@@ -412,6 +422,7 @@ export default function Admin() {
                               if (r.status === 'fulfilled') successNames.push(name);
                               else {
                                 const err: any = r.reason;
+                                console.error(`Attendance failed for ${name}:`, err);
                                 if (err?.code === 'DUPLICATE_ATTENDANCE' || err?.message === 'DUPLICATE_ATTENDANCE') duplicateNames.push(name);
                                 else errorNames.push(name);
                               }
@@ -440,7 +451,7 @@ export default function Admin() {
                     <input className="px-3 py-2 rounded text-sm w-44 sm:w-56 bg-surface text-foreground border border-border placeholder:text-muted-foreground" placeholder="Search people…" value={peopleSearch} onChange={(e)=>setPeopleSearch(e.target.value)} />
                   </div>
                 </div>
-                <div className="space-y-4">
+                <div className="space-y-2">
                   {people
                     .filter(p=>{
                       const q = peopleSearch.toLowerCase();
@@ -455,7 +466,7 @@ export default function Admin() {
                           {/* Constrain role text so long roles don't widen card */}
                           <span className="text-xs text-muted-foreground ml-2 max-w-[8rem] md:max-w-[10rem] min-w-0 truncate uppercase tracking-caps">{p.role || p.year || ""}</span>
                         </summary>
-                        <div className="px-3 pb-3 mt-1 grid sm:grid-cols-2 gap-4">
+                        <div className="px-2 pb-2 mt-0.5 grid sm:grid-cols-2 gap-2">
                           <input className="px-3 py-2 rounded bg-surface text-foreground border border-border placeholder:text-muted-foreground" value={p.name} onChange={(e) => setPeople((prev) => prev.map((x) => (x.id === p.id ? { ...x, name: e.target.value } : x)))} />
                           <select className="px-3 py-2 rounded dark-select bg-surface text-foreground border border-border" value={p.year || "Senior"} onChange={(e) => setPeople((prev) => prev.map((x) => (x.id === p.id ? { ...x, year: e.target.value } : x)))}>
                             <option>Freshman</option>
@@ -467,10 +478,10 @@ export default function Admin() {
                           <input className="px-3 py-2 rounded bg-surface text-foreground border border-border placeholder:text-muted-foreground" placeholder="Role" value={p.role || ""} onChange={(e) => setPeople((prev) => prev.map((x) => (x.id === p.id ? { ...x, role: e.target.value } : x)))} />
                           <input className="px-3 py-2 rounded bg-surface text-foreground border border-border placeholder:text-muted-foreground" placeholder="Discord" value={p.discord || ""} onChange={(e) => setPeople((prev) => prev.map((x) => (x.id === p.id ? { ...x, discord: e.target.value } : x)))} />
                           <input className="px-3 py-2 rounded sm:col-span-2 bg-surface text-foreground border border-border placeholder:text-muted-foreground" placeholder="Skills (comma-separated)" value={(p.skills || []).join(", ")} onChange={(e) => setPeople((prev) => prev.map((x) => x.id === p.id ? { ...x, skills: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) } : x))} />
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:col-span-2 items-end">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:col-span-2 items-end">
                             <div>
                               <label className="text-xs text-muted uppercase tracking-caps">Rank</label>
-                              <select className="mt-1 px-3 py-2 rounded w-full dark-select" value={(p as any).rank || "Bronze"} onChange={(e)=> setPeople(prev=>prev.map(x=>x.id===p.id?{...x, rank: e.target.value as any}:x))}>
+                              <select className="mt-1 px-3 py-2 rounded w-full dark-select bg-surface text-foreground border border-border" value={(p as any).rank || "Bronze"} onChange={(e)=> setPeople(prev=>prev.map(x=>x.id===p.id?{...x, rank: e.target.value as any}:x))}>
                                 <option>Bronze</option>
                                 <option>Silver</option>
                                 <option>Gold</option>
@@ -493,7 +504,16 @@ export default function Admin() {
                               </label>
                             </div>
                           </div>
-                          <button className="px-3 py-2 rounded bg-accent text-black border border-accent hover:bg-accent/90 sm:col-span-2" onClick={async () => { await updatePerson(p.id, p as any); showToast("Person updated"); }}>Save Changes</button>
+                          <div className="flex gap-2 sm:col-span-2">
+                            <button className="flex-1 px-3 py-2 rounded bg-accent text-foreground border border-accent hover:bg-accent/90" onClick={async () => { await updatePerson(p.id, p as any); showToast("Person updated"); }}>Save Changes</button>
+                            <button className="px-3 py-2 rounded bg-danger text-white border border-danger hover:bg-danger/90" onClick={async () => { 
+                              if (confirm(`Are you sure you want to delete ${p.name}? This will also delete all their attendance records and logs.`)) {
+                                await deletePerson(p.id); 
+                                setPeople(prev => prev.filter(x => x.id !== p.id));
+                                showToast("Person deleted"); 
+                              }
+                            }}>Delete</button>
+                          </div>
                         </div>
                       </details>
                     ))}
