@@ -1,7 +1,7 @@
 
 import { collection, getDocs, query, where, addDoc, updateDoc, deleteDoc, doc, setDoc, getDoc, increment } from "firebase/firestore";
 import { db } from "../firebase";
-import type { Person, Project, Task, RankedSettings, RankLevel, Attendance, LogEvent, DailyAnalytics } from "../types";
+import type { Person, Project, Task, RankedSettings, RankLevel, Attendance, LogEvent, DailyAnalytics, ProjectDependency } from "../types";
 import { isCurrentUserAdmin } from "../auth";
 
 // ---- Simple client-side cache with TTL ----
@@ -104,9 +104,21 @@ export async function fetchProjects(): Promise<Project[]> {
   const cached = readCache<Project[]>("projects");
   if (cached) return cached;
   const snap = await getDocs(collection(db, "projects"));
-  const data = snap.docs.map(d => d.data() as Project);
+  const data = snap.docs.map(d => {
+    const row = d.data() as Project;
+    return { ...row, id: row.id || d.id } as Project;
+  });
   writeCache("projects", data);
   return data;
+}
+
+// Lightweight deps fetch (no cache by default; small collection expected)
+export async function fetchProjectDependencies(): Promise<ProjectDependency[]> {
+  const snap = await getDocs(collection(db, "project_deps"));
+  return snap.docs.map(d => {
+    const row = d.data() as ProjectDependency;
+    return { ...row, id: row?.id || d.id } as ProjectDependency;
+  });
 }
 
 export async function fetchTasks(): Promise<Task[]> {
@@ -315,6 +327,17 @@ export async function updateProject(id: string, patch: Partial<Project>) {
   const ref = doc(db, "projects", id);
   await updateDoc(ref, pruneUndefined(patch as any));
   bustCache(["projects"]);
+}
+
+// --- Project dependency CRUD ---
+export async function addProjectDependency(dep: Omit<ProjectDependency, "id">) {
+  const ref = await addDoc(collection(db, "project_deps"), pruneUndefined(dep as any));
+  await updateDoc(ref, { id: ref.id });
+  return ref.id;
+}
+
+export async function deleteProjectDependency(id: string) {
+  await deleteDoc(doc(db, "project_deps", id));
 }
 
 // Soft archive a project (sets archived: true). UI should hide archived projects unless explicitly requested.

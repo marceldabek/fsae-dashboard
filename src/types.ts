@@ -41,6 +41,13 @@ export type Task = {
   ranked_points?: number; // points can be any positive integer based on admin-defined scale
 };
 
+// Optional dependency between projects (stored in Firestore: project_deps)
+export type ProjectDependency = {
+  id: string;
+  from_id: string; // prerequisite project (edge starts here)
+  to_id: string;   // dependent project (edge ends here)
+};
+
 // Settings for Ranked mode (stored in Firestore: settings/ranked)
 export type RankedSettings = {
   enabled?: boolean; // master toggle
