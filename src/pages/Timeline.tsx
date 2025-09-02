@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { listenAuth, isCurrentUserAdmin } from "../auth";
-import { fetchProjects, fetchTasks, fetchProjectDependencies, addProjectDependency, deleteProjectDependency, fetchPeople } from "../lib/firestore";
+import { fetchProjects, fetchTasks, fetchProjectDependencies, addProjectDependency, deleteProjectDependency, fetchPeople, updateProject } from "../lib/firestore";
 import type { Project as AppProject, Task, ProjectDependency } from "../types";
 import { useRoles } from "../lib/roles";
 import { Info } from "lucide-react";
@@ -225,7 +225,7 @@ function useProjects() {
     }
   }
 
-  return { projects, dependencies, setDependencies, loading, error, createDependency, people, refreshAll };
+  return { projects, setProjects, dependencies, setDependencies, loading, error, createDependency, people, refreshAll };
 }
 
 // =============================
@@ -432,16 +432,19 @@ function InfoPopover({ canEdit }: { canEdit: boolean }){
   );
 }
 
-function ProjectBlock({ p, rect, selected, onClick, onDoubleClick }:{ p: Project; rect: LayoutItem; selected: boolean; onClick: ()=>void; onDoubleClick: ()=>void; }){
+function ProjectBlock({ p, rect, selected, onClick, onDoubleClick, onMouseDown, onMouseUp, onMouseLeave, displayDueDateIso, elevate }:{ p: Project; rect: LayoutItem; selected: boolean; onClick: ()=>void; onDoubleClick: ()=>void; onMouseDown?: (e: React.MouseEvent<HTMLDivElement>)=>void; onMouseUp?: (e: React.MouseEvent<HTMLDivElement>)=>void; onMouseLeave?: (e: React.MouseEvent<HTMLDivElement>)=>void; displayDueDateIso?: string; elevate?: boolean; }){
   const color = STATUS_COLOR[p.status];
-  const due = isoToDate(p.dueDate);
+  const due = isoToDate(displayDueDateIso || p.dueDate);
   return (
     <div
       role="button"
       onClick={onClick}
       onDoubleClick={onDoubleClick}
-      className={`absolute z-10 rounded shadow-sm border border-black/50 dark:border-white/40 overflow-hidden text-black dark:text-white hover:scale-[1.02] transition-transform ${selected ? "ring-2 ring-[hsl(var(--accent))]" : ""}`}
-      style={{ left: rect.x, top: rect.y, width: rect.w, height: rect.h, background: color }}
+  onMouseDown={onMouseDown}
+  onMouseUp={onMouseUp}
+  onMouseLeave={onMouseLeave}
+  className={`absolute rounded shadow-sm border border-black/50 dark:border-white/40 overflow-hidden text-black dark:text-white hover:scale-[1.02] transition-transform ${selected ? "ring-2 ring-[hsl(var(--accent))]" : ""}`}
+  style={{ left: rect.x, top: rect.y, width: rect.w, height: rect.h, background: color, zIndex: elevate ? 50 : 10 }}
       title={`${p.name} - due ${fmtShort(due)}`}
     >
       {/* top-right date */}
@@ -471,7 +474,7 @@ const LINK_ARMED = "__ARMED__"; // sentinel meaning: user clicked "Link" and is 
 export default function TimelinePageBlue() {
   const { role } = useRoles();
   const canEdit = role === 'admin' || role === 'lead';
-  const { projects, dependencies, setDependencies: _setDependencies, loading, error, createDependency, people, refreshAll } = useProjects();
+  const { projects, setProjects, dependencies, setDependencies: _setDependencies, loading, error, createDependency, people, refreshAll } = useProjects();
   const [toast, setToast] = useState<string>("");
   const showToast = (msg: string) => { setToast(msg); window.setTimeout(()=>setToast(""), 2500); };
   const [showCreateProject, setShowCreateProject] = useState(false);
@@ -520,6 +523,7 @@ export default function TimelinePageBlue() {
   // Month view sizing
   // Month view dynamic sizing using ResizeObserver
   const [monthHostWidth, setMonthHostWidth] = useState<number>(0);
+  const monthScrollRef = useRef<HTMLDivElement | null>(null);
   const daysInSelectedMonth = view.kind === "month" ? months[view.monthIdx].days : 0;
   const baseDayCellW = 56;
   const dayCellW = view.kind === "month" && monthHostWidth ? Math.max(baseDayCellW, Math.floor(monthHostWidth / daysInSelectedMonth)) : baseDayCellW;
@@ -552,17 +556,39 @@ export default function TimelinePageBlue() {
   async function handleProjectClick(id: string) {
     if (linkActive && canEdit) {
       if (linkFrom && linkFrom !== LINK_ARMED && id !== linkFrom) {
-        // Toggle link/unlink for linkFrom → id
-        const s = projById.get(linkFrom)?.name || linkFrom;
-        const t = projById.get(id)?.name || id;
-        const existing = (dependencies || []).find(e => e.fromId === linkFrom && e.toId === id);
-        if (existing) {
-          try { if (existing.id) await deleteProjectDependency(existing.id); } catch {}
-          _setDependencies?.(prev => (prev || []).filter(d => !(d.fromId === linkFrom && d.toId === id)));
-          showToast(`Unlinked ${s} — ${t}`);
+        // Always link from earlier due date to later due date (forward-only)
+        const a = projById.get(linkFrom);
+        const b = projById.get(id);
+        if (!a || !b) { setLinkFrom(LINK_ARMED); return; }
+        const ad = isoToDate(a.dueDate);
+        const bd = isoToDate(b.dueDate);
+        const aYMD = `${ad.getFullYear()}-${String(ad.getMonth()+1).padStart(2,'0')}-${String(ad.getDate()).padStart(2,'0')}`;
+        const bYMD = `${bd.getFullYear()}-${String(bd.getMonth()+1).padStart(2,'0')}-${String(bd.getDate()).padStart(2,'0')}`;
+        if (aYMD === bYMD) {
+          showToast('Links must move forward (different dates).');
+          setLinkFrom(LINK_ARMED); setSelectedId(id); return;
+        }
+        const earlier = ad < bd ? a : b;
+        const later = ad < bd ? b : a;
+        const fromId = earlier.id;
+        const toId = later.id;
+        const sName = earlier.name; const tName = later.name;
+        const deps = (dependencies || []);
+        const forward = deps.find(e => e.fromId === fromId && e.toId === toId);
+        const reverse = deps.find(e => e.fromId === toId && e.toId === fromId);
+        if (forward) {
+          // Toggle off existing forward link
+          try { if (forward.id) await deleteProjectDependency(forward.id); } catch {}
+          _setDependencies?.(prev => (prev || []).filter(d => !(d.fromId === fromId && d.toId === toId)));
+          showToast(`Unlinked ${sName} — ${tName}`);
         } else {
-          await createDependency(linkFrom, id);
-          showToast(`Linked ${s} → ${t}`);
+          // If reverse exists, convert it: delete reverse, then create forward
+          if (reverse) {
+            try { if (reverse.id) await deleteProjectDependency(reverse.id); } catch {}
+            _setDependencies?.(prev => (prev || []).filter(d => !(d.fromId === toId && d.toId === fromId)));
+          }
+          await createDependency(fromId, toId);
+          showToast(`Linked ${sName} → ${tName}`);
         }
         setSelectedId(id);
         // remain in linking mode but reset to choose a new source next
@@ -592,6 +618,120 @@ export default function TimelinePageBlue() {
 
   function handleProjectDoubleClick(id: string) {
     window.location.assign(`/project/${id}`);
+  }
+
+  // ==== Long-press drag-to-adjust due date ====
+  const holdTimer = useRef<number | null>(null);
+  const longPressActive = useRef<boolean>(false);
+  const dragState = useRef<{ id: string; startClientX: number; startIso: string } | null>(null);
+  const [dragPreview, setDragPreview] = useState<{ id: string; iso: string } | null>(null);
+  const justDragged = useRef<boolean>(false);
+
+  function clearHoldTimer() {
+    if (holdTimer.current) { window.clearTimeout(holdTimer.current); holdTimer.current = null; }
+  }
+
+  function ymd(d: Date) {
+    const y = d.getFullYear();
+    const m = String(d.getMonth()+1).padStart(2, '0');
+    const da = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${da}`;
+  }
+
+  function mapClientXToDate(clientX: number): Date {
+    // Map depending on view
+    if (view.kind === 'year') {
+      const scroller = yearScrollRef.current;
+      if (!scroller) return new Date(isoToDate(dragState.current!.startIso));
+      const rect = scroller.getBoundingClientRect();
+      const xInContent = (clientX - rect.left) + scroller.scrollLeft;
+      const idx = Math.max(0, Math.min(months.length - 1, Math.floor(xInContent / monthWidth)));
+      const month = months[idx];
+      const xWithin = xInContent - idx * monthWidth;
+      const dayW = monthWidth / month.days;
+      const dayIdx = Math.max(0, Math.min(month.days - 1, Math.round(xWithin / dayW)));
+      return new Date(month.year, month.month, dayIdx + 1);
+    } else {
+      const scroller = monthScrollRef.current;
+      const idx = view.monthIdx;
+      const month = months[idx];
+      if (!scroller) return new Date(month.year, month.month, new Date(isoToDate(dragState.current!.startIso)).getDate());
+      const rect = scroller.getBoundingClientRect();
+      const xInContent = (clientX - rect.left) + scroller.scrollLeft;
+      const dayIdx = Math.max(0, Math.min(month.days - 1, Math.round(xInContent / dayCellW)));
+      return new Date(month.year, month.month, dayIdx + 1);
+    }
+  }
+
+  function onBlockMouseDown(e: React.MouseEvent<HTMLDivElement>, id: string) {
+    if (!canEdit) return;
+    if (linkActive) return; // don't conflict with linking mode
+    clearHoldTimer();
+    const p = projById.get(id);
+    if (!p) return;
+    const startIso = p.dueDate;
+    longPressActive.current = false;
+    dragState.current = { id, startClientX: e.clientX, startIso };
+    holdTimer.current = window.setTimeout(() => {
+      longPressActive.current = true;
+      setDragPreview({ id, iso: startIso });
+      // add listeners
+      window.addEventListener('mousemove', onGlobalMouseMove);
+      window.addEventListener('mouseup', onGlobalMouseUp, { once: true });
+      // prevent text selection while dragging
+      document.body.style.userSelect = 'none';
+      document.body.style.cursor = 'ew-resize';
+    }, 350);
+  }
+
+  function onBlockMouseUpOrLeave() {
+    // If long-press hasn't activated yet, cancel the timer
+    if (!longPressActive.current) {
+      clearHoldTimer();
+      dragState.current = null;
+    }
+  }
+
+  function onGlobalMouseMove(e: MouseEvent) {
+    if (!longPressActive.current || !dragState.current) return;
+    const d = mapClientXToDate(e.clientX);
+    const iso = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())).toISOString();
+    setDragPreview(prev => prev && prev.id === dragState.current!.id ? { id: prev.id, iso } : { id: dragState.current!.id, iso });
+  }
+
+  async function onGlobalMouseUp(e: MouseEvent) {
+    clearHoldTimer();
+    const wasDragging = longPressActive.current && !!dragState.current;
+    longPressActive.current = false;
+    const state = dragState.current; dragState.current = null;
+    // restore selection
+    document.body.style.userSelect = '';
+    document.body.style.cursor = '';
+    window.removeEventListener('mousemove', onGlobalMouseMove);
+    if (!state) { setDragPreview(null); return; }
+    if (!wasDragging) { setDragPreview(null); return; }
+    justDragged.current = true; window.setTimeout(()=>{ justDragged.current = false; }, 250);
+    const p = projById.get(state.id);
+    setDragPreview(null);
+    if (!p) return;
+    const newDate = mapClientXToDate(e.clientX);
+    const oldYmd = ymd(isoToDate(p.dueDate));
+    const newY = ymd(newDate);
+    if (newY === oldYmd) return; // no change
+    // Persist to Firestore as YYYY-MM-DD
+    try {
+      await updateProject(state.id, { due_date: newY } as any);
+      // optimistic update in UI
+      setProjects?.(prev => {
+        if (!prev) return prev;
+        return prev.map(pr => pr.id === state.id ? { ...pr, dueDate: new Date(Date.UTC(newDate.getFullYear(), newDate.getMonth(), newDate.getDate())).toISOString() } : pr);
+      });
+      showToast(`Due date moved to ${newY}`);
+      // Trigger a refresh to recompute layout and statuses
+      setTimeout(() => { refreshAll().catch(()=>{}); }, 50);
+    } catch {
+      showToast('Failed to update due date');
+    }
   }
 
   if (error) {
@@ -674,15 +814,34 @@ export default function TimelinePageBlue() {
 
             {/* Project blocks */}
             {(projects || []).map(p => {
-              const rect = layout.items.get(p.id); if (!rect) return null;
+              let rect = layout.items.get(p.id); if (!rect) return null;
+              // If dragging this block, override its x-position to follow the mouse-mapped date
+              if (dragPreview?.id === p.id) {
+                try {
+                  const d = isoToDate(dragPreview.iso);
+                  const mIdx = months.findIndex(m => d.getFullYear() === m.year && d.getMonth() === m.month);
+                  if (mIdx !== -1) {
+                    const month = months[mIdx];
+                    const dayWidth = monthWidth / month.days;
+                    const xMonthStart = monthWidth * mIdx;
+                    const xNew = xMonthStart + dayWidth * (d.getDate() - 1) + Math.max(0, (dayWidth - rect.w) / 2);
+                    rect = { ...rect, x: xNew };
+                  }
+                } catch {}
+              }
               return (
                 <ProjectBlock
                   key={p.id}
                   p={p}
                   rect={rect}
                   selected={selectedId === p.id}
-                  onClick={() => handleProjectClick(p.id)}
+                  onClick={() => { if (justDragged.current) return; handleProjectClick(p.id); }}
                   onDoubleClick={() => handleProjectDoubleClick(p.id)}
+                  onMouseDown={(e)=>onBlockMouseDown(e, p.id)}
+                  onMouseUp={onBlockMouseUpOrLeave}
+                  onMouseLeave={onBlockMouseUpOrLeave}
+                  displayDueDateIso={dragPreview?.id === p.id ? dragPreview.iso : undefined}
+                  elevate={selectedId === p.id || dragPreview?.id === p.id}
                 />
               );
             })}
@@ -708,6 +867,7 @@ export default function TimelinePageBlue() {
       {view.kind === "month" && (
         <div className="relative overflow-x-auto overflow-y-hidden flex-1" ref={(el) => {
           if (!el) return;
+          monthScrollRef.current = el;
           // Observe width changes to stretch days
           const ro = new ResizeObserver(entries => {
             for (const e of entries) {
@@ -752,10 +912,30 @@ export default function TimelinePageBlue() {
 
             {/* Month projects */}
             {filteredProjectsThisMonth.map((p) => {
-              const rect = monthItemsMap.get(p.id);
+              let rect = monthItemsMap.get(p.id);
               if (!rect) return null;
+              if (dragPreview?.id === p.id) {
+                try {
+                  const d = isoToDate(dragPreview.iso);
+                  const day = d.getDate();
+                  const xNew = (day - 1) * dayCellW + (dayCellW - rect.w) / 2;
+                  rect = { ...rect, x: xNew };
+                } catch {}
+              }
               return (
-                <ProjectBlock key={p.id} p={p} rect={rect} selected={selectedId === p.id} onClick={() => handleProjectClick(p.id)} onDoubleClick={() => handleProjectDoubleClick(p.id)} />
+                <ProjectBlock
+                  key={p.id}
+                  p={p}
+                  rect={rect}
+                  selected={selectedId === p.id}
+                  onClick={() => { if (justDragged.current) return; handleProjectClick(p.id); }}
+                  onDoubleClick={() => handleProjectDoubleClick(p.id)}
+                  onMouseDown={(e)=>onBlockMouseDown(e, p.id)}
+                  onMouseUp={onBlockMouseUpOrLeave}
+                  onMouseLeave={onBlockMouseUpOrLeave}
+                  displayDueDateIso={dragPreview?.id === p.id ? dragPreview.iso : undefined}
+                  elevate={selectedId === p.id || dragPreview?.id === p.id}
+                />
               );
             })}
 
