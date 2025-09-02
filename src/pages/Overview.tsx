@@ -1,16 +1,16 @@
 
 import { useEffect, useMemo, useState, useRef } from "react";
-import { fetchPeople, fetchProjects, fetchTasks, fetchAttendance, addProject } from "../lib/firestore";
-import type { Person, Project, Task, Attendance } from "../types";
+import { fetchPeople, fetchProjects, fetchTasks, fetchAttendance, fetchProjectDependencies } from "../lib/firestore";
+import type { Person, Project, Task, Attendance, ProjectDependency } from "../types";
 import { useAuth } from "../hooks/useAuth";
 import ProjectCard from "../components/ProjectCard";
-import PersonSelectPopover from "../components/PersonSelectPopover";
 import TrophyIcon from "../components/TrophyIcon";
 import ProgressBar from "../components/ProgressBar";
 import SwipeCarousel from "../components/SwipeCarousel";
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianGrid, Area } from "recharts";
 import AttendanceCard from "../components/AttendanceCard";
 import { RequireLead } from "../lib/roles";
+import ProjectCreateModal from "../components/ProjectCreateModal";
 
 function StatCard({ label, value }: { label: string; value: string | number }) {
   return (
@@ -27,24 +27,15 @@ export default function Overview() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [attendance, setAttendance] = useState<Attendance[]>([]);
+  const [dependencies, setDependencies] = useState<ProjectDependency[]>([]);
   // Subsystem multi-select with search
   const [selectedSubsystems, setSelectedSubsystems] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState<"subsystem" | "name" | "due" | "progress">("name");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [showSubsystemMenu, setShowSubsystemMenu] = useState(false);
   const [showSortMenu, setShowSortMenu] = useState(false);
-  // Project create overlay state
+  // Project create overlay state (moved to reusable modal)
   const [showCreateProject, setShowCreateProject] = useState(false);
-  const [prName, setPrName] = useState("");
-  const [prOwners, setPrOwners] = useState<string[]>([]);
-  const [prDesign, setPrDesign] = useState("");
-  const [prDesc, setPrDesc] = useState("");
-  const [prDue, setPrDue] = useState("");
-  const [prSubsystem, setPrSubsystem] = useState("");
-  const [savingProject, setSavingProject] = useState(false);
-  function toggleOwner(id: string) {
-    setPrOwners(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
-  }
   // Search bar state
   const [projectSearch, setProjectSearch] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -52,13 +43,14 @@ export default function Overview() {
 
   useEffect(() => {
     (async () => {
-      const [pe, pr, ta, at] = await Promise.all([
+      const [pe, pr, ta, at, deps] = await Promise.all([
         fetchPeople(),
         fetchProjects(),
         fetchTasks(),
         fetchAttendance(),
+        fetchProjectDependencies(),
       ]);
-      setPeople(pe); setProjects(pr); setTasks(ta); setAttendance(at);
+      setPeople(pe); setProjects(pr); setTasks(ta); setAttendance(at); setDependencies(deps);
     })();
   }, []);
 
@@ -150,26 +142,51 @@ export default function Overview() {
   // Only consider non-archived (open) projects for the Overview lists/filters
   const openProjects = useMemo(() => projects.filter(p => !(p as any).archived), [projects]);
 
+  // Determine blocked projects (grey), using dependencies and completion state
+  const blockedProjectIds = useMemo(() => {
+    if (!dependencies?.length) return new Set<string>();
+    const incoming = new Map<string, string[]>();
+    for (const d of dependencies) {
+      if (!d.from_id || !d.to_id) continue;
+      if (!incoming.has(d.to_id)) incoming.set(d.to_id, []);
+      incoming.get(d.to_id)!.push(d.from_id);
+    }
+    const doneSet = new Set<string>();
+    for (const p of openProjects) {
+      const arr = tasks.filter(t => t.project_id === p.id);
+      if (arr.length && arr.every(t => t.status === "Complete")) doneSet.add(p.id);
+    }
+    const blocked = new Set<string>();
+    for (const p of openProjects) {
+      const inc = incoming.get(p.id) || [];
+      if (inc.length && inc.some(fid => !doneSet.has(fid))) blocked.add(p.id);
+    }
+    return blocked;
+  }, [openProjects, tasks, dependencies]);
+
+  // Exclude blocked projects from Overview
+  const availableProjects = useMemo(() => openProjects.filter(p => !blockedProjectIds.has(p.id)), [openProjects, blockedProjectIds]);
+
   const subsystems = useMemo(() => {
     const set = new Set<string>();
-    for (const p of openProjects) if (p.subsystem) set.add(p.subsystem);
+    for (const p of availableProjects) if (p.subsystem) set.add(p.subsystem);
     return Array.from(set).sort();
-  }, [openProjects]);
+  }, [availableProjects]);
 
   // counts per subsystem for nicer dropdown badges (only open projects)
   const subsystemCounts = useMemo(() => {
     const m = new Map<string, number>();
-    for (const p of openProjects) if (p.subsystem) m.set(p.subsystem, (m.get(p.subsystem) || 0) + 1);
+    for (const p of availableProjects) if (p.subsystem) m.set(p.subsystem, (m.get(p.subsystem) || 0) + 1);
     return m;
-  }, [openProjects]);
+  }, [availableProjects]);
 
   // Hide completed projects switch state
   const [hideCompleted, setHideCompleted] = useState(false);
   // Filter projects by subsystem, search, and hide completed
   const filteredProjects = useMemo(() => {
     let arr = selectedSubsystems.length
-      ? openProjects.filter(p => p.subsystem && selectedSubsystems.includes(p.subsystem))
-      : openProjects;
+      ? availableProjects.filter(p => p.subsystem && selectedSubsystems.includes(p.subsystem))
+      : availableProjects;
     if (projectSearch.trim()) {
       const q = projectSearch.trim().toLowerCase();
       arr = arr.filter(p =>
@@ -182,7 +199,7 @@ export default function Overview() {
       arr = arr.filter(p => projectProgress(p) < 1);
     }
     return arr;
-  }, [openProjects, selectedSubsystems, projectSearch, hideCompleted]);
+  }, [availableProjects, selectedSubsystems, projectSearch, hideCompleted]);
   const projectsToShow = [...filteredProjects].sort((a, b) => {
     let cmp = 0;
     if (sortBy === "name") {
@@ -215,24 +232,9 @@ export default function Overview() {
   const uid = user?.uid || null;
   // ...existing code...
 
-  async function handleCreateProject() {
-    if (!prName.trim()) return;
-    try {
-      setSavingProject(true);
-      await addProject({
-        name: prName.trim(),
-        owner_ids: prOwners,
-        design_link: prDesign.trim() || undefined,
-        description: prDesc.trim() || undefined,
-        due_date: prDue || undefined,
-        subsystem: prSubsystem || undefined,
-      } as any);
-      const [pr] = await Promise.all([fetchProjects()]);
-      setProjects(pr);
-      // reset
-      setPrName(""); setPrOwners([]); setPrDesign(""); setPrDesc(""); setPrDue(""); setPrSubsystem("");
-      setShowCreateProject(false);
-    } finally { setSavingProject(false); }
+  async function refreshProjects() {
+    const [pr] = await Promise.all([fetchProjects()]);
+    setProjects(pr);
   }
 
   return (
@@ -246,7 +248,7 @@ export default function Overview() {
           {/* Top stats in one single row */}
           <div className="grid grid-cols-3 gap-3 mb-4">
             <StatCard label="Members" value={people.length} />
-            <StatCard label="Projects" value={projects.length} />
+            <StatCard label="Projects" value={availableProjects.length} />
             <StatCard label="Tasks" value={totalTasks} />
           </div>
 
@@ -312,10 +314,10 @@ export default function Overview() {
   {/* Project cards section */}
       <div className="mt-6 mb-2 flex items-center w-full" style={{ display: 'flex' }}>
         <h2 className="text-lg font-semibold">Projects</h2>
-        <RequireLead>
+    <RequireLead>
           <button
             aria-label="Create project"
-            onClick={()=> setShowCreateProject(true)}
+      onClick={()=> setShowCreateProject(true)}
             className="group inline-flex items-center justify-center h-7 w-7 rounded-md border border-accent/40 bg-accent/15 hover:bg-accent/25 text-accent transition shadow-sm hover:shadow-accent/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60 ml-2"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" className="drop-shadow-sm">
@@ -469,62 +471,13 @@ export default function Overview() {
         ))}
       </div>
 
-  {/* Sign in button removed per request */}
-  {showCreateProject && (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={()=> setShowCreateProject(false)} />
-      <div className="relative w-[95vw] max-w-lg rounded-2xl border border-border bg-card dark:bg-surface shadow-2xl p-5 overflow-auto max-h-[92vh]">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-lg font-semibold">Create Project</h3>
-          <button onClick={()=> setShowCreateProject(false)} aria-label="Close" className="h-8 w-8 inline-flex items-center justify-center rounded hover:bg-white/10">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#E5E7EB" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          </button>
-        </div>
-        <div className="space-y-3">
-          <input className="px-3 py-2 rounded w-full bg-surface text-foreground border border-border placeholder:text-muted-foreground focus:outline-none" placeholder="Project name" value={prName} onChange={e=>setPrName(e.target.value)} />
-          <input className="px-3 py-2 rounded w-full bg-surface text-foreground border border-border placeholder:text-muted-foreground focus:outline-none" placeholder="Design link (optional)" value={prDesign} onChange={e=>setPrDesign(e.target.value)} />
-          <textarea className="px-3 py-2 rounded w-full bg-surface text-foreground border border-border placeholder:text-muted-foreground focus:outline-none" placeholder="Project description (optional)" value={prDesc} onChange={e=>setPrDesc(e.target.value)} />
-          <div className="flex flex-col sm:flex-row gap-2">
-            <select className="px-3 py-2 rounded w-full bg-surface text-foreground border border-border dark-select placeholder:text-muted-foreground focus:outline-none" value={prSubsystem} onChange={e=>setPrSubsystem(e.target.value)}>
-              <option value="">Select subsystem…</option>
-              <option>Aero</option>
-              <option>Business</option>
-              <option>Composites</option>
-              <option>Controls</option>
-              <option>Data Acquisition</option>
-              <option>Electrical IC</option>
-              <option>Electrical EV</option>
-              <option>Finance</option>
-              <option>Frame</option>
-              <option>Manufacturing</option>
-              <option>Powertrain EV</option>
-              <option>Powertrain IC</option>
-              <option>Suspension</option>
-            </select>
-            <input type="date" className="px-3 py-2 rounded w-full bg-surface text-foreground border border-border focus:outline-none" value={prDue} onChange={e=>setPrDue(e.target.value)} />
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="text-sm text-muted-foreground uppercase tracking-caps">Owners</div>
-            <PersonSelectPopover
-              mode="multi"
-              people={people}
-              selectedIds={prOwners}
-              onAdd={(id)=> toggleOwner(id)}
-              onRemove={(id)=> toggleOwner(id)}
-              triggerLabel={prOwners.length ? `${prOwners.length} selected` : 'Add/Remove'}
-              buttonClassName="ml-auto text-[11px] px-2 py-1 rounded bg-surface text-foreground border border-border"
-              maxItems={5}
-            />
-          </div>
-          <button
-            onClick={handleCreateProject}
-            disabled={!prName.trim() || savingProject}
-            className={`w-full px-3 py-2 rounded border border-border text-sm text-center ${prName.trim() ? 'bg-card dark:bg-surface hover:bg-card/80' : 'bg-card dark:bg-surface opacity-50 cursor-not-allowed'}`}
-          >{savingProject ? 'Saving…' : 'Save Project'}</button>
-        </div>
-      </div>
-    </div>
-  )}
+  {/* Create Project Modal */}
+  <ProjectCreateModal
+    open={showCreateProject}
+    onClose={() => setShowCreateProject(false)}
+    people={people}
+    onCreated={async () => { await refreshProjects(); }}
+  />
     </>
   );
 }

@@ -1,9 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { listenAuth, isCurrentUserAdmin } from "../auth";
-import { fetchProjects, fetchTasks, fetchProjectDependencies, addProjectDependency, deleteProjectDependency } from "../lib/firestore";
+import { fetchProjects, fetchTasks, fetchProjectDependencies, addProjectDependency, deleteProjectDependency, fetchPeople } from "../lib/firestore";
 import type { Project as AppProject, Task, ProjectDependency } from "../types";
 import { useRoles } from "../lib/roles";
 import { Info } from "lucide-react";
+import ProjectCreateModal from "../components/ProjectCreateModal";
+import type { Person } from "../types";
 
 // =============================================
 // Timeline Page — Lanes + Grey-by-default edges, click-to-blue; clear Link flow
@@ -100,17 +102,20 @@ function useProjects() {
   const [dependencies, setDependencies] = useState<Dependency[] | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [people, setPeople] = useState<Person[] | null>(null);
 
   useEffect(() => {
     let mounted = true;
     (async () => {
       try {
-        const [projs, tasks, deps] = await Promise.all([
+        const [projs, tasks, deps, peeps] = await Promise.all([
           fetchProjects(),
           fetchTasks(),
           fetchProjectDependencies(),
+          fetchPeople(),
         ]);
         if (!mounted) return;
+        setPeople(peeps);
         const tasksByProject = new Map<string, Task[]>();
         for (const t of tasks) {
           const arr = tasksByProject.get(t.project_id) || [];
@@ -178,7 +183,49 @@ function useProjects() {
     }
   }
 
-  return { projects, dependencies, setDependencies, loading, error, createDependency };
+  async function refreshAll() {
+    try {
+      setLoading(true);
+      const [projs, tasks, deps, peeps] = await Promise.all([
+        fetchProjects(),
+        fetchTasks(),
+        fetchProjectDependencies(),
+        fetchPeople(),
+      ]);
+      setPeople(peeps);
+      const tasksByProject = new Map<string, Task[]>();
+      for (const t of tasks) {
+        const arr = tasksByProject.get(t.project_id) || [];
+        arr.push(t); tasksByProject.set(t.project_id, arr);
+      }
+      const edgesRaw: Dependency[] = deps
+        .filter(d => !!d.from_id && !!d.to_id)
+        .map((d: ProjectDependency) => ({ id: d.id, fromId: d.from_id, toId: d.to_id }));
+      const seen = new Set<string>();
+      const edges: Dependency[] = [];
+      for (const e of edgesRaw) { const key = `${e.fromId}|${e.toId}`; if (seen.has(key)) continue; seen.add(key); edges.push(e); }
+      const incoming = new Map<string, string[]>();
+      edges.forEach(e => { if (!incoming.has(e.toId)) incoming.set(e.toId, []); incoming.get(e.toId)!.push(e.fromId); });
+      const doneSet = new Set<string>();
+      for (const p of projs) { if ((p as any).archived) continue; if (areAllTasksDone(tasksByProject.get(p.id))) doneSet.add(p.id); }
+      const mapped: Project[] = projs
+        .filter(p => !(p as any).archived)
+        .map((p: AppProject) => {
+          const iso = toIso(p.due_date); if (!iso) return null;
+          const isDone = doneSet.has(p.id);
+          let status: ProjectStatus;
+          if (isDone) status = "done"; else { const inc = incoming.get(p.id) || []; const blockedBy = inc.some(fid => !doneSet.has(fid)); status = blockedBy ? "blocked" : "wip"; }
+          return { id: p.id, name: p.name, dueDate: iso, status } as Project;
+        })
+        .filter(Boolean) as Project[];
+      setProjects(mapped);
+      setDependencies(edges);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return { projects, dependencies, setDependencies, loading, error, createDependency, people, refreshAll };
 }
 
 // =============================
@@ -424,9 +471,10 @@ const LINK_ARMED = "__ARMED__"; // sentinel meaning: user clicked "Link" and is 
 export default function TimelinePageBlue() {
   const { role } = useRoles();
   const canEdit = role === 'admin' || role === 'lead';
-  const { projects, dependencies, setDependencies: _setDependencies, loading, error, createDependency } = useProjects();
+  const { projects, dependencies, setDependencies: _setDependencies, loading, error, createDependency, people, refreshAll } = useProjects();
   const [toast, setToast] = useState<string>("");
   const showToast = (msg: string) => { setToast(msg); window.setTimeout(()=>setToast(""), 2500); };
+  const [showCreateProject, setShowCreateProject] = useState(false);
 
   // UI state
   const [view, setView] = useState<ViewMode>({ kind: "year" });
@@ -562,10 +610,7 @@ export default function TimelinePageBlue() {
         </div>
         <div className="flex items-center gap-2">
           {view.kind === 'month' && (
-            <button className="px-3 py-1.5 rounded border text-sm border-border bg-card dark:bg-surface" onClick={() => setView({ kind: 'year' })}>Back to Year</button>
-          )}
-          {view.kind !== 'year' && (
-            <button className="px-3 py-1.5 rounded border text-sm bg-card dark:bg-surface border-border" onClick={() => setView({ kind: 'year' })}>Year</button>
+            <button className="px-3 py-1.5 rounded border text-sm border-border bg-card dark:bg-surface" onClick={() => setView({ kind: 'year' })}>Back to Year View</button>
           )}
           {/* Dependencies manager (Admin) */}
           {canEdit && (
@@ -577,6 +622,15 @@ export default function TimelinePageBlue() {
           )}
           {canEdit && (
             <>
+              <div className="mx-2 w-px h-6 bg-border" />
+              <button
+                className="px-3 py-1.5 rounded border text-sm border-accent/40 bg-accent/15 text-accent hover:bg-accent/25"
+                onClick={() => setShowCreateProject(true)}
+                aria-label="Create project"
+                title="Create project"
+              >
+                + Project
+              </button>
               <div className="mx-2 w-px h-6 bg-border" />
               <button
                 className={linkActive ? 'px-3 py-1.5 rounded border text-sm border-border bg-[hsl(var(--accent))] text-white' : 'px-3 py-1.5 rounded border text-sm border-border bg-card dark:bg-surface'}
@@ -751,6 +805,14 @@ export default function TimelinePageBlue() {
           {toast}
         </div>
       )}
+
+      {/* Create Project Modal */}
+      <ProjectCreateModal
+        open={!!showCreateProject && !!people}
+        onClose={() => setShowCreateProject(false)}
+        people={people || []}
+        onCreated={async () => { await refreshAll(); showToast("Project created"); }}
+      />
     </div>
   );
 }
@@ -778,12 +840,12 @@ function DependenciesManager({ projects, dependencies, onDeleted }:{ projects: P
               <li className="text-xs text-mutedToken-foreground px-2 py-1">No dependencies yet.</li>
             )}
             {sorted.map(row => (
-              <li key={row.id} className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 text-xs px-2 py-1 rounded hover:bg-surface/70">
+        <li key={row.id} className="grid grid-cols-[1fr_auto_1fr_auto] items-center gap-2 text-xs px-2 py-1 rounded hover:bg-surface/70">
                 <span className="truncate" title={`${row.from}`}>{row.from}</span>
                 <span className="text-center w-16 shrink-0">→</span>
                 <span className="truncate" title={`${row.to}`}>{row.to}</span>
                 <button
-                  className="ml-auto px-2 py-0.5 rounded border text-[11px] border-border bg-card dark:bg-surface hover:bg-card/70"
+          className="px-2 py-0.5 rounded border text-[11px] border-border bg-card dark:bg-surface hover:bg-card/70 justify-self-end"
                   onClick={async ()=>{
                     try {
                       // Try to delete by stored id; if synthetic, find server id
