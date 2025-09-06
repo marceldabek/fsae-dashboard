@@ -3,6 +3,7 @@ import { fetchPeople } from "../lib/firestore";
 import type { Person } from "../types";
 import { Link } from "react-router-dom";
 import { useRankedEnabled } from "../hooks/useRankedEnabled";
+import { useRoles } from "../lib/roles";
 
 function rankIconSrc(rank?: string) {
   const base = import.meta.env.BASE_URL || '/';
@@ -15,6 +16,7 @@ export default function Members() {
   const [people, setPeople] = useState<Person[]>([]);
   const [q, setQ] = useState("");
   const [rankedEnabled] = useRankedEnabled();
+  const { role, ready } = useRoles();
 
   useEffect(() => {
     (async () => setPeople(await fetchPeople()))();
@@ -40,7 +42,7 @@ export default function Members() {
       <ul className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
         {filtered.map(p => (
           <li key={p.id} className="relative rounded-2xl bg-card dark:bg-surface border border-border p-4">
-            {rankedEnabled && p.rank && (
+            {rankedEnabled && role === 'admin' && p.rank && (
               <img
                 src={rankIconSrc(p.rank)}
                 alt={p.rank}

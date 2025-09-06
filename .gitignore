@@ -11,6 +11,7 @@ firebase-debug.log*
 # Env & runtime config
 .runtimeconfig.json
 .env*
+!.env.example
 *.local
 *.secret
 
@@ -30,3 +31,10 @@ serviceAccount*.json
 Thumbs.db
 .vscode/*
 !.vscode/extensions.json
+
+# Discord Firestore sync secrets
+discord-firestore-sync/**/secrets/
+discord-firestore-sync/**/*firebase-adminsdk-*.json
+
+# Generic Firebase Admin SDK key names
+*firebase-adminsdk-*.json

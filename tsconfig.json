@@ -12,7 +12,13 @@
     "isolatedModules": true,
     "noEmit": true,
     "baseUrl": ".",
-    "paths": { "@/*": ["src/*"] },
+    "paths": {
+      "@/*": ["src/*"],
+      "@/components/application/table": [
+        "src/components/application/table.tsx",
+        "src/components/application/table/index.ts"
+      ]
+    },
     "types": ["vite/client"]          // <— add this
   },
   "include": ["src"],

@@ -8,6 +8,7 @@ export type Person = {
   skills?: string[];
   role?: string;
   discord?: string; // @username
+  avatar_url?: string; // preferred avatar image URL (e.g., discordGuilds.members.avatarUrl)
   // Ranked mode fields
   rank?: RankLevel; // defaults to Bronze if undefined
   ranked_opt_in?: boolean; // participates in the weekly/hourly pool

@@ -1,5 +1,5 @@
 
-import { collection, getDocs, query, where, addDoc, updateDoc, deleteDoc, doc, setDoc, getDoc, increment } from "firebase/firestore";
+import { collection, getDocs, query, where, addDoc, updateDoc, deleteDoc, doc, setDoc, getDoc, increment, orderBy, limit } from "firebase/firestore";
 import { db } from "../firebase";
 import type { Person, Project, Task, RankedSettings, RankLevel, Attendance, LogEvent, DailyAnalytics, ProjectDependency } from "../types";
 import { isCurrentUserAdmin } from "../auth";
@@ -51,14 +51,39 @@ function bustCacheByPrefix(prefix: string) {
 export async function refreshAllCaches() {
   if (isCurrentUserAdmin()) return; // skip admin
   try {
-    const [pplSnap, projSnap, taskSnap, settingsSnap, rankedSnap] = await Promise.all([
-      getDocs(collection(db, "people")),
+    const GUILD = (import.meta as any).env?.VITE_DISCORD_GUILD_ID as string | undefined;
+    const discordMembersSnapPromise = (async () => {
+      try {
+        if (!GUILD) return null;
+        const col = collection(db, 'discordGuilds', GUILD, 'members');
+        const qMembers = query(col, orderBy('displayName'), limit(2000));
+        return await getDocs(qMembers);
+      } catch { return null; }
+    })();
+
+    const [discordSnap, projSnap, taskSnap, settingsSnap, rankedSnap, peopleSnap] = await Promise.all([
+      discordMembersSnapPromise,
       getDocs(collection(db, "projects")),
       getDocs(collection(db, "tasks")),
       getDocs(collection(db, "settings")),
       getDocs(collection(db, "ranked")),
+      getDocs(collection(db, "people")),
     ]);
-    writeCache("people", pplSnap.docs.map(d => d.data() as Person));
+    if (discordSnap) {
+      const extrasById = new Map<string, Partial<Person>>();
+      try {
+        peopleSnap?.docs.forEach(doc => { const p = doc.data() as Person; if (p?.id || doc.id) extrasById.set(p.id || doc.id, p); });
+      } catch {}
+      const mapped: Person[] = discordSnap.docs.map(d => {
+        const m: any = d.data();
+        const name = m?.displayName ?? m?.globalName ?? m?.username ?? d.id;
+        const avatar_url = m?.avatarUrl || (m?.avatar ? `https://cdn.discordapp.com/avatars/${d.id}/${m.avatar}.png?size=64` : undefined);
+        const base: Person = { id: d.id, name, discord: m?.username ? `@${m.username}` : undefined, avatar_url } as Person;
+        const extra = extrasById.get(d.id) || {};
+        return { ...base, ...extra, id: d.id, name: extra.name || base.name, avatar_url: base.avatar_url || extra.avatar_url } as Person;
+      });
+      writeCache("people", mapped);
+    }
     writeCache("projects", projSnap.docs.map(d => d.data() as Project));
     writeCache("tasks", taskSnap.docs.map(d => d.data() as Task));
   const d = settingsSnap.docs.find(x => x.id === "global");
@@ -92,10 +117,27 @@ function pruneUndefined<T extends Record<string, any>>(obj: T): T {
 }
 
 export async function fetchPeople(): Promise<Person[]> {
+  // Now sourced from Discord guild members; returns simplified Person shape
   const cached = readCache<Person[]>("people");
   if (cached) return cached;
-  const snap = await getDocs(collection(db, "people"));
-  const data = snap.docs.map(d => d.data() as Person);
+  const GUILD = (import.meta as any).env?.VITE_DISCORD_GUILD_ID as string | undefined;
+  if (!GUILD) throw new Error('VITE_DISCORD_GUILD_ID is not set');
+  const col = collection(db, 'discordGuilds', GUILD, 'members');
+  const qMembers = query(col, orderBy('displayName'), limit(2000));
+  const [snap, peopleSnap] = await Promise.all([
+    getDocs(qMembers),
+    getDocs(collection(db, "people")),
+  ]);
+  const extrasById = new Map<string, Partial<Person>>();
+  try { peopleSnap.docs.forEach(doc => { const p = doc.data() as Person; if (p?.id || doc.id) extrasById.set(p.id || doc.id, p); }); } catch {}
+  const data: Person[] = snap.docs.map(d => {
+    const m: any = d.data();
+    const name = m?.displayName ?? m?.globalName ?? m?.username ?? d.id;
+    const avatar_url = m?.avatarUrl || (m?.avatar ? `https://cdn.discordapp.com/avatars/${d.id}/${m.avatar}.png?size=64` : undefined);
+    const base: Person = { id: d.id, name, discord: m?.username ? `@${m.username}` : undefined, avatar_url } as Person;
+    const extra = extrasById.get(d.id) || {};
+    return { ...base, ...extra, id: d.id, name: extra.name || base.name, avatar_url: base.avatar_url || extra.avatar_url } as Person;
+  });
   writeCache("people", data);
   return data;
 }

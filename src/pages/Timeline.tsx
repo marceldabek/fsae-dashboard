@@ -1,11 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { listenAuth, isCurrentUserAdmin } from "../auth";
-import { fetchProjects, fetchTasks, fetchProjectDependencies, addProjectDependency, deleteProjectDependency, fetchPeople, updateProject } from "../lib/firestore";
+import { fetchProjects, fetchTasks, fetchProjectDependencies, addProjectDependency, deleteProjectDependency, updateProject } from "../lib/firestore";
 import type { Project as AppProject, Task, ProjectDependency } from "../types";
 import { useRoles } from "../lib/roles";
 import { Info } from "lucide-react";
 import ProjectCreateModal from "../components/ProjectCreateModal";
 import type { Person } from "../types";
+import { useDiscordMembers } from '@/hooks/useDiscordMembers';
+import { discordMembersToPersons } from '@/utils/discordMapping';
 
 // =============================================
 // Timeline Page — Lanes + Grey-by-default edges, click-to-blue; clear Link flow
@@ -103,19 +105,20 @@ function useProjects() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [people, setPeople] = useState<Person[] | null>(null);
+  const { members } = useDiscordMembers();
 
   useEffect(() => {
     let mounted = true;
     (async () => {
       try {
-        const [projs, tasks, deps, peeps] = await Promise.all([
+  const [projs, tasks, deps] = await Promise.all([
           fetchProjects(),
           fetchTasks(),
           fetchProjectDependencies(),
-          fetchPeople(),
         ]);
         if (!mounted) return;
-        setPeople(peeps);
+  // derive people from discord members
+  setPeople(discordMembersToPersons(members));
         const tasksByProject = new Map<string, Task[]>();
         for (const t of tasks) {
           const arr = tasksByProject.get(t.project_id) || [];
@@ -167,7 +170,7 @@ function useProjects() {
       }
     })();
     return () => { mounted = false; };
-  }, []);
+  }, [members]);
 
   async function createDependency(fromId: string, toId: string) {
     if (fromId === toId) return; // no self edge
@@ -186,13 +189,12 @@ function useProjects() {
   async function refreshAll() {
     try {
       setLoading(true);
-      const [projs, tasks, deps, peeps] = await Promise.all([
+  const [projs, tasks, deps] = await Promise.all([
         fetchProjects(),
         fetchTasks(),
         fetchProjectDependencies(),
-        fetchPeople(),
       ]);
-      setPeople(peeps);
+  setPeople(discordMembersToPersons(members));
       const tasksByProject = new Map<string, Task[]>();
       for (const t of tasks) {
         const arr = tasksByProject.get(t.project_id) || [];

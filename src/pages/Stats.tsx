@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
-import { fetchPeople, fetchProjects, fetchTasks, fetchAttendance, palette, fetchDailyAnalyticsRange } from "../lib/firestore";
+import { fetchProjects, fetchTasks, fetchAttendance, palette, fetchDailyAnalyticsRange } from "../lib/firestore";
 import type { Person, Project, Task, Attendance } from "../types";
+import { useDiscordMembers } from '@/hooks/useDiscordMembers';
+import { discordMembersToPersons } from '@/utils/discordMapping';
 
 // Lazy import Recharts pieces to keep bundle light if page not visited
 // Vite will code-split this page anyway since it's route-lazy.
@@ -19,6 +21,7 @@ import {
 
 export default function Stats() {
   const [people, setPeople] = useState<Person[]>([]);
+  const { members } = useDiscordMembers();
   const [projects, setProjects] = useState<Project[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [attendance, setAttendance] = useState<Attendance[]>([]);
@@ -29,15 +32,14 @@ export default function Stats() {
     let alive = true;
     (async () => {
       try {
-        const [ppl, projs, tks, att, analytics] = await Promise.all([
-          fetchPeople(),
+        const [projs, tks, att, analytics] = await Promise.all([
           fetchProjects(),
           fetchTasks(),
           fetchAttendance(),
           fetchDailyAnalyticsRange(30).catch(() => []),
         ]);
         if (!alive) return;
-        setPeople(ppl);
+        // people now derived from Discord members
         setProjects(projs);
         setTasks(tks);
         setAttendance(att);
@@ -48,6 +50,11 @@ export default function Stats() {
     })();
     return () => { alive = false; };
   }, []);
+
+  // Keep people in sync with discord members
+  useEffect(() => {
+    setPeople(discordMembersToPersons(members));
+  }, [members]);
 
   const totals = useMemo(() => {
     // Exclude tasks that belong to archived projects from the general "byStatus" totals

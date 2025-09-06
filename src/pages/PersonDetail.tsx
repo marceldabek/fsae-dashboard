@@ -5,6 +5,7 @@ import { useParams, Link } from "react-router-dom";
 import { fetchPeople, fetchProjects, fetchTasks, fetchSettings, fetchAttendance } from "../lib/firestore";
 import type { Person, Project, Task, RankLevel, LogEvent, Attendance } from "../types";
 import { useRankedEnabled } from "../hooks/useRankedEnabled";
+import { useRoles } from "../lib/roles";
 import LinkButton from "../components/LinkButton";
 
 export default function PersonDetail() {
@@ -20,6 +21,7 @@ export default function PersonDetail() {
   const [attendance, setAttendance] = useState<Attendance[]>([]);
   const [streak, setStreak] = useState<number>(0);
   const [rankedEnabled] = useRankedEnabled();
+  const { role } = useRoles();
 
   useEffect(() => {
     (async () => {
@@ -156,7 +158,7 @@ export default function PersonDetail() {
             )}
             <div className="text-xs text-muted-foreground leading-snug uppercase tracking-caps">{person.year || person.role}</div>
           </div>
-          {rankedEnabled && person.rank && (
+          {rankedEnabled && role === 'admin' && person.rank && (
             <img src={rankIcon(person.rank)} alt={person.rank} className="shrink-0 h-20 w-20 md:h-24 md:w-24 object-contain -mt-2" />
           )}
         </div>
@@ -315,7 +317,7 @@ export default function PersonDetail() {
       </div>
 
   {/* Bottom two-column area: Ranked History (left) & Points History (right) - only when ranked is enabled */}
-  {rankedEnabled ? (
+  {rankedEnabled && role === 'admin' ? (
     <div className="grid md:grid-cols-2 gap-6">
   <div className="rounded-2xl bg-card border border-border p-4 relative">
         <div className="flex items-center mb-2">

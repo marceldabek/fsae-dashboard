@@ -6,6 +6,7 @@ import ProgressBar from "./ProgressBar";
 import LinkButton from "./LinkButton";
 import type { Project, Task, Person } from "../types";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Avatar } from "@/components/base/avatar/avatar";
 
 export default function ProjectCard({
   project,
@@ -117,19 +118,39 @@ export default function ProjectCard({
             <div className="flex items-center gap-2">
               <span className="text-[10px] uppercase tracking-wide opacity-80">OWNERS</span>
               {owners.length > 0 ? (
-                <span
-                  className="px-1.5 py-0.5 rounded bg-card dark:bg-surface whitespace-normal break-words text-[10px] leading-none"
-                  style={{ paddingTop: "1px", paddingBottom: "1px" }}
-                >
-                  {owners.length}
-                </span>
+                <div className="flex -space-x-1 h-6 items-center">
+                  {owners.slice(0, 6).map((o) => {
+                    const initials = o.name
+                      ? o.name
+                          .split(/\s+/)
+                          .filter(Boolean)
+                          .slice(0, 2)
+                          .map((s) => s[0]?.toUpperCase())
+                          .join("")
+                      : undefined;
+                    return (
+                      <Avatar
+                        key={o.id}
+                        size="xs"
+                        alt={o.name}
+                        src={o.avatar_url || undefined}
+                        initials={!o.avatar_url ? initials : undefined}
+                        className="ring-[1px] ring-bg-primary"
+                      />
+                    );
+                  })}
+                  {owners.length > 6 && (
+                    <Avatar
+                      size="xs"
+                      className="ring-[1px] ring-bg-primary"
+                      placeholder={<span className="flex items-center justify-center text-[10px] font-semibold text-quaternary">+{owners.length - 6}</span>}
+                    />
+                  )}
+                </div>
               ) : (
-                <span
-                  className="px-1.5 py-0.5 rounded bg-white/10 whitespace-normal break-words text-[10px] leading-none"
-                  style={{ paddingTop: "1px", paddingBottom: "1px" }}
-                >
-                  N/A
-                </span>
+                <div className="h-6 flex items-center px-1.5 rounded bg-white/10 whitespace-normal break-words">
+                  <span className="text-[10px] leading-none">N/A</span>
+                </div>
               )}
             </div>
           </div>

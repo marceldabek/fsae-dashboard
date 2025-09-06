@@ -22,9 +22,10 @@ import {
   fetchRecentLogs,
   setRankedSettings as setRankedSettingsFs,
   deletePerson,
-} from "../lib/firestore";
+} from "@/lib/firestore";
 import { functions } from "../firebase";
 import { httpsCallable } from "firebase/functions";
+import PeopleTable from "@/components/admin/PeopleTable";
 
 export default function Admin() {
   const user = useAuth();
@@ -40,12 +41,7 @@ export default function Admin() {
   const [ruleUrl, setRuleUrl] = useState("");
   const [shareUrl, setShareUrl] = useState("");
 
-  // Create Person
-  const [pName, setPName] = useState("");
-  const [pYear, setPYear] = useState("Senior");
-  const [pSkills, setPSkills] = useState("");
-  const [pRole, setPRole] = useState("");
-  const [pDiscord, setPDiscord] = useState("");
+  // Create Person (removed UI per request)
 
   // Create Project
   const [prName, setPrName] = useState("");
@@ -180,21 +176,7 @@ export default function Admin() {
     }
   }
 
-  async function handleCreatePerson() {
-    try {
-      const id = await addPerson({
-        name: pName.trim(),
-        discord: pDiscord.trim() || undefined,
-      } as any);
-      setPeople(await fetchPeople());
-      setPName("");
-      setPDiscord("");
-  showToast("Person saved");
-    } catch (e: any) {
-      console.error(e);
-  showToast("Save failed");
-    }
-  }
+  // handleCreatePerson removed
 
   async function handleCreateProject() {
     if (!prName.trim()) return alert("Give the project a name");
@@ -352,174 +334,18 @@ export default function Admin() {
 
         {activeTab === 'people' && (
           <div role="tabpanel" className="mt-4">
-            <div className="grid md:grid-cols-2 gap-6">
-              <section className="space-y-2">
-                {/* Create profile card */}
-                <div className="form-section rounded-2xl bg-card border border-border p-4 space-y-3">
-                  <div className="text-sm font-semibold text-foreground">Create profile</div>
-                  <input className="px-3 py-2 rounded w-full bg-surface text-foreground border border-border placeholder:text-muted-foreground text-sm" placeholder="Name" value={pName} onChange={(e) => setPName(e.target.value)} />
-                  <input className="px-3 py-2 rounded w-full bg-surface text-foreground border border-border placeholder:text-muted-foreground text-sm" placeholder="Discord (e.g., username)" value={pDiscord} onChange={(e) => setPDiscord(e.target.value)} />
-                  <button
-                    onClick={async()=>{
-                      if(!pName.trim()) { showToast('Enter a name'); return; }
-                      await handleCreatePerson();
-                    }}
-                    disabled={!pName.trim()}
-                    className={`px-3 py-2 rounded w-full border border-border text-sm text-center ${pName.trim() ? 'bg-surface' : 'bg-surface opacity-50 cursor-not-allowed'}`}>
-                    Create profile
-                  </button>
-                </div>
-
-                {/* Quick attendance card */}
-                <div className="form-section rounded-2xl bg-card border border-border p-4 space-y-3">
-                  <div className="text-sm font-semibold text-foreground">Quick attendance</div>
-
-                  <input
-                      type="date"
-                      className="px-2.5 py-1.5 rounded text-sm bg-surface text-foreground border border-border w-full max-w-xs mx-auto block placeholder:text-muted-foreground"
-                      value={attendanceDate}
-                      onChange={(e)=>setAttendanceDate(e.target.value)}
-                    />
-
-                  <div className="grid grid-cols-2 gap-2 items-stretch">
-                    <div>
-                      <PersonSelectPopover
-                        people={people}
-                        mode="multi"
-                        selectedIds={attendeeIds}
-                        onAdd={(id) => setAttendeeIds(prev => prev.includes(id) ? prev : [...prev, id])}
-                        onRemove={(id) => setAttendeeIds(prev => prev.filter(x => x !== id))}
-                        triggerLabel={attendeeIds.length ? `${attendeeIds.length} selected` : 'Select person…'}
-                        buttonClassName="w-full px-2.5 py-1.5 rounded dark-select text-sm"
-                        maxItems={50}
-                        allowScroll={true}
-                      />
-                    </div>
-                    <div>
-                      <button
-                        className={`w-full px-2.5 py-1.5 rounded border border-border text-sm text-center ${attendeeIds.length ? 'bg-overlay-6' : 'bg-overlay-6 opacity-50 cursor-not-allowed'}`}
-                        disabled={attendeeIds.length === 0}
-                        onClick={async()=>{
-                          console.log('Role check:', { role, roleReady });
-                          if (!roleReady) {
-                            showToast('Loading user permissions...');
-                            return;
-                          }
-                          if (role !== 'admin') {
-                            showToast(`Only admins can mark attendance. Your role: ${role || 'none'}`);
-                            return;
-                          }
-                          if(!attendeeIds || attendeeIds.length === 0) { showToast('Select at least one person'); return; }
-                          const date = attendanceDate || new Date().toISOString().slice(0,10);
-                          try {
-                            const results = await Promise.allSettled(attendeeIds.map(id => addAttendance({ person_id: id, date, points: 10 })));
-                            const successNames: string[] = [];
-                            const duplicateNames: string[] = [];
-                            const errorNames: string[] = [];
-                            results.forEach((r, i) => {
-                              const id = attendeeIds[i];
-                              const name = people.find(p=>p.id===id)?.name || id;
-                              if (r.status === 'fulfilled') successNames.push(name);
-                              else {
-                                const err: any = r.reason;
-                                console.error(`Attendance failed for ${name}:`, err);
-                                if (err?.code === 'DUPLICATE_ATTENDANCE' || err?.message === 'DUPLICATE_ATTENDANCE') duplicateNames.push(name);
-                                else errorNames.push(name);
-                              }
-                            });
-                            if (successNames.length > 0) showToast(`${successNames.length} marked present (+10 pts)`);
-                            if (duplicateNames.length > 0) showToast(`${duplicateNames.join(', ')} already marked for ${date}`);
-                            if (errorNames.length > 0) showToast(`Failed for: ${errorNames.join(', ')}`);
-                            setTimeout(()=>{
-                              setAttendeeIds([]);
-                              setAttendanceDate(new Date().toISOString().slice(0,10));
-                            }, 0);
-                          } catch (e:any) {
-                            console.error(e);
-                            showToast('Attendance failed');
-                          }
-                        }}
-                      >Give 10 pts</button>
-                    </div>
-                  </div>
-                </div>
-              </section>
-              <section className="space-y-2">
-                <div className="flex items-center justify-between mb-2">
-                  <h2 className="font-semibold truncate">Edit profiles</h2>
-                  <div className="ml-4">
-                    <input className="px-3 py-2 rounded text-sm w-44 sm:w-56 bg-surface text-foreground border border-border placeholder:text-muted-foreground" placeholder="Search people…" value={peopleSearch} onChange={(e)=>setPeopleSearch(e.target.value)} />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  {people
-                    .filter(p=>{
-                      const q = peopleSearch.toLowerCase();
-                      if(!q) return true;
-                      return p.name.toLowerCase().includes(q) || (p.skills||[]).some(s=>s.toLowerCase().includes(q)) || (p.role||"").toLowerCase().includes(q);
-                    })
-                    .sort((a,b)=>a.name.localeCompare(b.name))
-                    .map((p) => (
-                      <details key={p.id} className="rounded-xl bg-card border border-border">
-                        <summary className="cursor-pointer font-medium px-3 py-2 flex items-center justify-between gap-2">
-                          <span className="truncate">{p.name}</span>
-                          {/* Constrain role text so long roles don't widen card */}
-                          <span className="text-xs text-muted-foreground ml-2 max-w-[8rem] md:max-w-[10rem] min-w-0 truncate uppercase tracking-caps">{p.role || p.year || ""}</span>
-                        </summary>
-                        <div className="px-2 pb-2 mt-0.5 grid sm:grid-cols-2 gap-2">
-                          <input className="px-3 py-2 rounded bg-surface text-foreground border border-border placeholder:text-muted-foreground" value={p.name} onChange={(e) => setPeople((prev) => prev.map((x) => (x.id === p.id ? { ...x, name: e.target.value } : x)))} />
-                          <select className="px-3 py-2 rounded dark-select bg-surface text-foreground border border-border" value={p.year || "Senior"} onChange={(e) => setPeople((prev) => prev.map((x) => (x.id === p.id ? { ...x, year: e.target.value } : x)))}>
-                            <option>Freshman</option>
-                            <option>Sophomore</option>
-                            <option>Junior</option>
-                            <option>Senior</option>
-                            <option>Graduate</option>
-                          </select>
-                          <input className="px-3 py-2 rounded bg-surface text-foreground border border-border placeholder:text-muted-foreground" placeholder="Role" value={p.role || ""} onChange={(e) => setPeople((prev) => prev.map((x) => (x.id === p.id ? { ...x, role: e.target.value } : x)))} />
-                          <input className="px-3 py-2 rounded bg-surface text-foreground border border-border placeholder:text-muted-foreground" placeholder="Discord" value={p.discord || ""} onChange={(e) => setPeople((prev) => prev.map((x) => (x.id === p.id ? { ...x, discord: e.target.value } : x)))} />
-                          <input className="px-3 py-2 rounded sm:col-span-2 bg-surface text-foreground border border-border placeholder:text-muted-foreground" placeholder="Skills (comma-separated)" value={(p.skills || []).join(", ")} onChange={(e) => setPeople((prev) => prev.map((x) => x.id === p.id ? { ...x, skills: e.target.value.split(",").map((s) => s.trim()).filter(Boolean) } : x))} />
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:col-span-2 items-end">
-                            <div>
-                              <label className="text-xs text-muted uppercase tracking-caps">Rank</label>
-                              <select className="mt-1 px-3 py-2 rounded w-full dark-select bg-surface text-foreground border border-border" value={(p as any).rank || "Bronze"} onChange={(e)=> setPeople(prev=>prev.map(x=>x.id===p.id?{...x, rank: e.target.value as any}:x))}>
-                                <option>Bronze</option>
-                                <option>Silver</option>
-                                <option>Gold</option>
-                                <option>Platinum</option>
-                                <option>Diamond</option>
-                              </select>
-                            </div>
-                            <div>
-                              <label className="text-xs text-muted uppercase tracking-caps">Ranked pool</label>
-                              <label className="mt-1 flex items-center gap-3 select-none">
-                                <input
-                                  type="checkbox"
-                                  className="peer sr-only"
-                                  checked={!!(p as any).ranked_opt_in}
-                                  onChange={(e)=> setPeople(prev=>prev.map(x=>x.id===p.id?{...x, ranked_opt_in: e.target.checked}:x))}
-                                />
-                                <span className="relative inline-block h-6 w-11 rounded-full bg-white/15 transition-colors peer-checked:bg-accent/70 
-                                  after:content-[''] after:absolute after:left-0.5 after:top-0.5 after:h-5 after:w-5 after:rounded-full after:bg-white after:shadow after:transition-transform after:duration-200 peer-checked:after:translate-x-5" />
-                                <span className="text-xs text-white/90">Opted in</span>
-                              </label>
-                            </div>
-                          </div>
-                          <div className="flex gap-2 sm:col-span-2">
-                            <button className="flex-1 px-3 py-2 rounded bg-accent text-foreground border border-accent hover:bg-accent/90" onClick={async () => { await updatePerson(p.id, p as any); showToast("Person updated"); }}>Save Changes</button>
-                            <button className="px-3 py-2 rounded bg-danger text-white border border-danger hover:bg-danger/90" onClick={async () => { 
-                              if (confirm(`Are you sure you want to delete ${p.name}? This will also delete all their attendance records and logs.`)) {
-                                await deletePerson(p.id); 
-                                setPeople(prev => prev.filter(x => x.id !== p.id));
-                                showToast("Person deleted"); 
-                              }
-                            }}>Delete</button>
-                          </div>
-                        </div>
-                      </details>
-                    ))}
-                </div>
-              </section>
-            </div>
+            <PeopleTable
+              people={people as any}
+              toast={showToast}
+              onUpdate={async (id, patch) => {
+                await updatePerson(id, patch as any);
+                setPeople(prev => prev.map(p => p.id === id ? { ...p, ...patch } : p));
+              }}
+              onDelete={async (id) => {
+                await deletePerson(id);
+                setPeople(prev => prev.filter(p => p.id !== id));
+              }}
+            />
           </div>
         )}
 
