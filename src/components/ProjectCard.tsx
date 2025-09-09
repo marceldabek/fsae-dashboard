@@ -135,14 +135,14 @@ export default function ProjectCard({
                         alt={o.name}
                         src={o.avatar_url || undefined}
                         initials={!o.avatar_url ? initials : undefined}
-                        className="ring-[1px] ring-bg-primary"
+                        className="ring-2 ring-card dark:ring-surface"
                       />
                     );
                   })}
                   {owners.length > 6 && (
                     <Avatar
                       size="xs"
-                      className="ring-[1px] ring-bg-primary"
+                      className="ring-2 ring-card dark:ring-surface"
                       placeholder={<span className="flex items-center justify-center text-[10px] font-semibold text-quaternary">+{owners.length - 6}</span>}
                     />
                   )}

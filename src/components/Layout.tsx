@@ -1,7 +1,7 @@
 import { Link, NavLink, Outlet, useLocation, useMatches } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { subscribeAdminRoleChanges } from "../admin";
-import { useRoles, RequireLead } from "../lib/roles";
+import { useRoles, RequireLead, RequireMember } from "../lib/roles";
 import { signIn, signOutUser, signInWithDiscord } from "../auth";
 import { useEffect, useMemo, useState } from "react";
 import TeamLogo from "./TeamLogo";
@@ -52,7 +52,7 @@ function Layout({ children }: { children?: ReactNode }) {
   return (
   <div className="min-h-[100dvh] bg-background bg-app-gradient text-foreground">
       {/* iOS PWA safe area top spacer to avoid visual gap under the status bar */}
-      <div style={{ height: 'env(safe-area-inset-top)' }} className="bg-black" />
+      <div style={{ height: 'env(safe-area-inset-top)' }} className="bg-background" />
   <header className="sticky top-0 z-50 w-full bg-background/95 backdrop-blur border-b border-border">
         <div className="max-w-6xl mx-auto px-4 h-14 flex items-center justify-between">
           <Link to="/" className="flex items-center h-10">
@@ -102,7 +102,11 @@ function Layout({ children }: { children?: ReactNode }) {
           </div>
           <nav className="px-2 py-3 text-base">
             <MenuLink to="/" label="Overview" />
-            {myPersonId && <MenuLink to={`/person/${myPersonId}`} label="My Dashboard" />}
+            {myPersonId && (
+              <RequireMember>
+                <MenuLink to={`/person/${myPersonId}`} label="My Dashboard" />
+              </RequireMember>
+            )}
             <MenuLink to="/members" label="Members" />
             <MenuLink to="/stats" label="Stats" />
             <MenuLink to="/timeline" label="Timeline" />
@@ -181,9 +185,41 @@ function Layout({ children }: { children?: ReactNode }) {
               </span>
             </label>
             {user ? (
-              <button onClick={signOutUser} className="w-full text-left px-3 py-2 rounded-md hover:bg-black/20 transition text-sm font-normal">
-                Sign out
-              </button>
+              <div className="px-2 flex items-center gap-2">
+                {user.uid?.startsWith("discord:") ? (
+                  <>
+                    <img
+                      src={`${base}icons/Discord-Symbol-Black.svg`}
+                      alt=""
+                      aria-hidden="true"
+                      className="h-5 w-5 block dark:hidden"
+                    />
+                    <img
+                      src={`${base}icons/Discord-Symbol-White.svg`}
+                      alt=""
+                      aria-hidden="true"
+                      className="h-5 w-5 hidden dark:block"
+                    />
+                  </>
+                ) : (
+                  // Google multi-color mark (inline, small)
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 48 48"
+                    aria-hidden="true"
+                    className="w-5 h-5"
+                  >
+                    <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
+                    <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
+                    <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
+                    <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
+                    <path fill="none" d="M0 0h48v48H0z" />
+                  </svg>
+                )}
+                <button onClick={signOutUser} className="flex-1 text-left px-3 py-2 rounded-md hover:bg-black/20 transition text-sm font-normal">
+                  Sign out
+                </button>
+              </div>
             ) : (
               <div className="grid grid-cols-2 gap-2 px-2">
                 {/* Google sign-in button (provided markup), adapted to JSX and wired to signIn */}
@@ -223,7 +259,7 @@ function Layout({ children }: { children?: ReactNode }) {
                       await signInWithDiscord();
                       setMenuOpen(false);
                     } catch (e) {
-                      console.error("Discord sign-in failed", e);
+                      // Discord sign-in failed
                     }
                   }}
                   className="w-full h-10 border border-border rounded-md bg-white dark:bg-transparent hover:bg-black/10 dark:hover:bg-white/10 transition flex items-center justify-center"

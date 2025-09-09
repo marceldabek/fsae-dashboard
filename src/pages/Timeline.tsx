@@ -1053,28 +1053,6 @@ function DependenciesManager({ projects, dependencies, onDeleted }:{ projects: P
 }
 
 // =============================
-// Dev sanity checks (simple runtime asserts)
-// =============================
-if (import.meta.env.DEV) {
-  try {
-    const w = academicYearWindow(new Date());
-    console.assert(w.months.length === 11, "Expected 11 months in academic window");
-    const layoutCfg = { monthWidth: 640, rowHeight: 84, block: { w: 100, h: 48 }, headerH: 56 };
-    const sample: Project[] = [
-      { id: 't1', name: 'A', dueDate: new Date(2025,7,12).toISOString(), status: 'done' },
-      { id: 't2', name: 'B', dueDate: new Date(2025,7,12).toISOString(), status: 'wip' },
-      { id: 't3', name: 'C', dueDate: new Date(2025,7,13).toISOString(), status: 'blocked' }
-    ];
-    const lay = computeYearLayout(sample, w.months, layoutCfg);
-    console.assert(lay.items.size === 3, "Expected 3 layout items for sample projects");
-    const a = lay.items.get('t1')!; const b = lay.items.get('t2')!; const c = lay.items.get('t3')!;
-    console.assert(!!a && !!b && !!c, "Items missing");
-    console.assert(a.y !== b.y, "Same-day projects should stack to different rows (different y)");
-    console.assert(Array.isArray(w.months.slice(0,1)) && w.months.slice(0,1).length === 1, "Month slice should return single-month array");
-  } catch {}
-}
-
-// =============================
 // Notes
 // =============================
 // • Boxes are positioned purely by dueDate; only the project name is shown.

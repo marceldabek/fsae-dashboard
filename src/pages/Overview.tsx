@@ -11,12 +11,19 @@ import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip, CartesianG
 import AttendanceCard from "../components/AttendanceCard";
 import { RequireLead } from "../lib/roles";
 import ProjectCreateModal from "../components/ProjectCreateModal";
+import { NumberTicker } from "../components/magicui/number-ticker";
 
-  function StatCard({ label, value }: { label: string; value: string | number }) {
+  function StatCard({ label, value, delay = 0 }: { label: string; value: string | number; delay?: number }) {
   return (
       <div className="rounded-xl bg-card dark:bg-surface border border-border p-3 shadow-sm text-center flex flex-col items-center justify-center min-w-0">
       {/* Make value text match total task completion font */}
-      <div className="text-xl font-semibold leading-tight">{value}</div>
+      <div className="text-xl font-semibold leading-tight">
+        {typeof value === 'number' ? (
+          <NumberTicker value={value} delay={delay} />
+        ) : (
+          value
+        )}
+      </div>
   <div className="mt-1 text-xs tracking-caps text-muted uppercase opacity-80 whitespace-nowrap overflow-hidden text-ellipsis leading-snug" title={label}>{label}</div>
     </div>
   );
@@ -247,9 +254,9 @@ export default function Overview() {
         <div className="min-w-0">
           {/* Top stats in one single row */}
           <div className="grid grid-cols-3 gap-3 mb-4">
-            <StatCard label="Members" value={people.length} />
-            <StatCard label="Projects" value={availableProjects.length} />
-            <StatCard label="Tasks" value={totalTasks} />
+            <StatCard label="Members" value={people.length} delay={0} />
+            <StatCard label="Projects" value={availableProjects.length} delay={0.5} />
+            <StatCard label="Tasks" value={totalTasks} delay={1} />
           </div>
 
           {/* Progress bar with matching stat typography */}

@@ -32,7 +32,7 @@ export default function PersonSelectPopover(props: PersonSelectPopoverProps) {
 		onRemove,
 		triggerLabel,
 		triggerContent,
-		buttonClassName = "px-3 py-2 rounded bg-card/80 border border-white/20 text-sm hover:bg-card transition",
+		buttonClassName = "px-3 py-2 rounded border border-input bg-card text-sm hover:bg-card/80 transition",
 		disabled = false,
 		maxItems = 8,
 		allowUnassign = true,
@@ -86,18 +86,18 @@ export default function PersonSelectPopover(props: PersonSelectPopoverProps) {
 				{triggerContent ?? autoLabel}
 			</button>
 			{open && (
-				<div className="fixed inset-0 z-40 flex items-start justify-center pt-24 px-4">
-					<div className="absolute inset-0 bg-black/40" />
-					<div ref={ref} className="relative z-10 w-full max-w-md rounded-lg border border-white/15 bg-black/80 p-3 space-y-2">
+				<div className="fixed inset-0 z-[120] flex items-start justify-center pt-24 px-4">
+					{/* Removed dark backdrop to avoid covering underlying card */}
+					<div ref={ref} className="relative z-[121] w-full max-w-md rounded-lg border border-input bg-popover text-popover-foreground p-3 space-y-2 shadow-md">
 						<div className="flex items-center gap-2">
 							<input
 								autoFocus
 								value={q}
 								onChange={e => setQ(e.target.value)}
 								placeholder="Search people…"
-								className="w-full px-2 py-1.5 rounded bg-card/80 text-sm focus:outline-none"
+								className="w-full px-2 py-1.5 rounded-md border border-input bg-transparent text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
 							/>
-							<button onClick={() => setOpen(false)} className="text-[11px] px-2 py-1 rounded bg-card/80 border border-white/20 hover:bg-card">Close</button>
+							<button onClick={() => setOpen(false)} className="text-[11px] px-2 py-1 rounded border border-input hover:bg-card">Close</button>
 						</div>
 						<ul className={`space-y-1 text-sm ${allowScroll ? 'max-h-60 overflow-auto' : ''}`}>
 							{mode === "single" && allowUnassign && (
@@ -111,7 +111,7 @@ export default function PersonSelectPopover(props: PersonSelectPopoverProps) {
 							{filtered.slice(0, maxItems).map(p => {
 								const selected = mode === "single" ? p.id === selectedId : selectedSet.has(p.id);
 								return (
-									<li key={p.id} className="flex items-center gap-2 justify-between px-2 py-1 rounded hover:bg-card">
+									<li key={p.id} className="flex items-center gap-2 justify-between px-2 py-1 rounded hover:bg-card/80">
 										<div className="min-w-0">
 											<div className="truncate text-sm font-medium">{p.name}</div>
 											{p.skills && p.skills.length > 0 && (<div className="text-xs text-muted truncate uppercase tracking-caps">{p.skills.join(', ')}</div>)}
@@ -119,12 +119,12 @@ export default function PersonSelectPopover(props: PersonSelectPopoverProps) {
 										{mode === "multi" ? (
 											<button
 												onClick={() => selected ? onRemove?.(p.id) : onAdd?.(p.id)}
-												className={`px-2 py-1 rounded text-tick border ${selected ? 'bg-accent/20 border-accent/40 text-accent' : 'bg-overlay-6 border-overlay-10 hover:bg-overlay-10/60'}`}
+												className={`px-2 py-1 rounded text-tick border ${selected ? 'bg-accent/20 border-accent/40 text-accent' : 'bg-card/60 border-input hover:bg-card/80'}`}
 											>{selected ? 'Remove' : 'Add'}</button>
 										) : (
 											<button
 												onClick={() => { onSelect?.(p.id); setOpen(false); }}
-												className={`px-2 py-1 rounded text-tick border ${selected ? 'bg-accent/30 border-accent/50 text-accent' : 'bg-overlay-6 border-overlay-10 hover:bg-overlay-10/60'}`}
+												className={`px-2 py-1 rounded text-tick border ${selected ? 'bg-accent/30 border-accent/50 text-accent' : 'bg-card/60 border-input hover:bg-card/80'}`}
 											>{selected ? 'Selected' : 'Select'}</button>
 										)}
 									</li>

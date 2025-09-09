@@ -10,9 +10,13 @@ provider.setCustomParameters({ prompt: 'select_account' });
 export function listenAuth(cb: (user: User | null) => void) {
   return onAuthStateChanged(auth, cb);
 }
+
+
 // Popup sign-in (restored). Returns the signed-in user.
 export async function signIn(): Promise<User> {
   const { user } = await signInWithPopup(auth, provider);
+  // Ensure latest custom claims are on the client
+  try { await auth.currentUser?.getIdToken(true); } catch {}
   return user;
 }
 export async function signOutUser() {
@@ -27,6 +31,16 @@ export function getCurrentUser(): User | null {
 export function isCurrentUserAdmin(): boolean {
   const u = auth.currentUser;
   return isAdminUid(u?.uid || null);
+}
+
+// Optional: read current user's custom claims.roles
+export async function getUserClaims(): Promise<{ team_lead?: boolean; team_member?: boolean } | null> {
+  try {
+    const tok = await auth.currentUser?.getIdTokenResult();
+    const roles = (tok?.claims as any)?.roles;
+    if (roles && (typeof roles === 'object')) return roles as any;
+    return null;
+  } catch { return null; }
 }
 
 // Discord OAuth via Cloud Functions popup
@@ -74,7 +88,8 @@ export async function signInWithDiscord(): Promise<User> {
     if (!allowedOrigins.has(event.origin)) return;
         const data = event.data as { source?: string; token?: string } | null;
         if (!data || data.source !== "discord-auth" || !data.token) return;
-        const cred = await signInWithCustomToken(auth, data.token);
+  const cred = await signInWithCustomToken(auth, data.token);
+  try { await auth.currentUser?.getIdToken(true); } catch {}
         finish(undefined, cred.user);
       } catch (e) {
         finish(e);

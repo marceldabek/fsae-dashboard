@@ -1,0 +1,121 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{db}/documents {
+
+    // ---- Helpers ----
+    function isSignedIn() { return request.auth != null; }
+
+    // Custom claims set by backend: roles: { team_lead: bool, team_member: bool }
+    function hasRole(role) {
+      return isSignedIn()
+             && request.auth.token.roles != null
+             && request.auth.token.roles[role] == true;
+    }
+
+    // Check Firestore user doc for Discord users (fallback when custom claims fail)
+    function hasRoleFromFirestore(role) {
+      return isSignedIn()
+             && request.auth.uid != null
+             && request.auth.uid.matches('discord:.*')
+             && get(/databases/$(db)/documents/users/$(request.auth.uid)).data.roles[role] == true;
+    }
+
+    // Admin/Lead lists in config/*
+    function isAdminFromConfig() {
+      return isSignedIn()
+             && (request.auth.uid in get(/databases/$(db)/documents/config/admins).data.uids);
+    }
+    function isLeadFromConfig() {
+      return isSignedIn() && (
+        (request.auth.uid in get(/databases/$(db)/documents/config/leads).data.uids) ||
+        (request.auth.uid in get(/databases/$(db)/documents/config/admins).data.uids)
+      );
+    }
+
+    function isAdmin() { return isAdminFromConfig(); }
+    function isLead()  { return hasRole("team_lead") || hasRoleFromFirestore("team_lead") || isLeadFromConfig(); }
+    function isLeadOrAdmin() { return isLead() || isAdmin(); }
+    // Treat leads as members too
+    function isMember() { return hasRole("team_member") || hasRoleFromFirestore("team_member") || isLeadOrAdmin(); }
+
+    // If you set a discordId in custom claims, read it here. (OK if null.)
+    function discordId() { return isSignedIn() ? request.auth.token.discordId : null; }
+
+  // Person-id used across app logic: Discord users use their discordId; others use uid
+  function personId() { return isSignedIn() ? (discordId() != null ? discordId() : request.auth.uid) : null; }
+
+    // Resolve whether the signed-in user is an owner/claimer of a given project
+  function isOwnerOfProject(projectId) {
+      return isSignedIn()
+             && projectId is string
+             && (
+         get(/databases/$(db)/documents/projects/$(projectId)).data.owner_ids != null &&
+         (personId() in get(/databases/$(db)/documents/projects/$(projectId)).data.owner_ids)
+             );
+    }
+
+    // ---- Public reads everywhere ----
+    match /{document=**} {
+      allow read: if true;
+    }
+
+    // ---- Projects ----
+    match /projects/{projectId} {
+      allow read: if true;
+      allow create, update, delete: if isLeadOrAdmin();
+
+      // optional: claims subcollection (members can write their own doc)
+      match /claims/{uid} {
+        allow read: if true;
+        allow create, update, delete: if isMember() && isSignedIn() && request.auth.uid == uid;
+      }
+    }
+
+    // ---- People ----
+    match /people/{personId} {
+      allow read: if true;
+      allow create, update, delete: if isLeadOrAdmin();
+    }
+
+    // ---- Tasks ----
+    // Expected fields: assignee_id (string), status ("open"|"in_progress"|"completed"/"Complete")
+    match /tasks/{taskId} {
+      allow read: if true;
+
+      // Leads/Admins: full control
+      allow create, update, delete: if isLeadOrAdmin();
+
+      // Members: create/update only their own; can't complete; can't reassign; no delete
+      function statusBecomesCompleted() {
+        return resource != null
+               && lower(request.resource.data.status) == "complete"
+               && lower(resource.data.status) != "complete";
+      }
+  function reassignsAwayFromSelf() {
+        return resource != null
+               && request.resource.data.assignee_id != resource.data.assignee_id
+       && request.resource.data.assignee_id != personId();
+      }
+
+  // Create: members may only create tasks on projects they own/claimed,
+  // task may be unassigned or self-assigned, and cannot be created as complete
+      allow create: if isOwnerOfProject(request.resource.data.project_id)
+                    && (request.resource.data.assignee_id == null || request.resource.data.assignee_id == personId())
+                    && lower(request.resource.data.status) != "complete";
+
+      // Update: must remain self-assigned; can't flip to complete; can't reassign
+      allow update: if (isMember() || isOwnerOfProject(resource.data.project_id))
+                    && resource.data.assignee_id == personId()
+                    && request.resource.data.assignee_id == resource.data.assignee_id
+                    && !statusBecomesCompleted()
+                    && !reassignsAwayFromSelf();
+    }
+
+    // ---- Other collections ----
+    match /attendance/{doc}     { allow read: if true; allow create, update, delete: if isLeadOrAdmin(); }
+    match /ranked/{doc}         { allow read: if true; allow create, update, delete: if isLeadOrAdmin(); }
+    match /settings/{doc}       { allow read: if true; allow create, update, delete: if isLeadOrAdmin(); }
+    match /logs/{doc}           { allow read: if true; allow create, update, delete: if isLeadOrAdmin(); }
+    match /project_deps/{doc}   { allow read: if true; allow create, update, delete: if isLeadOrAdmin(); }
+  }
+}

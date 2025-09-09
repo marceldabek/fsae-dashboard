@@ -1,6 +1,5 @@
-
 import { collection, getDocs, query, where, addDoc, updateDoc, deleteDoc, doc, setDoc, getDoc, increment, orderBy, limit } from "firebase/firestore";
-import { db } from "../firebase";
+import { db, auth } from "../firebase";
 import type { Person, Project, Task, RankedSettings, RankLevel, Attendance, LogEvent, DailyAnalytics, ProjectDependency } from "../types";
 import { isCurrentUserAdmin } from "../auth";
 
@@ -45,6 +44,24 @@ function bustCacheByPrefix(prefix: string) {
       if (key.startsWith(full)) localStorage.removeItem(key);
     }
   } catch {}
+}
+
+// Status normalization helpers
+function toAppStatus(s: any): Task["status"] {
+  const raw = String(s || "");
+  switch (raw) {
+    case "Complete":
+    case "complete":
+      return "Complete";
+    case "In Progress":
+    case "in_progress":
+    case "in progress":
+      return "In Progress";
+    case "Todo":
+    case "open":
+    default:
+      return "Todo";
+  }
 }
 
 // Proactively refresh caches in the background (called from app shell)
@@ -93,6 +110,11 @@ export async function refreshAllCaches() {
   } catch {
     // ignore background refresh errors
   }
+}
+
+// Expose a targeted cache invalidation for projects so other pages refetch fresh data
+export function invalidateProjectsCache() {
+  bustCache(["projects"]);
 }
 
 // Clear all app-managed localStorage caches (does not affect Firestore IndexedDB)
@@ -167,7 +189,11 @@ export async function fetchTasks(): Promise<Task[]> {
   const cached = readCache<Task[]>("tasks");
   if (cached) return cached;
   const snap = await getDocs(collection(db, "tasks"));
-  const data = snap.docs.map(d => d.data() as Task);
+  const data = snap.docs.map(d => {
+    const t = d.data() as any;
+    const status = toAppStatus(t?.status);
+    return { ...(t as Task), status } as Task;
+  });
   writeCache("tasks", data);
   return data;
 }
@@ -178,7 +204,11 @@ export async function fetchTasksForProject(projectId: string): Promise<Task[]> {
   if (cached) return cached;
   const q = query(collection(db, "tasks"), where("project_id", "==", projectId));
   const snap = await getDocs(q);
-  const data = snap.docs.map(d => d.data() as Task);
+  const data = snap.docs.map(d => {
+    const t = d.data() as any;
+    const status = toAppStatus(t?.status);
+    return { ...(t as Task), status } as Task;
+  });
   writeCache(key, data);
   return data;
 }
@@ -186,12 +216,42 @@ export async function fetchTasksForProject(projectId: string): Promise<Task[]> {
 // Admin-only ops (security enforced by Firestore Rules)
 export async function addTask(t: Omit<Task, "id">) {
   const now = Date.now();
-  const payload: Omit<Task, "id"> = { ...t, created_at: t.created_at ?? now } as any;
-  const ref = await addDoc(collection(db, "tasks"), pruneUndefined(payload));
-  await updateDoc(ref, { id: ref.id });
-  bustCache(["tasks"]);
-  bustCacheByPrefix("tasks:project:");
-  return ref.id;
+  // PROMPT 2 — normalize payload to rules: assignee_id and lowercase status
+  let status = (t.status || "open") as any;
+  const s = String(status || "").toLowerCase();
+  status = s === "complete" ? "complete" : (s === "in progress" || s === "in_progress") ? "in_progress" : (s === "todo" ? "open" : s || "open");
+  const payload: Omit<Task, "id"> = pruneUndefined({
+    project_id: (t as any).project_id,
+    description: t.description,
+    status: status as any,
+    assignee_id: (t as any).assignee_id,
+    ranked_points: (t as any).ranked_points,
+    created_at: (t as any).created_at ?? now,
+  } as any) as any;
+
+  // Log payload and claims before write
+  try {
+  // PROMPT 3 — refresh token to ensure latest claims present
+  try { await auth.currentUser?.getIdToken(true); } catch {}
+  } catch {}
+
+  try {
+    const ref = await addDoc(collection(db, "tasks"), payload as any);
+    await updateDoc(ref, { id: ref.id });
+    bustCache(["tasks"]);
+    bustCacheByPrefix("tasks:project:");
+    return ref.id;
+  } catch (err: any) {
+    try {
+      const tok = await auth.currentUser?.getIdTokenResult();
+      const claims: any = tok?.claims || {};
+      const reasons: string[] = [];
+      if (!claims?.roles?.team_member && !claims?.roles?.team_lead) reasons.push("no roles.team_member");
+      if (payload?.assignee_id && claims?.discordId && payload.assignee_id !== claims.discordId) reasons.push("assignee_id !== claims.discordId");
+      if ((payload as any)?.status === "complete" ) reasons.push("status === 'complete' on create");
+    } catch {}
+    throw err;
+  }
 }
 
 export async function updateTask(id: string, data: Partial<Task>) {

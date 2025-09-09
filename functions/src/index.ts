@@ -75,7 +75,8 @@ if (IS_EMULATOR) {
 
 // Web origins (where we postMessage the token back)
 const WEB_ORIGIN_PROD = "https://marceldabek.github.io";
-const WEB_ORIGIN_DEV = "http://localhost:5173";
+const WEB_ORIGIN_DEV_LOCALHOST = "http://localhost:5173";
+const WEB_ORIGIN_DEV_127 = "http://127.0.0.1:5173";
 
 // Redirect URIs — SAME per environment
 const REDIRECT_LOCAL = "http://127.0.0.1:5002/uconn-fsae-ev/us-central1/discordCallback";
@@ -83,7 +84,13 @@ const REDIRECT_PROD = "https://us-central1-uconn-fsae-ev.cloudfunctions.net/disc
 const DISCORD_REDIRECT_URI = IS_EMULATOR ? REDIRECT_LOCAL : REDIRECT_PROD;
 console.log("[init] DISCORD_REDIRECT_URI:", DISCORD_REDIRECT_URI);
 
-const SCOPES = "identify"; // add " email guilds.members.read" later if needed
+// Request identify + guild member read to fetch role IDs
+const SCOPES = "identify guilds.members.read";
+
+// Discord guild + role IDs - hardcode since we have them and config() is deprecated
+const DISCORD_GUILD_ID = "784228444983918633";
+const TEAM_LEAD_ROLE_ID = "785593127951269888";
+const TEAM_MEMBER_ROLE_ID = "803798510398865418";
 
 export const discordLogin = onRequest((req, res) => {
   const state = crypto.randomBytes(16).toString("hex");
@@ -139,7 +146,7 @@ export const discordCallback = onRequest(
           .send(`<pre>STEP A: Token exchange failed (${tokenResp.status})\nredirect_uri used: ${DISCORD_REDIRECT_URI}\nclient_id used: ${DISCORD_CLIENT_ID}\n\n${body}</pre>`);
         return;
       }
-      const { access_token: accessToken } = await tokenResp.json();
+  const { access_token: accessToken } = await tokenResp.json();
       console.log("STEP A OK");
 
       // 2) Identify user
@@ -156,7 +163,7 @@ export const discordCallback = onRequest(
           .send(`<pre>STEP B: /users/@me failed (${meResp.status}).\n${body}</pre>`);
         return;
       }
-      const me = (await meResp.json()) as { id: string; username?: string; global_name?: string; avatar?: string };
+  const me = (await meResp.json()) as { id: string; username?: string; global_name?: string; avatar?: string };
       console.log("STEP B OK user", me.id, me.username);
 
     const uid = `discord:${me.id}`;
@@ -174,15 +181,61 @@ export const discordCallback = onRequest(
       );
   console.log("STEP C OK Firestore upsert");
 
-  const token = await admin.auth().createCustomToken(uid, { discordId: me.id });
-  console.log("STEP C OK custom token issued");
+      // 2b) Optionally fetch guild member to determine roles for claims
+      let roles: { team_lead: boolean; team_member: boolean } = { team_lead: false, team_member: false };
+      console.log("STEP 2B: Starting role check. GUILD_ID:", DISCORD_GUILD_ID, "LEAD_ROLE:", TEAM_LEAD_ROLE_ID, "MEMBER_ROLE:", TEAM_MEMBER_ROLE_ID);
+      
+      if (DISCORD_GUILD_ID) {
+        try {
+          console.log("STEP 2B: Fetching guild member for user", me.id);
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const gmResp = await (globalThis as any).fetch(`https://discord.com/api/users/@me/guilds/${DISCORD_GUILD_ID}/member`, {
+            headers: { Authorization: `Bearer ${accessToken}` },
+          });
+          console.log("STEP 2B: Guild member response status:", gmResp.status);
+          
+          if (gmResp.ok) {
+            const gm = (await gmResp.json()) as { roles?: string[] };
+            console.log("STEP 2B: User roles from Discord:", gm.roles);
+            const r = new Set(gm.roles || []);
+            const lead = TEAM_LEAD_ROLE_ID ? r.has(TEAM_LEAD_ROLE_ID) : false;
+            const member = TEAM_MEMBER_ROLE_ID ? r.has(TEAM_MEMBER_ROLE_ID) : false;
+            roles = { team_lead: lead, team_member: member || lead };
+            console.log("STEP 2B: Computed roles:", roles);
+          } else {
+            const errorText = await gmResp.text();
+            console.log("STEP 2B: Guild member fetch failed:", gmResp.status, errorText);
+          }
+        } catch (e) {
+          console.error("STEP 2B: Guild member fetch error:", e);
+          // ignore guild member errors; proceed without roles
+        }
+      } else {
+        console.log("STEP 2B: No DISCORD_GUILD_ID set, skipping role check");
+      }
+
+      // Upsert user record with roles
+      await db.collection("users").doc(uid).set({ roles }, { merge: true });
+      console.log("STEP 2C: Saved roles to Firestore:", roles);
+
+      // Apply custom claims (note: this overwrites existing claims with provided keys)
+      try {
+        await admin.auth().setCustomUserClaims(uid, { roles });
+        console.log("STEP 2D: Set custom claims:", { roles });
+      } catch (e) {
+        console.error("setCustomUserClaims failed", (e as Error)?.message);
+      }
+
+      const token = await admin.auth().createCustomToken(uid, { discordId: me.id });
+      console.log("STEP C OK custom token issued");
 
       res.set("Content-Type", "text/html");
       res.send(`<!doctype html><meta charset="utf-8"><script>
         (function () {
           var msg = { source: "discord-auth", token: ${JSON.stringify(token)} };
           try { window.opener && window.opener.postMessage(msg, "${WEB_ORIGIN_PROD}"); } catch (e) {}
-          try { window.opener && window.opener.postMessage(msg, "${WEB_ORIGIN_DEV}"); } catch (e) {}
+          try { window.opener && window.opener.postMessage(msg, "${WEB_ORIGIN_DEV_LOCALHOST}"); } catch (e) {}
+          try { window.opener && window.opener.postMessage(msg, "${WEB_ORIGIN_DEV_127}"); } catch (e) {}
           try { window.close(); } catch (e) {}
         })();
       </script>`);
@@ -511,3 +564,89 @@ export const weeklyRankApply = onSchedule(
     await writeBaseline(scores, people);
   },
 );
+
+// ---------- Project claim callables ----------
+
+export const claimProject = onCall(async (request) => {
+  const uid = request.auth?.uid || "";
+  if (!uid) throw new HttpsError("unauthenticated", "Must sign in");
+  
+  // Check if user is a member (has Discord role or is lead/admin)
+  const userDoc = await db.collection("users").doc(uid).get();
+  const userData = userDoc.data();
+  const hasTeamMemberRole = Boolean(userData?.roles?.team_member);
+  const hasTeamLeadRole = Boolean(userData?.roles?.team_lead);
+  
+  // Also check if they're in config-based lead/admin lists
+  const [adminSnap, leadSnap] = await Promise.all([
+    db.doc("config/admins").get(),
+    db.doc("config/leads").get(),
+  ]);
+  const adminUids = (adminSnap.data()?.uids || []) as string[];
+  const leadUids = (leadSnap.data()?.uids || []) as string[];
+  const isConfigAdmin = adminUids.includes(uid);
+  const isConfigLead = leadUids.includes(uid) || isConfigAdmin;
+  
+  const isMember = hasTeamMemberRole || hasTeamLeadRole || isConfigLead;
+  if (!isMember) {
+    throw new HttpsError("permission-denied", "Must be a team member to claim projects");
+  }
+  
+  const data = (request.data || {}) as { projectId?: string };
+  const projectId = String(data.projectId || "").trim();
+  if (!projectId) throw new HttpsError("invalid-argument", "projectId required");
+
+  // Map Firebase uid to personId used in owner_ids (discord users: discord:{id})
+  const personId = uid.startsWith("discord:") ? uid.slice("discord:".length) : uid;
+
+  const projRef = db.collection("projects").doc(projectId);
+
+  try {
+  await projRef.set({ owner_ids: FieldValue.arrayUnion(personId) }, { merge: true });
+    return { ok: true };
+  } catch (e) {
+    console.error("claimProject failed", (e as Error)?.message);
+    throw new HttpsError("internal", "claim failed");
+  }
+});
+
+export const unclaimProject = onCall(async (request) => {
+  const uid = request.auth?.uid || "";
+  if (!uid) throw new HttpsError("unauthenticated", "Must sign in");
+  
+  // Check if user is a member (has Discord role or is lead/admin)
+  const userDoc = await db.collection("users").doc(uid).get();
+  const userData = userDoc.data();
+  const hasTeamMemberRole = Boolean(userData?.roles?.team_member);
+  const hasTeamLeadRole = Boolean(userData?.roles?.team_lead);
+  
+  // Also check if they're in config-based lead/admin lists
+  const [adminSnap, leadSnap] = await Promise.all([
+    db.doc("config/admins").get(),
+    db.doc("config/leads").get(),
+  ]);
+  const adminUids = (adminSnap.data()?.uids || []) as string[];
+  const leadUids = (leadSnap.data()?.uids || []) as string[];
+  const isConfigAdmin = adminUids.includes(uid);
+  const isConfigLead = leadUids.includes(uid) || isConfigAdmin;
+  
+  const isMember = hasTeamMemberRole || hasTeamLeadRole || isConfigLead;
+  if (!isMember) {
+    throw new HttpsError("permission-denied", "Must be a team member to unclaim projects");
+  }
+
+  const data = (request.data || {}) as { projectId?: string };
+  const projectId = String(data.projectId || "").trim();
+  if (!projectId) throw new HttpsError("invalid-argument", "projectId required");
+
+  const personId = uid.startsWith("discord:") ? uid.slice("discord:".length) : uid;
+  const projRef = db.collection("projects").doc(projectId);
+
+  try {
+  await projRef.set({ owner_ids: FieldValue.arrayRemove(personId) }, { merge: true });
+    return { ok: true };
+  } catch (e) {
+    console.error("unclaimProject failed", (e as Error)?.message);
+    throw new HttpsError("internal", "unclaim failed");
+  }
+});

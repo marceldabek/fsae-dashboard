@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import PersonSelectPopover from "../components/PersonSelectPopover";
-import TaskCreateCard from "../components/TaskCreateCard";
+import TaskCreateModal from "../components/TaskCreateModal";
 import { useAuth } from "../hooks/useAuth";
 import { RequireLead, RequireAdmin, useRoles } from "../lib/roles";
 import { canViewAdminTab, AdminTab } from "../admin";
@@ -53,11 +53,7 @@ export default function Admin() {
   const [ownerSearch, setOwnerSearch] = useState("");
 
   // Create Task
-  const [tProject, setTProject] = useState<string>("");
-  const [tDesc, setTDesc] = useState("");
-  const [tStatus, setTStatus] = useState<"Todo" | "In Progress" | "Complete">("In Progress");
-  const [tAssignee, setTAssignee] = useState<string>("");
-  const [tPoints, setTPoints] = useState<number|"">("");
+  const [showTaskModal, setShowTaskModal] = useState(false);
   const [attendeeIds, setAttendeeIds] = useState<string[]>([]);
 
   // Admin UI helpers
@@ -148,7 +144,6 @@ export default function Admin() {
       setSettingsState(await fetchSettings());
       showToast("Settings saved");
     } catch (e: any) {
-      console.error(e);
       showToast("Save failed");
     }
   }
@@ -160,7 +155,7 @@ export default function Admin() {
       setPeople(pe);
       setProjects(pr);
     } catch (e) {
-      console.error("Reload failed", e);
+      // Reload failed
     }
   }
 
@@ -171,7 +166,6 @@ export default function Admin() {
       setProjects([]);
       showToast("System reset complete");
     } catch (e) {
-      console.error(e);
       showToast("Reset failed");
     }
   }
@@ -198,26 +192,11 @@ export default function Admin() {
       setPrSubsystem("");
   showToast("Project saved");
     } catch (e: any) {
-      console.error(e);
   showToast("Save failed");
     }
   }
 
-  async function handleCreateTask() {
-    if (!tProject) return alert("Choose a project");
-    try {
-  const id = await addTask({ project_id: tProject, description: tDesc.trim(), status: tStatus, assignee_id: tAssignee || undefined, ranked_points: (tPoints || undefined) as any });
-      setTProject("");
-      setTDesc("");
-      setTStatus("In Progress");
-      setTAssignee("");
-      setTPoints("");
-  showToast("Task saved");
-    } catch (e: any) {
-      console.error(e);
-  showToast("Save failed");
-    }
-  }
+  // task creation is handled in TaskCreateModal
 
   // Subsystems present across projects and counts
   const subsystems = useMemo(() => {
@@ -403,7 +382,15 @@ export default function Admin() {
               </section>
               <section className="space-y-2">
                 <h2 className="font-semibold">Create Task</h2>
-                <TaskCreateCard
+                <button
+                  onClick={() => setShowTaskModal(true)}
+                  className="w-full h-9 rounded-md bg-surface text-foreground border border-border text-sm font-medium hover:bg-surface/80 transition"
+                >
+                  Open Task Creator
+                </button>
+                <TaskCreateModal
+                  open={showTaskModal}
+                  onClose={() => setShowTaskModal(false)}
                   people={people}
                   projects={projects}
                   onCreated={reloadAll}
@@ -586,7 +573,6 @@ export default function Admin() {
                       tasks: tasks.map((r: any) => ({ project: r.Project?.toString() || "", description: r.Description?.toString() || "", status: (r.Status?.toString() || "Todo") as any, assignee: r.Assignee?.toString() })),
                     });
                   } catch (err: any) {
-                    console.error(err);
                     setSeedMessage("Failed to read file");
                   }
                 }}
@@ -634,7 +620,6 @@ export default function Admin() {
                           setProjects(await fetchProjects());
                           setSeedMessage("Import complete");
                         } catch (e) {
-                          console.error(e);
                           setSeedMessage("Import failed");
                         } finally {
                           setSeedImporting(false);
@@ -794,7 +779,6 @@ export default function Admin() {
                       setRsDirty(false);
                       showToast("Ranked settings saved");
                     } catch (e) {
-                      console.error(e);
                       showToast("Save failed");
                     }
                   }}
@@ -928,7 +912,6 @@ export default function Admin() {
                     setRecentLogs(await fetchRecentLogs(50));
                     setShowApplyModal(false);
                   } catch (e) {
-                    console.error(e);
                     showToast("Apply failed");
                   } finally {
                     setRankedApplying(false);
@@ -982,7 +965,6 @@ function ArchivedProjectRestore() {
                     setAll(prev => prev.map(x=> x.id===p.id ? { ...x, archived: false } : x));
                     (window as any).alert?.("Project restored");
                   } catch (e) {
-                    console.error(e);
                     (window as any).alert?.("Restore failed");
                   } finally {
                     setRestoring(null);

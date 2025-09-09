@@ -5,7 +5,7 @@ import { RouterProvider } from "react-router-dom";
 import router from "./router";
 import './index.css'
 import { installViewportVhFix } from './utils/viewportVhFix';
-import { refreshAllCaches, recordAnonymousVisit } from "./lib/firestore";
+import { recordAnonymousVisit } from "./lib/firestore";
 import { setRuntimeAdmins } from './admin';
 import { listenAuth } from './auth';
 
@@ -38,10 +38,8 @@ root.render(
   </React.StrictMode>
 );
 
-// Background refresh: on load, on focus, and every 10 minutes
-// Run background tasks but swallow errors to avoid noisy unhandled rejections
+// Initialize auth and roles
 (async () => {
-  try { await refreshAllCaches(); } catch (e) { /* ignore background refresh errors */ }
   try { await recordAnonymousVisit(); } catch (e) { /* ignore anonymous visit errors */ }
   // Listen for auth and load roles (callable function first, then fallback to direct doc)
   listenAuth(async (u) => {
@@ -49,11 +47,5 @@ root.render(
     // Rely solely on backend callable for role population (no Firestore doc fallback)
   // ...existing code...
   });
-  document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible") {
-      refreshAllCaches().catch(()=>{});
-    }
-  });
-  setInterval(() => { refreshAllCaches().catch(()=>{}); }, 10 * 60 * 1000);
 })();
 

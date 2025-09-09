@@ -4,11 +4,14 @@ import { useParams, Link } from "react-router-dom";
 
 import ProgressBar from "../components/ProgressBar";
 import PersonSelectPopover from "../components/PersonSelectPopover";
-import TaskCreateCard from "../components/TaskCreateCard";
-import { fetchPeople, fetchProjects, fetchTasksForProject, addTask, updateTask, deleteTaskById, updateProjectOwners, archiveProject, deleteProject } from "../lib/firestore";
+import TaskCreateModal from "../components/TaskCreateModal";
+import { fetchPeople, fetchProjects, fetchTasksForProject, addTask, updateTask, deleteTaskById, updateProjectOwners, archiveProject, deleteProject, invalidateProjectsCache } from "../lib/firestore";
+import { db, functions } from "../firebase";
+import { doc, getDoc } from "firebase/firestore";
+import { httpsCallable } from "firebase/functions";
 import { useRankedEnabled } from "../hooks/useRankedEnabled";
 import { useAuth } from "../hooks/useAuth";
-import { RequireLead } from "../lib/roles";
+import { RequireLead, RequireMember, useRoles } from "../lib/roles";
 import type { Person, Project, Task } from "../types";
 
 export default function ProjectDetail() {
@@ -29,12 +32,18 @@ export default function ProjectDetail() {
   const [toast, setToast] = useState<string>("");
   const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
   
-const user = useAuth();
-const uid = user?.uid || null;
+  const user = useAuth();
+  const uid = user?.uid || null;
+  const { role } = useRoles();
+  const amLead = role === 'lead' || role === 'admin';
 // Leads can edit everything except hidden admin tabs, so treat them like admins here.
-// const { isAdmin, isLead, rolesLoaded } = useAdminStatus();
-// const canEdit = isAdmin || isLead;
-const canEdit = false; // Replace with new guard logic if needed
+  // Members who claimed the project can create tasks for it; leads/admins can always edit
+  const claimed = useMemo(() => {
+    if (!project || !uid) return false;
+    const personId = uid.startsWith("discord:") ? uid.slice("discord:".length) : uid;
+    return Array.isArray(project.owner_ids) && project.owner_ids.includes(personId);
+  }, [project, uid]);
+  const canEdit = amLead || claimed;
   const [ownerIds, setOwnerIds] = useState<string[]>([]);
   const ownerMutationVersion = useRef(0); // incremental guard to avoid race conditions
   const [ownersBusy, setOwnersBusy] = useState(false);
@@ -63,8 +72,26 @@ const canEdit = false; // Replace with new guard logic if needed
   }, [ownerIds, allPeople]);
   // legacy reload (if needed to re-fetch people list externally)
   async function reloadOwners(){
-    // no network fetch needed for live UI; rely on existing allPeople
-    setOwners(ownerIds.map(id => allPeople.find(p => p.id === id)!).filter(Boolean));
+    if (!id) return;
+    const tryFetch = async () => {
+      const snap = await getDoc(doc(db, "projects", id));
+      if (!snap.exists()) return null;
+      return { id, ...(snap.data() as any) } as Project;
+    };
+    try {
+      let p: Project | null = await tryFetch();
+      if (!p) {
+        // brief retry to avoid sporadic propagation delays
+        await new Promise(r => setTimeout(r, 120));
+        p = await tryFetch();
+      }
+      if (p) {
+        setProject(p);
+        const ids = (p as any).owner_ids || [];
+        setOwnerIds(ids);
+        setOwners(ids.map((pid: string) => allPeople.find(pp => pp.id === pid)!).filter(Boolean));
+      }
+    } catch {}
   }
 
   async function reloadTasks() {
@@ -72,6 +99,37 @@ const canEdit = false; // Replace with new guard logic if needed
     setTasks(await fetchTasksForProject(id));
   }
   useEffect(() => { reloadTasks(); }, [id]);
+
+  async function claimProject() {
+    if (!id || !uid) return;
+    // Optimistic: update local project owners immediately
+    setProject(p => {
+      if (!p) return p;
+      const personId = uid.startsWith("discord:") ? uid.slice("discord:".length) : uid;
+      const next = Array.from(new Set([...(p.owner_ids || []), personId]));
+      return { ...(p as any), owner_ids: next } as any;
+    });
+    const fn = httpsCallable(functions, "claimProject");
+    try { await fn({ projectId: id }); } finally {
+  invalidateProjectsCache();
+      await reloadOwners();
+    }
+  }
+  async function unclaimProject() {
+    if (!id || !uid) return;
+    // Optimistic: update local project owners immediately
+    setProject(p => {
+      if (!p) return p;
+      const personId = uid.startsWith("discord:") ? uid.slice("discord:".length) : uid;
+      const next = (p.owner_ids || []).filter(x => x !== personId);
+      return { ...(p as any), owner_ids: next } as any;
+    });
+    const fn = httpsCallable(functions, "unclaimProject");
+    try { await fn({ projectId: id }); } finally {
+      invalidateProjectsCache();
+      await reloadOwners();
+    }
+  }
   // rankedEnabled managed by hook
 
   const total = tasks.length;
@@ -240,6 +298,22 @@ const canEdit = false; // Replace with new guard logic if needed
             <div className="flex items-center justify-between gap-2 mb-2">
               <div className="flex items-center gap-2">
                 <span className="text-muted-foreground uppercase tracking-caps text-xs">Owners</span>
+                {/* Member claim controls (visible when not archived) */}
+                <RequireMember>
+                  {!((project as any).archived) && uid && !amLead && (
+                    claimed ? (
+                      <button
+                        onClick={unclaimProject}
+                        className="inline-flex items-center justify-center h-6 px-2 rounded-md border border-accent/40 bg-accent/10 hover:bg-accent/20 text-accent text-[11px] font-medium"
+                      >Unclaim</button>
+                    ) : (
+                      <button
+                        onClick={claimProject}
+                        className="inline-flex items-center justify-center h-6 px-2 rounded-md border border-accent/40 bg-accent/10 hover:bg-accent/20 text-accent text-[11px] font-medium"
+                      >Claim</button>
+                    )
+                  )}
+                </RequireMember>
                 <RequireLead>
                   {!((project as any).archived) && (
                     <PersonSelectPopover
@@ -291,22 +365,20 @@ const canEdit = false; // Replace with new guard logic if needed
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <h2 className="font-semibold text-xs uppercase tracking-caps text-muted-foreground leading-tight">TASKS</h2>
-                {/* Only leads/admins can add tasks */}
-                <RequireLead>
-                  {!(project as any).archived && (
-                    <button
-                      aria-label="Add task"
-                      onClick={()=> setShowAddTask(true)}
-                      className="group inline-flex items-center justify-center h-7 w-7 rounded-md border border-accent/40 bg-accent/15 hover:bg-accent/25 text-accent transition shadow-sm hover:shadow-accent/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
-                    >
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" className="drop-shadow-sm">
-                        <line x1="12" y1="5" x2="12" y2="19" />
-                        <line x1="5" y1="12" x2="19" y2="12" />
-                      </svg>
-                      <span className="sr-only">Add task</span>
-                    </button>
-                  )}
-                </RequireLead>
+                {/* Leads/admins OR members who claimed can add tasks */}
+                {!(project as any).archived && (amLead || claimed) && (
+                  <button
+                    aria-label="Add task"
+                    onClick={()=> setShowAddTask(true)}
+                    className="group inline-flex items-center justify-center h-7 w-7 rounded-md border border-accent/40 bg-accent/15 hover:bg-accent/25 text-accent transition shadow-sm hover:shadow-accent/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" className="drop-shadow-sm">
+                      <line x1="12" y1="5" x2="12" y2="19" />
+                      <line x1="5" y1="12" x2="19" y2="12" />
+                    </svg>
+                    <span className="sr-only">Add task</span>
+                  </button>
+                )}
               </div>
               <label className="flex items-center gap-2 select-none cursor-pointer group">
                 <span className="text-xs font-medium text-muted-foreground uppercase tracking-caps">Hide completed</span>
@@ -477,21 +549,13 @@ const canEdit = false; // Replace with new guard logic if needed
               })}
             </ul>
           </section>
-          {showAddTask && createPortal(
-            <div className="fixed inset-0 z-[120] flex items-center justify-center">
-              <div className="absolute inset-0 bg-black/55 backdrop-blur-sm" onClick={()=> setShowAddTask(false)} />
-              <div className="relative w-[95vw] max-w-md rounded-2xl border border-white/10 bg-card dark:bg-surface backdrop-blur-sm shadow-2xl p-5 text-foreground">
-                <TaskCreateCard
-                  people={allPeople}
-                  fixedProjectId={project.id}
-                  onCreated={()=>{ reloadTasks(); setShowAddTask(false); }}
-                  hideTitle
-                  unstyled
-                />
-              </div>
-            </div>,
-            document.body
-          )}
+          <TaskCreateModal
+            open={showAddTask}
+            onClose={()=> setShowAddTask(false)}
+            people={allPeople}
+            fixedProjectId={project.id}
+            onCreated={()=>{ reloadTasks(); }}
+          />
         </div>
     </>
   );

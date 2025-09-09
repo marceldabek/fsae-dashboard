@@ -2,6 +2,9 @@ import { useState } from "react";
 import PersonSelectPopover from "./PersonSelectPopover";
 import type { Person, Project } from "../types";
 import { addTask } from "../lib/firestore";
+import { Input } from "./ui/input";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "./ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 
 interface TaskCreateCardProps {
   people: Person[];
@@ -28,7 +31,9 @@ export default function TaskCreateCard({ people, projects = [], fixedProjectId, 
     if (!pid) return;
     setSaving(true);
     try {
-      await addTask({ project_id: pid, description: desc.trim(), status, assignee_id: assignee || undefined, ranked_points: (points || undefined) as any });
+  // PROMPT 2: quick preview
+  try { console.log("[TaskCreateCard] create", { project_id: pid, description: desc.trim(), status, assignee_id: assignee || undefined, ranked_points: points || undefined }); } catch {}
+  await addTask({ project_id: pid, description: desc.trim(), status, assignee_id: assignee || undefined, ranked_points: (points || undefined) as any });
       setDesc("");
       setStatus("In Progress");
       setAssignee("");
@@ -43,72 +48,105 @@ export default function TaskCreateCard({ people, projects = [], fixedProjectId, 
   const disable = !desc.trim() || saving || !(fixedProjectId || projectId);
 
   const content = (
-  <div className="space-y-3">
-      {!hideTitle && <h3 className="text-xs font-semibold">Add Task</h3>}
+    <>
       {!fixedProjectId && (
-        <select
-            className="px-3 h-9 rounded text-xs w-full dark-select bg-surface text-foreground border border-border placeholder:text-muted-foreground form-control"
-          value={projectId}
-          onChange={e=>setProjectId(e.target.value)}
-        >
-          <option value="">Select project…</option>
-          {projects.map(p=> <option key={p.id} value={p.id}>{p.name}</option>)}
-        </select>
+        <Select value={projectId} onValueChange={setProjectId}>
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder="Select project…" />
+          </SelectTrigger>
+          <SelectContent>
+            {projects.map((p) => (
+              <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       )}
-      <input
-  className="px-3 h-9 rounded text-xs w-full bg-surface text-foreground border border-border placeholder:text-muted-foreground placeholder:text-xs focus:outline-none form-control"
-  placeholder="Task title"
-        value={desc}
-        onChange={e => setDesc(e.target.value)}
-      />
-      <div className="flex gap-2">
-        <select
-            className="px-3 h-9 rounded text-xs dark-select flex-1 min-w-0 bg-surface text-foreground border border-border placeholder:text-muted-foreground form-control"
-          value={status}
-          onChange={e => setStatus(e.target.value as any)}
-        >
-          <option>Todo</option>
-          <option>In Progress</option>
-          <option>Complete</option>
-        </select>
-        <PersonSelectPopover
-            mode="single"
-            people={people}
-            selectedId={assignee || null}
-            onSelect={(id)=> setAssignee(id || "")}
-            triggerLabel={assignee ? (people.find(p=>p.id===assignee)?.name || 'Assignee') : 'Assign to…'}
-            buttonClassName="px-3 h-9 rounded text-[10px] bg-surface text-foreground border border-border flex items-center hover:bg-surface/80 whitespace-nowrap form-control"
-            maxItems={5}
+
+      {/* Row: Title + Status */}
+    <div className="flex gap-2">
+        <Input
+      className="h-9 text-sm rounded-md flex-1"
+          placeholder="Task title"
+          value={desc}
+          onChange={(e) => setDesc(e.target.value)}
         />
+        <Select value={status} onValueChange={(v) => setStatus(v as any)}>
+      <SelectTrigger className="w-40 text-sm rounded-md h-9">
+            <SelectValue placeholder="Status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="Todo">Todo</SelectItem>
+            <SelectItem value="In Progress">In Progress</SelectItem>
+            <SelectItem value="Complete">Complete</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
-      <select
-  className="px-3 h-9 rounded text-xs dark-select w-full bg-surface text-foreground border border-border placeholder:text-muted-foreground form-control"
-        value={(points as any)}
-        onChange={(e)=> setPoints((e.target.value? Number(e.target.value) : "") as any)}
-      >
-  <option value="">Points (by estimated hours)</option>
-  <option value="1">1 pt ~ 0.5 hr</option>
-  <option value="3">3 pts ~ 1 hr</option>
-  <option value="6">6 pts ~ 2 hrs</option>
-  <option value="10">10 pts ~ 3 hrs</option>
-  <option value="15">15 pts ~ 5 hrs</option>
-  <option value="40">40 pts ~ 10 hrs</option>
-  <option value="65">65 pts ~ 15 hrs</option>
-  <option value="98">98 pts ~ 20 hrs</option>
-  <option value="150">150 pts ~ 25 hrs</option>
-  <option value="200">200 pts ~ 30 hrs</option>
-      </select>
+
+      {/* Row: Assignee + Points */}
+  <div className="flex gap-2">
+        <PersonSelectPopover
+          mode="single"
+          people={people}
+          selectedId={assignee || null}
+          onSelect={(id) => setAssignee(id || "")}
+          triggerLabel={assignee ? (people.find((p) => p.id === assignee)?.name || "Assignee") : "Assign to…"}
+      buttonClassName="px-3 h-9 rounded-md text-sm border border-input flex items-center whitespace-nowrap"
+          maxItems={5}
+        />
+    <Select value={points === "" ? "none" : String(points)} onValueChange={(v) => setPoints(v === "none" ? "" : Number(v))}>
+      <SelectTrigger className="flex-1 text-sm rounded-md h-9">
+            <SelectValue placeholder="Points (by estimated hours)" />
+          </SelectTrigger>
+          <SelectContent>
+      <SelectItem value="none">No estimate</SelectItem>
+            <SelectItem value="1">1 pt ~ 0.5 hr</SelectItem>
+            <SelectItem value="3">3 pts ~ 1 hr</SelectItem>
+            <SelectItem value="6">6 pts ~ 2 hrs</SelectItem>
+            <SelectItem value="10">10 pts ~ 3 hrs</SelectItem>
+            <SelectItem value="15">15 pts ~ 5 hrs</SelectItem>
+            <SelectItem value="40">40 pts ~ 10 hrs</SelectItem>
+            <SelectItem value="65">65 pts ~ 15 hrs</SelectItem>
+            <SelectItem value="98">98 pts ~ 20 hrs</SelectItem>
+            <SelectItem value="150">150 pts ~ 25 hrs</SelectItem>
+            <SelectItem value="200">200 pts ~ 30 hrs</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+    </>
+  );
+
+  if (unstyled) return (
+  <div className="space-y-2">
+      {content}
       <button
         onClick={handleSave}
         disabled={disable}
-  className="w-full h-9 rounded bg-surface text-foreground border border-border text-xs font-medium hover:bg-surface/80 disabled:opacity-40 disabled:cursor-not-allowed transition"
-      >{saving ? 'Saving…' : 'Save'}</button>
+    className="w-full h-9 rounded-md bg-surface text-foreground border border-border text-sm font-medium hover:bg-surface/80 disabled:opacity-40 disabled:cursor-not-allowed transition"
+      >
+        {saving ? "Saving…" : "Save"}
+      </button>
     </div>
   );
 
-  if (unstyled) return content;
-
   return (
-    <div className={"rounded-2xl bg-card border border-border p-4 " + className}>{content}</div>
+    <Card className={"max-w-lg mx-4 sm:mx-6 shadow-2xl border-border " + className}>
+      {!hideTitle && (
+        <CardHeader className="p-4 pb-2">
+          <CardTitle className="text-sm">Add Task</CardTitle>
+        </CardHeader>
+      )}
+      <CardContent className="p-4 pt-2 space-y-2">
+        {content}
+      </CardContent>
+    <CardFooter className="p-4 pt-2">
+        <button
+          onClick={handleSave}
+          disabled={disable}
+      className="w-full h-9 rounded-md border border-input text-sm text-center bg-card dark:bg-surface hover:bg-card/80 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {saving ? "Saving…" : "Save"}
+        </button>
+      </CardFooter>
+    </Card>
   );
 }

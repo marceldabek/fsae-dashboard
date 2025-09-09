@@ -14,11 +14,10 @@ if (import.meta.env.DEV && typeof window !== 'undefined') {
       if (!g.__FSAE_FN_EMULATOR__) {
         connectFunctionsEmulator(functionsClient, host, 5002);
         g.__FSAE_FN_EMULATOR__ = true;
-        console.log('[functions] Connected emulator at', host, 5002);
       }
     }
   } catch (e) {
-    console.warn('[functions] emulator connect failed', e);
+    // Emulator connection failed
   }
 }
 

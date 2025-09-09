@@ -65,20 +65,22 @@ if (import.meta.env.DEV && typeof window !== "undefined") {
         const port = Number(import.meta.env.VITE_FUNCTIONS_EMULATOR_PORT) || 5002; // firebase.json sets 5002
         connectFunctionsEmulator(functions, host, port);
         g.__FSAE_FN_EMULATOR__ = true;
-        // eslint-disable-next-line no-console
-        console.log("[firebase] Connected Functions emulator at", host, port);
       }
     }
   } catch (e) {
-    // eslint-disable-next-line no-console
-    console.warn("[firebase] Functions emulator connect failed", e);
+    // Emulator connection failed
   }
 }
 
 export const auth = getAuth(app);
 
-// Connect Auth/Firestore emulators in local dev
-if (import.meta.env.DEV && typeof window !== "undefined") {
+// Option A default: use prod Auth/Firestore. Only connect emulators if explicitly opted-in.
+// To opt-in locally, set VITE_USE_AUTH_EMULATOR=true in .env.local
+if (
+  import.meta.env.DEV &&
+  typeof window !== "undefined" &&
+  String(import.meta.env.VITE_USE_AUTH_EMULATOR).toLowerCase() === "true"
+) {
   const host = window.location.hostname;
   if (host === "localhost" || host === "127.0.0.1") {
     try {
@@ -86,15 +88,13 @@ if (import.meta.env.DEV && typeof window !== "undefined") {
       if (!g.__FSAE_AUTH_EMULATOR__) {
         connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true });
         g.__FSAE_AUTH_EMULATOR__ = true;
-        console.log("[firebase] Connected Auth emulator at 127.0.0.1:9099");
       }
       if (!g.__FSAE_DB_EMULATOR__) {
         connectFirestoreEmulator(db as any, "127.0.0.1", 8080);
         g.__FSAE_DB_EMULATOR__ = true;
-        console.log("[firebase] Connected Firestore emulator at 127.0.0.1:8080");
       }
     } catch (e) {
-      console.warn("[firebase] Emulator connect failed", e);
+      // Emulator connection failed
     }
   }
 }
