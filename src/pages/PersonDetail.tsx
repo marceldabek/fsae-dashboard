@@ -89,21 +89,7 @@ export default function PersonDetail() {
   const numTasks = tasks.length;
   const numTasksTodo = tasks.filter(t => t.status !== "Complete").length;
 
-  // Estimate total hours committed (completed tasks) using same mapping logic used elsewhere.
-  const ptsToHours = (p: number) => {
-    if (p === 1) return 0.5;
-    if (p === 3) return 1;
-    if (p === 6) return 2;
-    if (p === 10) return 3;
-    if (p === 15) return 5;
-    if (p === 40) return 10;
-    if (p === 65) return 15;
-    if (p === 98) return 20;
-    if (p === 150) return 25;
-    if (p === 200) return 30;
-    return Math.max(0, Math.round(p / 4));
-  };
-  const taskHours = Math.round(tasks.filter(t=> t.status === 'Complete').reduce((sum, t)=> sum + (typeof t.ranked_points === 'number' ? ptsToHours(t.ranked_points) : 2), 0));
+  // Removed HRS stat per request
 
   // Remove old leaderboard rank on personal page per request
 
@@ -163,7 +149,7 @@ export default function PersonDetail() {
           )}
         </div>
   {/* role/year shown above; badges are displayed below Projects per request */}
-        <div className="mt-3 grid grid-cols-5 text-center">
+  <div className="mt-3 grid grid-cols-4 text-center">
           <div className="flex flex-col items-center">
             <div className="text-lg font-semibold">{numProjects}</div>
             <div className="text-xs text-muted-foreground uppercase tracking-caps">Projects</div>
@@ -187,10 +173,7 @@ export default function PersonDetail() {
             </div>
             <div className="text-xs text-muted-foreground uppercase tracking-caps">Streak</div>
           </div>
-          <div className="flex flex-col items-center">
-            <div className="text-lg font-semibold">{taskHours}</div>
-            <div className="text-xs text-muted-foreground uppercase tracking-caps">Hrs</div>
-          </div>
+          {/* HRS stat removed */}
         </div>
       </div>
 
@@ -209,6 +192,9 @@ export default function PersonDetail() {
       {/* Projects Card */}
   <div className="rounded-2xl bg-card border border-border p-4">
         <h2 className="font-semibold mb-2">Projects</h2>
+        {displayProjects.length === 0 ? (
+          <div className="text-xs text-muted-foreground uppercase tracking-caps">No projects yet.</div>
+        ) : (
         <ul className="space-y-3">
           {displayProjects.map(p => {
             // Use ALL tasks for the project for progress, not just tasks assigned to this person
@@ -300,6 +286,7 @@ export default function PersonDetail() {
             );
           })}
         </ul>
+        )}
       </div>
 
       {/* Badges Card (placed under Projects and above Ranked History) */}

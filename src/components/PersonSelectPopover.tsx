@@ -87,7 +87,7 @@ export default function PersonSelectPopover(props: PersonSelectPopoverProps) {
 			</button>
 			{open && (
 				<div className="fixed inset-0 z-40 flex items-start justify-center pt-24 px-4">
-					<div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+					<div className="absolute inset-0 bg-black/40" />
 					<div ref={ref} className="relative z-10 w-full max-w-md rounded-lg border border-white/15 bg-black/80 p-3 space-y-2">
 						<div className="flex items-center gap-2">
 							<input

@@ -54,8 +54,8 @@ export default function ProjectCard({
   );
 
   const container = compact
-  ? "rounded-xl bg-card dark:bg-surface border border-white/10 p-2.5"
-  : "rounded-2xl bg-card dark:bg-surface border border-white/10 p-3";
+  ? "rounded-xl bg-card dark:bg-surface border border-border p-2.5 shadow-sm"
+  : "rounded-2xl bg-card dark:bg-surface border border-border p-3 shadow-sm";
   const nameClass = compact
     ? "text-base font-semibold hover:underline mb-0"
     : "text-lg font-semibold hover:underline mb-0";

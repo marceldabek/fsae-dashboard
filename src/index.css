@@ -8,10 +8,11 @@
 @layer base {
   :root {
     /* Light theme — matches your old palette */
-    --bg: 220 23% 97%;              /* #F7F8FA */
+  --bg: 220 23% 97%;              /* #F7F8FA */
     --foreground: 222 40% 11%;      /* #111827 */
 
-    --card: 220 23% 97%;
+  /* Give cards a bit more shade so they pop against the page */
+  --card: 220 20% 94%;
     --card-foreground: 222 40% 11%;
     --popover: 220 23% 97%;
     --popover-foreground: 222 40% 11%;
@@ -31,8 +32,9 @@
     --destructive: 0 63% 46%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 220 13% 90%;
-    --input: 220 13% 90%;
+  /* Slightly darker border/input for clearer separation in light mode */
+  --border: 220 13% 85%;
+  --input: 220 13% 85%;
     --ring: 221 83% 53%;
 
     /* Overlays (used by Gantt headers/tooltips, via rgb(var(--overlay-*))) */

@@ -18,17 +18,11 @@
     }
   ],
   "emulators": {
-    "functions": {
-      "port": 5002
-    },
-    "ui": {
-      "port": 4002
-    },
-    "hub": {
-      "port": 4402
-    },
-    "logging": {
-      "port": 4502
-    }
+    "functions": { "host": "127.0.0.1", "port": 5002 },
+    "firestore": { "host": "127.0.0.1", "port": 8080 },
+    "auth": { "host": "127.0.0.1", "port": 9099 },
+    "ui": { "host": "127.0.0.1", "port": 4000 },
+    "hub": { "host": "127.0.0.1", "port": 4402 },
+    "logging": { "host": "127.0.0.1", "port": 4502 }
   }
 }

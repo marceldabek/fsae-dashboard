@@ -345,7 +345,8 @@ export async function addProject(pr: Omit<Project, "id"> & { id?: string }) {
 // Simple settings doc: settings/global => { rulebook_url?: string }
 export async function updatePerson(id: string, patch: Partial<Person>) {
   const ref = doc(db, "people", id);
-  await updateDoc(ref, pruneUndefined(patch as any));
+  // Use setDoc with merge to create-or-update person extras; updateDoc fails if doc doesn't exist
+  await setDoc(ref, pruneUndefined({ ...(patch as any), id } as any), { merge: true });
   bustCache(["people"]);
 }
 

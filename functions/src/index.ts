@@ -1,18 +1,199 @@
 // functions/src/index.ts
-import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { onCall, HttpsError, onRequest } from "firebase-functions/v2/https";
+import { defineSecret } from "firebase-functions/params";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { setGlobalOptions } from "firebase-functions/v2/options";
 import * as admin from "firebase-admin";
+import { getFirestore, FieldValue } from "firebase-admin/firestore";
+import * as crypto from "crypto";
+import { URLSearchParams } from "url";
+import * as path from "path";
+import * as fs from "fs";
 
 // Initialize Admin once
 try {
   admin.app();
 } catch {
-  admin.initializeApp();
+  if (process.env.FUNCTIONS_EMULATOR === "true") {
+    // Prefer functions/keys/serviceAccountKey.json if present; fallback to discord-firestore-sync secrets
+    const candidates = [
+      path.resolve(__dirname, "../keys/serviceAccountKey.json"),
+      path.resolve(__dirname, "../../discord-firestore-sync/secrets/uconn-fsae-ev-firebase-adminsdk-fbsvc-d98afe7345.json"),
+    ];
+    type ServiceAccountJSON = admin.ServiceAccount & { project_id?: string };
+    let loaded: ServiceAccountJSON | null = null;
+    let usedPath = "";
+    for (const p of candidates) {
+      if (fs.existsSync(p)) {
+        const raw = fs.readFileSync(p, "utf8");
+        try {
+          loaded = JSON.parse(raw) as ServiceAccountJSON;
+        } catch {
+          loaded = null;
+        }
+        usedPath = p;
+        break;
+      }
+    }
+    if (!loaded) {
+      console.warn("[init] Emulator mode: service account JSON not found. Falling back to default credentials.");
+      admin.initializeApp();
+    } else {
+      console.log("[init] Emulator mode: initializing Admin with service account:", usedPath);
+      admin.initializeApp({
+        credential: admin.credential.cert(loaded),
+        projectId: loaded.project_id,
+      });
+    }
+  } else {
+    admin.initializeApp();
+  }
 }
+// Firestore (modular)
+const db = getFirestore();
 
 // Global defaults
 setGlobalOptions({ region: "us-central1", maxInstances: 10 });
+
+// ---------- Discord OAuth endpoints ----------
+
+// Secrets (set with the CLI before deploy):
+//   firebase functions:secrets:set DISCORD_CLIENT_SECRET
+const DISCORD_CLIENT_SECRET = defineSecret("DISCORD_CLIENT_SECRET");
+// Client ID is public; hardcode is fine
+const DISCORD_CLIENT_ID = "1412530877400879217";
+
+// Emulator detection (Functions v2 sets this when running locally)
+const IS_EMULATOR = process.env.FUNCTIONS_EMULATOR === "true";
+if (IS_EMULATOR) {
+  // Do not log secrets; only indicate presence for debugging local setup
+  const hasSecretEnv = Boolean(process.env.DISCORD_CLIENT_SECRET);
+  console.log("[init] Emulator mode detected. DISCORD_CLIENT_SECRET env present:", hasSecretEnv);
+} else {
+  console.log("[init] Running in production mode.");
+}
+
+// Web origins (where we postMessage the token back)
+const WEB_ORIGIN_PROD = "https://marceldabek.github.io";
+const WEB_ORIGIN_DEV = "http://localhost:5173";
+
+// Redirect URIs — SAME per environment
+const REDIRECT_LOCAL = "http://127.0.0.1:5002/uconn-fsae-ev/us-central1/discordCallback";
+const REDIRECT_PROD = "https://us-central1-uconn-fsae-ev.cloudfunctions.net/discordCallback";
+const DISCORD_REDIRECT_URI = IS_EMULATOR ? REDIRECT_LOCAL : REDIRECT_PROD;
+console.log("[init] DISCORD_REDIRECT_URI:", DISCORD_REDIRECT_URI);
+
+const SCOPES = "identify"; // add " email guilds.members.read" later if needed
+
+export const discordLogin = onRequest((req, res) => {
+  const state = crypto.randomBytes(16).toString("hex");
+  const params = new URLSearchParams({
+  client_id: DISCORD_CLIENT_ID,
+    redirect_uri: DISCORD_REDIRECT_URI,
+    response_type: "code",
+    scope: SCOPES,
+    state,
+  });
+  const url = `https://discord.com/api/oauth2/authorize?${params.toString()}`;
+  console.log("AUTH URL redirecting to:", url);
+  res.redirect(url);
+  return;
+});
+
+// TEMP DEBUG VERSION — verbose error output for troubleshooting
+export const discordCallback = onRequest(
+  { secrets: [DISCORD_CLIENT_SECRET] },
+  async (req, res) => {
+    try {
+      // Safely parse `code` from query without using `any`
+      const q = req.query as Record<string, unknown>;
+      const codeVal = q?.code;
+      const code = typeof codeVal === "string" ? codeVal : Array.isArray(codeVal) ? String(codeVal[0] ?? "") : "";
+      if (!code) {
+        res.status(400).send("Missing code");
+        return;
+      }
+
+      // 1) Exchange code -> token
+      const form = new URLSearchParams({
+        client_id: DISCORD_CLIENT_ID,
+        client_secret: DISCORD_CLIENT_SECRET.value(),
+        grant_type: "authorization_code",
+        code: code,
+        redirect_uri: DISCORD_REDIRECT_URI,
+      });
+  // Do not log form contents to avoid leaking secrets
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const tokenResp = await (globalThis as any).fetch("https://discord.com/api/oauth2/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: form,
+      });
+
+      if (!tokenResp.ok) {
+  const body = await tokenResp.text();
+  console.error("TOKEN EXCHANGE FAILED", tokenResp.status, "(body redacted)");
+        res
+          .status(500)
+          .send(`<pre>STEP A: Token exchange failed (${tokenResp.status})\nredirect_uri used: ${DISCORD_REDIRECT_URI}\nclient_id used: ${DISCORD_CLIENT_ID}\n\n${body}</pre>`);
+        return;
+      }
+      const { access_token: accessToken } = await tokenResp.json();
+      console.log("STEP A OK");
+
+      // 2) Identify user
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const meResp = await (globalThis as any).fetch("https://discord.com/api/users/@me", {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (!meResp.ok) {
+        const body = await meResp.text();
+        console.error("STEP B FAIL /users/@me", meResp.status, body);
+        res
+          .status(500)
+          .send(`<pre>STEP B: /users/@me failed (${meResp.status}).\n${body}</pre>`);
+        return;
+      }
+      const me = (await meResp.json()) as { id: string; username?: string; global_name?: string; avatar?: string };
+      console.log("STEP B OK user", me.id, me.username);
+
+    const uid = `discord:${me.id}`;
+  await db.collection("users").doc(uid).set(
+        {
+          discord: {
+            id: me.id,
+            username: me.username ?? null,
+            global_name: me.global_name ?? null,
+            avatar: me.avatar ?? null,
+          },
+      updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+  console.log("STEP C OK Firestore upsert");
+
+  const token = await admin.auth().createCustomToken(uid, { discordId: me.id });
+  console.log("STEP C OK custom token issued");
+
+      res.set("Content-Type", "text/html");
+      res.send(`<!doctype html><meta charset="utf-8"><script>
+        (function () {
+          var msg = { source: "discord-auth", token: ${JSON.stringify(token)} };
+          try { window.opener && window.opener.postMessage(msg, "${WEB_ORIGIN_PROD}"); } catch (e) {}
+          try { window.opener && window.opener.postMessage(msg, "${WEB_ORIGIN_DEV}"); } catch (e) {}
+          try { window.close(); } catch (e) {}
+        })();
+      </script>`);
+      return;
+    } catch (e) {
+      console.error("CALLBACK CRASHED", e);
+      res.status(500).send("<pre>Callback crashed before finishing. See function logs.</pre>");
+      return;
+    }
+  },
+);
 
 // ---------- Roles ----------
 
@@ -25,7 +206,7 @@ export const getAdminRoles = onCall(async (request) => {
   const toUidArray = (v: unknown) =>
     Array.isArray(v) ? v.map(x => String(x).trim()).filter(Boolean) : [];
 
-  const db = admin.firestore();
+  // use modular Firestore instance
   const [asnap, lsnap] = await Promise.all([
     db.doc("config/admins").get(),
     db.doc("config/leads").get(),
@@ -84,7 +265,7 @@ interface RankedSettings {
 }
 
 async function loadRankedSettings(): Promise<RankedSettings> {
-  const snap = await admin.firestore().collection("ranked").doc("settings").get();
+  const snap = await db.collection("ranked").doc("settings").get();
   const defaults: RankedSettings = {
     enabled: true,
     autoApply: true,
@@ -97,7 +278,7 @@ async function loadRankedSettings(): Promise<RankedSettings> {
 }
 
 async function setRankedSettings(data: Partial<RankedSettings>) {
-  await admin.firestore().collection("ranked").doc("settings").set(data, { merge: true });
+  await db.collection("ranked").doc("settings").set(data, { merge: true });
 }
 
 function taskPoints(t: Task, settings: RankedSettings): number {
@@ -155,11 +336,11 @@ async function fetchCollections(): Promise<{
   tasks: Task[];
   attendance: AttendanceRec[];
 }> {
-  const db = admin.firestore();
+  // use modular Firestore instance
   const [peopleSnap, tasksSnap, attendanceSnap] = await Promise.all([
     db.collection("people").get(),
     db.collection("tasks").get(),
-    db.collection("attendance").get().catch(() => ({ docs: [] as FirebaseFirestore.QueryDocumentSnapshot[] })),
+  db.collection("attendance").get().catch(() => ({ docs: [] as Array<{ id: string; data(): Record<string, unknown> }> })),
   ]);
 
   const people = peopleSnap.docs.map((d) => ({ id: d.id, ...(d.data() as Partial<Person>) })) as Person[];
@@ -210,41 +391,32 @@ function computeRankUpdates(people: Person[], scores: Map<string, number>, setti
 async function applyRankUpdates(updates: Array<{ id: string; from: RankLevel; to: RankLevel }>) {
   if (!updates.length) return;
 
-  const db = admin.firestore();
+  // use modular Firestore instance
   const now = Date.now();
   const batch = db.batch();
 
-  const fieldValue = (admin.firestore as unknown as { FieldValue?: typeof admin.firestore.FieldValue }).FieldValue;
-
   for (const u of updates) {
     const ref = db.collection("people").doc(u.id);
-    if (fieldValue?.arrayUnion) {
-      batch.update(ref, {
-        rank: u.to,
-        rank_history: fieldValue.arrayUnion({ ts: now, from: u.from, to: u.to }),
-      });
-    } else {
-      batch.update(ref, { rank: u.to });
-    }
+    batch.update(ref, {
+      rank: u.to,
+      // If rank_history isn't an array yet, this will fail; we append separately below as a fallback
+    });
   }
 
   await batch.commit();
 
-  if (!fieldValue?.arrayUnion) {
-    for (const u of updates) {
-      const ref = db.collection("people").doc(u.id);
-      try {
-        await ref.set(
-          {
-            rank_history: admin.firestore.FieldValue?.arrayUnion
-              ? admin.firestore.FieldValue.arrayUnion({ ts: now, from: u.from, to: u.to })
-              : [{ ts: now, from: u.from, to: u.to }],
-          },
-          { merge: true },
-        );
-      } catch (e) {
-        console.error("[rank] history append fallback failed", u.id, e);
-      }
+  // Append rank_history entries after batch commit (single-writes to ensure an array exists)
+  for (const u of updates) {
+    const ref = db.collection("people").doc(u.id);
+    try {
+      await ref.set(
+        {
+          rank_history: [{ ts: now, from: u.from, to: u.to }],
+        },
+        { merge: true },
+      );
+    } catch (e) {
+      console.error("[rank] history append failed", u.id, e);
     }
   }
 
@@ -256,7 +428,7 @@ async function applyRankUpdates(updates: Array<{ id: string; from: RankLevel; to
 }
 
 async function writeBaseline(scores: Map<string, number>, people: Person[]) {
-  const db = admin.firestore();
+  // use modular Firestore instance
   const participants = people.filter((p) => p.ranked_opt_in);
   const orderedParticipants = [...participants].sort((a, b) => (scores.get(b.id) || 0) - (scores.get(a.id) || 0));
   const ordered = orderedParticipants.map((p) => p.id);
@@ -289,7 +461,7 @@ export const applyRankedChanges = onCall(async (request) => {
   const start = Date.now();
 
   try {
-    const adminDoc = await admin.firestore().collection("config").doc("admins").get();
+  const adminDoc = await db.collection("config").doc("admins").get();
     const adminUids: string[] = adminDoc.exists ? (adminDoc.data()?.uids || []) : [];
     if (!adminUids.includes(uid)) throw new HttpsError("permission-denied", "Admin only");
 

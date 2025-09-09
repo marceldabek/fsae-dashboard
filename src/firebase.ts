@@ -6,7 +6,8 @@ import {
   CACHE_SIZE_UNLIMITED,
 } from "firebase/firestore";
 import { getFunctions, connectFunctionsEmulator } from 'firebase/functions';
-import { getAuth } from "firebase/auth";
+import { getAuth, connectAuthEmulator } from "firebase/auth";
+import { connectFirestoreEmulator } from "firebase/firestore";
 
 // If you later add App Check, import it here.
 
@@ -75,3 +76,25 @@ if (import.meta.env.DEV && typeof window !== "undefined") {
 }
 
 export const auth = getAuth(app);
+
+// Connect Auth/Firestore emulators in local dev
+if (import.meta.env.DEV && typeof window !== "undefined") {
+  const host = window.location.hostname;
+  if (host === "localhost" || host === "127.0.0.1") {
+    try {
+      const g: any = globalThis as any;
+      if (!g.__FSAE_AUTH_EMULATOR__) {
+        connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true });
+        g.__FSAE_AUTH_EMULATOR__ = true;
+        console.log("[firebase] Connected Auth emulator at 127.0.0.1:9099");
+      }
+      if (!g.__FSAE_DB_EMULATOR__) {
+        connectFirestoreEmulator(db as any, "127.0.0.1", 8080);
+        g.__FSAE_DB_EMULATOR__ = true;
+        console.log("[firebase] Connected Firestore emulator at 127.0.0.1:8080");
+      }
+    } catch (e) {
+      console.warn("[firebase] Emulator connect failed", e);
+    }
+  }
+}

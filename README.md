@@ -43,3 +43,27 @@ Required keys:
 - VITE_FIREBASE_MESSAGING_SENDER_ID
 - VITE_FIREBASE_APP_ID
 
+## Local Firebase emulators
+
+Start the emulators on pinned ports (functions:5002, firestore:8080, auth:9099, UI:4000):
+
+```bash
+firebase emulators:start --only functions,auth,firestore
+```
+
+### Service account for local Admin SDK
+
+Create `functions/keys/serviceAccountKey.json` with your Firebase service account. This file must be gitignored (see `functions/.gitignore`).
+
+Alternatively, you can reuse the existing JSON in `discord-firestore-sync/secrets/` for local-only development.
+
+### Test Discord login endpoint (optional)
+
+```bash
+curl -I "http://127.0.0.1:5002/uconn-fsae-ev/us-central1/discordLogin"
+```
+
+Ensure your Discord application (in the Developer Portal) includes BOTH redirect URIs:
+- Local: `http://127.0.0.1:5002/uconn-fsae-ev/us-central1/discordCallback`
+- Prod:  `https://us-central1-uconn-fsae-ev.cloudfunctions.net/discordCallback`
+

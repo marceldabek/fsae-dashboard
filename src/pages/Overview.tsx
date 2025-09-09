@@ -12,9 +12,9 @@ import AttendanceCard from "../components/AttendanceCard";
 import { RequireLead } from "../lib/roles";
 import ProjectCreateModal from "../components/ProjectCreateModal";
 
-function StatCard({ label, value }: { label: string; value: string | number }) {
+  function StatCard({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="rounded-xl bg-card dark:bg-surface border border-white/10 p-3 text-center flex flex-col items-center justify-center min-w-0">
+      <div className="rounded-xl bg-card dark:bg-surface border border-border p-3 shadow-sm text-center flex flex-col items-center justify-center min-w-0">
       {/* Make value text match total task completion font */}
       <div className="text-xl font-semibold leading-tight">{value}</div>
   <div className="mt-1 text-xs tracking-caps text-muted uppercase opacity-80 whitespace-nowrap overflow-hidden text-ellipsis leading-snug" title={label}>{label}</div>
@@ -253,7 +253,7 @@ export default function Overview() {
           </div>
 
           {/* Progress bar with matching stat typography */}
-  <div className="rounded-xl bg-card dark:bg-surface border border-border p-2 pb-3">
+          <div className="rounded-xl bg-card dark:bg-surface border border-border p-2 pb-3 shadow-sm">
             <div className="flex items-center justify-between mb-2">
               <div className="text-xs tracking-caps text-muted uppercase opacity-80">Total Task Completion</div>
               {/* Keep completion percentage prominent */}
@@ -279,7 +279,7 @@ export default function Overview() {
               />
 
             {/* Slide 1: Leaderboard */}
-            <div className="relative max-w-[390px] w-full mx-auto rounded-2xl p-5 md:p-6 border bg-card dark:bg-surface text-foreground border-white/10 overflow-hidden h-56 flex flex-col">
+            <div className="relative max-w-[390px] w-full mx-auto rounded-2xl p-5 md:p-6 border bg-card dark:bg-surface text-foreground border-border shadow-sm overflow-hidden h-56 flex flex-col">
               <h2 className="text-xs md:text-sm mb-2 text-muted uppercase tracking-caps" style={{ fontWeight: 400 }}>All-Time Leaderboard</h2>
               <div className="h-full overflow-hidden">
                 <table className="mx-auto w-full table-fixed text-xs sm:text-sm">
@@ -377,7 +377,7 @@ export default function Overview() {
         <div className="relative min-w-0">
           <button
             onClick={() => { setShowSubsystemMenu(v=>!v); setShowSortMenu(false); }}
-            className="px-3 py-1.5 rounded-md text-xs font-medium border border-border bg-card dark:bg-surface hover:bg-card/80 w-full"
+            className="px-3 py-1.5 rounded-md text-xs font-medium border border-border bg-card dark:bg-surface hover:bg-card/80 shadow-sm w-full"
           >
             Subsystems: <span className="font-semibold">{selectedSubsystems.length ? `${selectedSubsystems.length} selected` : "All"}</span>
           </button>
@@ -420,7 +420,7 @@ export default function Overview() {
         <div className="relative min-w-0">
           <button
             onClick={() => { setShowSortMenu(v=>!v); setShowSubsystemMenu(false); }}
-            className="px-3 py-1.5 rounded-md text-xs font-medium border border-border bg-card dark:bg-surface hover:bg-card/80 w-full"
+            className="px-3 py-1.5 rounded-md text-xs font-medium border border-border bg-card dark:bg-surface hover:bg-card/80 shadow-sm w-full"
           >
             Sort: <span className="font-semibold">{sortLabel(sortBy)} {dirSymbol}</span>
           </button>
@@ -456,7 +456,7 @@ export default function Overview() {
           value={projectSearch}
           onChange={handleSearchChange}
           placeholder="Search projects..."
-          className="px-3 py-1.5 rounded-md text-xs font-medium border border-border bg-card dark:bg-surface focus:bg-card/80 w-full focus:outline-none"
+          className="px-3 py-1.5 rounded-md text-xs font-medium border border-border bg-card dark:bg-surface focus:bg-card/80 shadow-sm w-full focus:outline-none"
         />
       </div>
   <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2">

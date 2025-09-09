@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { AreaChart, Area, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 import FadeAreaChart from "./FadeAreaChart";
 
@@ -14,47 +14,27 @@ const demoWeek = [
 ];
 const demoMonth = Array.from({ length: 30 }).map((_, i) => ({ label: `${i + 1}` , present: Math.max(0, Math.round(5 + 6 * Math.sin(i/4))) }));
 
-// --- helpers to resolve theme colors ----------------------------------------
-// These match your tailwind.config.js theme keys
-const VAR_CANDIDATES: Record<string, Array<keyof typeof TAILWIND_COLORS>> = {
-  line: ["accent"],
-  card: ["surface"],
-  border: ["border"],
-  text: ["text"],
+// --- theme helpers using CSS variables so light/dark swap automatically -----
+const CSS_VARS = {
+  // Use lighter blue from design-tokens.json: accent-weak (#98D7D8)
+  line: '#98D7D8',
+  card: 'hsl(var(--card))',
+  border: 'hsl(var(--border))',
+  text: 'hsl(var(--foreground))',
 };
-const TAILWIND_COLORS = {
-  accent: '#64C7C9',
-  surface: '#0F1B3A',
-  border: '#24304F',
-  text: '#FFFFFF',
-  overlay: 'rgba(255,255,255,0.06)',
-};
-function resolveThemeColor(keys: Array<keyof typeof TAILWIND_COLORS>, fallback: string): string {
-  for (const k of keys) {
-    if (k in TAILWIND_COLORS) return TAILWIND_COLORS[k];
-  }
-  return fallback;
-}
-function withAlpha(rgb: string, alpha: number): string {
-  if (rgb.startsWith("#")) {
-    // Convert hex to rgba
-    const bigint = parseInt(rgb.slice(1), 16);
-    const r = (bigint >> 16) & 255;
-    const g = (bigint >> 8) & 255;
-    const b = bigint & 255;
-    return `rgba(${r},${g},${b},${alpha})`;
-  }
-  if (rgb.startsWith("rgb")) {
-    return rgb.replace(/rgb\(([^)]+)\)/, `rgba($1,${alpha})`);
-  }
-  return rgb;
-}
 
 function DarkTooltip({ active, payload }: any) {
   if (!active || !payload?.length) return null;
   const p = payload[0].payload;
   return (
-    <div className="rounded-xl px-3 py-2 text-sm shadow-lg border" style={{ background: TAILWIND_COLORS.surface, borderColor: TAILWIND_COLORS.border, color: TAILWIND_COLORS.text }}>
+    <div
+      className="rounded-xl px-3 py-2 text-sm shadow-lg border"
+      style={{
+        background: 'hsl(var(--card))',
+        borderColor: 'hsl(var(--border))',
+        color: 'hsl(var(--foreground))',
+      }}
+    >
       <div className="opacity-70">{p.label}</div>
       <div className="font-semibold">{p.present} present</div>
     </div>
@@ -82,18 +62,12 @@ export default function AttendanceCard(props: AttendanceCardProps) {
   const data = view === "week" ? weekData : monthData;
   const currentAttendance = useMemo(() => (data.length ? data[data.length - 1].present : 0), [data]);
 
-  // Use theme colors from Tailwind config
-  const theme = {
-    line: resolveThemeColor(VAR_CANDIDATES.line, TAILWIND_COLORS.accent),
-    card: resolveThemeColor(VAR_CANDIDATES.card, TAILWIND_COLORS.surface),
-    border: resolveThemeColor(VAR_CANDIDATES.border, TAILWIND_COLORS.border),
-    text: resolveThemeColor(VAR_CANDIDATES.text, TAILWIND_COLORS.text),
-  };
+  // Colors follow current theme via CSS variables
+  const theme = CSS_VARS;
 
   return (
     <div
-  className={`relative max-w-[390px] w-full mx-auto rounded-2xl p-5 md:p-6 border bg-card dark:bg-surface text-foreground border-border overflow-hidden h-full flex flex-col ${className ?? ""}`}
-      style={{ background: theme.card, borderColor: theme.border, color: theme.text }}
+      className={`relative max-w-[390px] w-full mx-auto rounded-2xl p-5 md:p-6 border bg-card dark:bg-surface text-foreground border-border overflow-hidden h-full flex flex-col ${className ?? ""}`}
     >
       {/* Header row */}
       <div className="flex items-center justify-between gap-4 min-w-0">
@@ -129,7 +103,7 @@ export default function AttendanceCard(props: AttendanceCardProps) {
               <XAxis dataKey="label" hide />
               <YAxis hide domain={[0, (dataMax: number) => Math.max(10, dataMax * 1.15)]} />
               <CartesianGrid horizontal={false} vertical={false} />
-              <Tooltip content={<DarkTooltip />} cursor={{ stroke: withAlpha(theme.text, 0.06), strokeWidth: 20 }} />
+              <Tooltip content={<DarkTooltip />} cursor={{ stroke: 'hsl(var(--foreground) / 0.06)', strokeWidth: 20 }} />
               <Area type="monotone" dataKey="present" stroke={theme.line} strokeWidth={3} fill="url(#attnGradient)" />
             </AreaChart>
           </ResponsiveContainer>
@@ -149,7 +123,7 @@ export default function AttendanceCard(props: AttendanceCardProps) {
               <XAxis dataKey="label" hide />
               <YAxis hide domain={[0, (dataMax: number) => Math.max(10, dataMax * 1.15)]} />
               <CartesianGrid horizontal={false} vertical={false} />
-              <Tooltip content={<DarkTooltip />} cursor={{ stroke: withAlpha(theme.text, 0.06), strokeWidth: 20 }} />
+              <Tooltip content={<DarkTooltip />} cursor={{ stroke: 'hsl(var(--foreground) / 0.06)', strokeWidth: 20 }} />
               <Area type="monotone" dataKey="present" stroke={theme.line} strokeWidth={3} fill="url(#attnGradient)" />
             </AreaChart>
           </ResponsiveContainer>
