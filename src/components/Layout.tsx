@@ -21,6 +21,7 @@ function Layout({ children }: { children?: ReactNode }) {
   const fullBleed = fullBleedFromHandle || isTimeline;
   const { theme, toggle } = useTheme();
   const user = useAuth();
+  const base = (import.meta as any).env?.BASE_URL || import.meta.env.BASE_URL || "/";
 
   // If signed in with Discord custom token, uid is "discord:{discordId}".
   const myPersonId = useMemo(() => {
@@ -229,14 +230,14 @@ function Layout({ children }: { children?: ReactNode }) {
                 >
                   {/* Light theme: black logo */}
                   <img
-                    src="/icons/Discord-Symbol-Black.svg"
+                    src={`${base}icons/Discord-Symbol-Black.svg`}
                     alt=""
                     aria-hidden="true"
                     className="h-5 w-5 block dark:hidden"
                   />
                   {/* Dark theme: white logo */}
                   <img
-                    src="/icons/Discord-Symbol-White.svg"
+                    src={`${base}icons/Discord-Symbol-White.svg`}
                     alt=""
                     aria-hidden="true"
                     className="h-5 w-5 hidden dark:block"
