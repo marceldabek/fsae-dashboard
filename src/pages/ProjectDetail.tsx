@@ -2,7 +2,30 @@ import { useEffect, useMemo, useState, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useParams, Link } from "react-router-dom";
 
-import ProgressBar from "../components/ProgressBar";
+// ProgressBar removed per request
+import { Dropdown } from "@/components/base/dropdown/dropdown";
+import { Trash01, Edit03, CheckDone01 } from "@untitledui/icons";
+import ProjectCreateModal from "../components/ProjectCreateModal";
+import { Avatar } from "@/components/base/avatar/avatar";
+import { getAvatarUrl } from "../utils/colorExtraction";
+
+// Local archive icon (16x16) to display before the Archive label
+const ArchiveIcon = ({ className }: { className?: string }) => (
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    className={className}
+  >
+    <rect x="3" y="4" width="18" height="4" rx="1" ry="1" />
+    <path d="M5 8h14v9a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V8z" />
+    <path d="M10 12h4" />
+  </svg>
+);
 import PersonSelectPopover from "../components/PersonSelectPopover";
 import TaskCreateModal from "../components/TaskCreateModal";
 import { fetchPeople, fetchProjects, fetchTasksForProject, addTask, updateTask, deleteTaskById, updateProjectOwners, archiveProject, deleteProject, invalidateProjectsCache } from "../lib/firestore";
@@ -13,6 +36,7 @@ import { useRankedEnabled } from "../hooks/useRankedEnabled";
 import { useAuth } from "../hooks/useAuth";
 import { RequireLead, RequireMember, useRoles } from "../lib/roles";
 import type { Person, Project, Task } from "../types";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 
 export default function ProjectDetail() {
   const [showDescription, setShowDescription] = useState(true);
@@ -31,6 +55,7 @@ export default function ProjectDetail() {
   const [rankedEnabled] = useRankedEnabled();
   const [toast, setToast] = useState<string>("");
   const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
+  const [showEditProject, setShowEditProject] = useState(false);
   
   const user = useAuth();
   const uid = user?.uid || null;
@@ -132,9 +157,7 @@ export default function ProjectDetail() {
   }
   // rankedEnabled managed by hook
 
-  const total = tasks.length;
-  const done = tasks.filter(t => t.status === "Complete").length;
-  const percent = total > 0 ? (done / total) * 100 : 0;
+  // Progress summary removed
 
   // local edit helpers
   const [newDesc, setNewDesc] = useState("");
@@ -214,13 +237,13 @@ export default function ProjectDetail() {
           <div className="min-w-0 space-y-1">
             <h1 className="text-lg font-semibold leading-tight tracking-tight break-words pr-0 max-w-[calc(100%-110px)]">{project.name}</h1>
             {project.subsystem && (
-              <div className="text-[11px] font-medium text-muted/70 uppercase tracking-caps mt-0.5">{project.subsystem}</div>
+              <div className="text-[11px] text-muted-foreground/60 uppercase tracking-caps mt-0.5">{project.subsystem}</div>
             )}
              {/* Description section */}
           </div>
           <div className="absolute top-0 right-0 flex flex-col gap-2 items-end sm:flex-row sm:items-start sm:gap-2" style={{width: 'auto'}}>
-            {/* Button group for Delete, Link, Archive */}
-            <div className="flex flex-col space-y-1 sm:flex-row sm:gap-2">
+            {/* Right-side actions: Link + menu */}
+            <div className="flex flex-col space-y-1 sm:flex-row sm:gap-2 items-end">
               {project.design_link && (
                 <a
                   className="w-[68px] inline-flex items-center justify-center h-6 rounded-md border border-brand-blue/40 bg-brand-blue/20 hover:bg-brand-blue/30 text-[11px] font-medium whitespace-nowrap transition"
@@ -230,14 +253,39 @@ export default function ProjectDetail() {
                   title="Design link"
                 >Link</a>
               )}
-              {/* Only leads/admins can see archive/delete buttons */}
+              {/* Only leads/admins can see archive/delete menu (when not archived) */}
               <RequireLead>
                 {!((project as any).archived) && (
                   <div className="relative">
-                    <button
-                      onClick={()=> setShowArchiveConfirm(true)}
-                      className="w-[68px] inline-flex items-center justify-center h-6 rounded-md border border-accent/40 bg-accent/10 hover:bg-accent/20 text-accent text-[11px] font-medium whitespace-nowrap transition"
-                    >Archive</button>
+                    <Dropdown.Root>
+                      <Dropdown.DotsButton className="inline-flex items-center justify-center h-5 w-5 rounded-full border border-white/70 bg-card dark:bg-surface hover:bg-card/80 outline-none focus:outline-none ring-0 focus:ring-0 focus-visible:ring-0" />
+                      <Dropdown.Popover className="w-48 bg-card dark:bg-surface border border-white/70 shadow-xl outline-none ring-0 focus:ring-0 focus-visible:ring-0">
+                        <Dropdown.Menu>
+                          <Dropdown.Item
+                            icon={Edit03}
+                            onAction={() => setShowEditProject(true)}
+                            className="[&>div>span]:text-white [&>div>svg]:text-white"
+                          >
+                            Edit…
+                          </Dropdown.Item>
+                          <Dropdown.Item
+                            icon={ArchiveIcon as any}
+                            onAction={() => setShowArchiveConfirm(true)}
+                            className="[&>div>span]:text-white [&>div>svg]:text-white"
+                          >
+                            Archive
+                          </Dropdown.Item>
+                          <Dropdown.Item
+                            icon={Trash01}
+                            onAction={() => setShowDeleteConfirm(true)}
+                            className="text-danger focus:text-danger hover:text-danger [&>div>span]:text-danger [&>div>svg]:text-danger"
+                          >
+                            <span className="pr-4">Delete</span>
+                          </Dropdown.Item>
+                        </Dropdown.Menu>
+                      </Dropdown.Popover>
+                    </Dropdown.Root>
+
                     {showArchiveConfirm && (
                       <div className="absolute right-0 mt-2 w-72 rounded bg-surface border border-border p-3 shadow-lg z-20">
                         <div className="text-sm">Archive this project? You can re-enable it from the Admin page.</div>
@@ -247,15 +295,7 @@ export default function ProjectDetail() {
                         </div>
                       </div>
                     )}
-                  </div>
-                )}
-                {!((project as any).archived) && (
-                  <div className="relative">
-                    <button
-                      onClick={() => setShowDeleteConfirm(true)}
-                      className="w-[68px] inline-flex items-center justify-center h-6 rounded-md border border-destructive/40 bg-destructive/10 hover:bg-destructive/20 text-destructive text-[11px] font-medium whitespace-nowrap transition"
-                      title="Delete project"
-                    >Delete</button>
+
                     {showDeleteConfirm && (
                       <div className="absolute right-0 mt-2 w-72 rounded bg-surface border border-border p-3 shadow-lg z-30">
                         <div className="text-sm">Delete this project permanently? This cannot be undone.</div>
@@ -276,25 +316,21 @@ export default function ProjectDetail() {
                 )}
               </RequireLead>
           </div>
-           {/* Description box - always below buttons, with 32px margin above title */}
-           <div className="mb-0" style={{ marginTop: '24px' }}>
-             <button
-               className="text-muted-foreground uppercase tracking-caps text-xs block w-full text-left focus:outline-none"
-               style={{ marginBottom: '4px' }}
-               onClick={() => setShowDescription(prev => !prev)}
-             >
-               Description
-               <span className="ml-2 inline-block align-middle">
-                 {showDescription ? '▲' : '▼'}
-               </span>
-             </button>
-             {showDescription && (
-               <div className="rounded-lg border border-border bg-card dark:bg-surface p-3 text-xs text-muted-foreground mb-0" style={{minHeight: '32px'}}>
-                 {project.description ? project.description : <span className="text-muted-foreground/40">No description provided.</span>}
-               </div>
-             )}
+          {/* Edit Project modal (reuses the same component as Timeline) */}
+          <ProjectCreateModal
+            open={showEditProject}
+            onClose={() => setShowEditProject(false)}
+            people={allPeople}
+            projectToEdit={project as any}
+            onCreated={async () => { setShowEditProject(false); await reloadOwners(); }}
+          />
+           {/* Description shown plainly under header */}
+           <div className="mb-8" style={{ marginTop: '24px' }}>
+             <div className="rounded-lg border border-border bg-card dark:bg-surface p-3 text-xs text-muted-foreground/60" style={{minHeight: '32px'}}>
+               {project.description ? project.description : <span className="text-muted-foreground/40">No description provided.</span>}
+             </div>
            </div>
-          <div style={{ marginTop: '16px' }}>
+          <div style={{ marginTop: '16px', marginBottom: '48px' }}>
             <div className="flex items-center justify-between gap-2 mb-2">
               <div className="flex items-center gap-2">
                 <span className="text-muted-foreground uppercase tracking-caps text-xs">Owners</span>
@@ -323,8 +359,8 @@ export default function ProjectDetail() {
                       onAdd={handleAddOwner}
                       onRemove={handleRemoveOwner}
                       triggerLabel="Add/Remove"
-                      triggerContent={<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>}
-                      buttonClassName="inline-flex items-center justify-center h-4 w-4 rounded-md border border-accent/40 bg-accent/15 hover:bg-accent/25 text-accent transition"
+                      triggerContent={<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>}
+                      buttonClassName="inline-flex items-center justify-center h-6 w-6 rounded-md border border-accent/40 bg-accent/15 hover:bg-accent/25 text-accent transition"
                       disabled={ownersBusy}
                       maxItems={5}
                     />
@@ -337,14 +373,36 @@ export default function ProjectDetail() {
             </div>
             <div className="flex flex-wrap items-start gap-2 text-[13px] leading-snug">
               {owners.length > 0 ? (
-                owners.map(o => (
-                  <span
-                    key={o.id}
-                    className="px-2 py-0.5 rounded bg-surface/80 border border-border text-tick text-sm whitespace-nowrap font-medium"
-                  >{o.name}</span>
-                ))
+                owners.map(o => {
+                  const src = getAvatarUrl(o as any);
+                  const initials = o?.name
+                    ? o.name
+                        .split(/\s+/)
+                        .filter(Boolean)
+                        .slice(0, 2)
+                        .map(s => s[0]?.toUpperCase())
+                        .join("")
+                    : o.id.slice(0, 2).toUpperCase();
+                  return (
+                    <Link
+                      key={o.id}
+                      to={`/person/${o.id}`}
+                      className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-card dark:bg-surface border border-border/50 text-tick text-sm whitespace-nowrap font-medium hover:bg-card/80 focus:outline-none focus:ring-2 focus:ring-accent/50"
+                      title={`View ${o.name}'s profile`}
+                    >
+                      <Avatar
+                        size="xs"
+                        alt={o?.name || o.id}
+                        src={src}
+                        initials={!src ? initials : undefined}
+                        className="ring-2 ring-card dark:ring-surface"
+                      />
+                      <span className="truncate max-w-[160px]">{o.name}</span>
+                    </Link>
+                  );
+                })
               ) : (
-                <span className="px-2 py-0.5 rounded bg-surface/80 border border-border text-tick text-sm whitespace-nowrap font-medium">N/A</span>
+                <span className="px-2 py-0.5 rounded-full bg-card dark:bg-surface border border-border/50 text-tick text-sm whitespace-nowrap font-medium">N/A</span>
               )}
             </div>
           </div>
@@ -354,25 +412,20 @@ export default function ProjectDetail() {
                     {toast}
                   </div>
                 )}
-        <div className="flex flex-col items-center">
-          <ProgressBar value={percent} color={percent === 100 ? 'linear-gradient(90deg,#22c55e,#16a34a)' : undefined} />
-          <div style={{ marginTop: "4px" }} className="text-[11px] text-muted text-center uppercase tracking-caps font-medium tracking-wide">
-            {total > 0 ? `${done}/${total} complete` : "No tasks yet"}
-          </div>
-        </div>
+  {/* Progress bar removed */}
 
           <section className="space-y-2">
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
-                <h2 className="font-semibold text-xs uppercase tracking-caps text-muted-foreground leading-tight">TASKS</h2>
+                <h2 className="text-xs uppercase tracking-caps text-muted-foreground leading-tight">TASKS</h2>
                 {/* Leads/admins OR members who claimed can add tasks */}
                 {!(project as any).archived && (amLead || claimed) && (
                   <button
                     aria-label="Add task"
                     onClick={()=> setShowAddTask(true)}
-                    className="group inline-flex items-center justify-center h-7 w-7 rounded-md border border-accent/40 bg-accent/15 hover:bg-accent/25 text-accent transition shadow-sm hover:shadow-accent/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/60"
+                    className="group inline-flex items-center justify-center h-6 w-6 rounded-md border border-accent/40 bg-accent/15 hover:bg-accent/25 text-accent transition shadow-sm hover:shadow-accent/20 focus:outline-none"
                   >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" className="drop-shadow-sm">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round" className="drop-shadow-sm">
                       <line x1="12" y1="5" x2="12" y2="19" />
                       <line x1="5" y1="12" x2="19" y2="12" />
                     </svg>
@@ -448,29 +501,97 @@ export default function ProjectDetail() {
                 const isEditing = editTaskId === t.id;
                 return (
                   <li key={t.id} className="relative flex flex-col justify-between gap-2 rounded bg-card dark:bg-surface border border-border p-3 pr-10 flex-1 min-w-[280px] md:w-[calc(50%-0.75rem)] xl:w-[calc(33.333%-0.75rem)]">
-                    <div className="min-w-0 flex flex-wrap items-center gap-2">
-                      <div className="font-medium text-sm break-words flex-1" title={t.description}>
+                    <div className="min-w-0 flex items-start gap-1.5">
+                      <div className="text-sm break-words" title={t.description}>
                         {t.description}
                       </div>
+                      <RequireLead>
+                        {!isEditing && (
+                          <Dropdown.Root>
+                            <Dropdown.DotsButton className="inline-flex items-center justify-center h-5 w-5 rounded-full border border-white/70 bg-card dark:bg-surface hover:bg-card/80 ml-1 outline-none focus:outline-none ring-0 focus:ring-0 focus-visible:ring-0" />
+                            <Dropdown.Popover className="w-44 bg-card dark:bg-surface border border-white/70 shadow-xl outline-none ring-0 focus:ring-0 focus-visible:ring-0">
+                              <Dropdown.Menu>
+                                <Dropdown.Item icon={Edit03 as any} className="[&>div>span]:text-white [&>div>svg]:text-white" onAction={() => { setEditTaskId(t.id); setShowAddTask(false); }}>
+                                  Edit…
+                                </Dropdown.Item>
+                                <Dropdown.Separator />
+                                <Dropdown.Item className="[&>div>span]:text-white" onAction={() => handleUpdate(t, "Todo")}>
+                                  <span className="inline-flex items-center gap-2">
+                                    <span className="w-2 h-2 rounded-full bg-red-400 inline-block" aria-hidden></span>
+                                    To-do
+                                  </span>
+                                </Dropdown.Item>
+                                <Dropdown.Item className="[&>div>span]:text-white" onAction={() => handleUpdate(t, "In Progress") }>
+                                  <span className="inline-flex items-center gap-2">
+                                    <span className="w-2 h-2 rounded-full bg-yellow-400 inline-block" aria-hidden></span>
+                                    In Progress
+                                  </span>
+                                </Dropdown.Item>
+                                <Dropdown.Item className="[&>div>span]:text-white" onAction={() => handleUpdate(t, "Complete")}>
+                                  <span className="inline-flex items-center gap-2">
+                                    <span className="w-2 h-2 rounded-full bg-success inline-block" aria-hidden></span>
+                                    Complete
+                                  </span>
+                                </Dropdown.Item>
+                                <Dropdown.Separator />
+                                <Dropdown.Item icon={Trash01 as any} className="text-danger focus:text-danger hover:text-danger [&>div>span]:text-danger [&>div>svg]:text-danger" onAction={() => handleDelete(t)}>
+                                  Delete
+                                </Dropdown.Item>
+                              </Dropdown.Menu>
+                            </Dropdown.Popover>
+                          </Dropdown.Root>
+                        )}
+                      </RequireLead>
                     </div>
                     <div className="text-tick text-muted-foreground flex gap-2 items-center mt-0.5">
                       {/* Show assignee name to all users */}
                       {!isEditing && (
-                        <span className="text-tiny">
-                          {assignee ? assignee.name : 'Unassigned'}
-                        </span>
+                        assignee ? (
+                          <Link
+                            to={`/person/${assignee.id}`}
+                            className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-card dark:bg-surface border border-border/50 text-tick text-[11px] font-medium hover:bg-card/80 focus:outline-none focus:ring-2 focus:ring-accent/50"
+                            title={`View ${assignee.name}'s profile`}
+                          >
+                            {(() => {
+                              const a = assignee as Person;
+                              const src = getAvatarUrl(a as any);
+                              const initials = a.name
+                                ? a.name.split(/\s+/).filter(Boolean).slice(0, 2).map((s: string) => s[0]?.toUpperCase()).join("")
+                                : "NA";
+                              return (
+                                <Avatar
+                                  size="xs"
+                                  alt={a.name || 'Unassigned'}
+                                  src={src}
+                                  initials={!src ? initials : undefined}
+                                  className="ring-2 ring-card dark:ring-surface"
+                                />
+                              );
+                            })()}
+                            <span className="truncate max-w-[160px]">{assignee.name}</span>
+                          </Link>
+                        ) : (
+                          <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-card dark:bg-surface border border-border/50 text-tick text-[11px] font-medium">
+                            {(() => {
+                              const src = undefined as string | undefined;
+                              const initials = "NA";
+                              return (
+                                <Avatar
+                                  size="xs"
+                                  alt={'Unassigned'}
+                                  src={src}
+                                  initials={!src ? initials : undefined}
+                                  className="ring-2 ring-card dark:ring-surface"
+                                />
+                              );
+                            })()}
+                            <span className="truncate max-w-[160px]">Unassigned</span>
+                          </span>
+                        )
                       )}
                       {/* Only leads/admins can edit tasks */}
                       <RequireLead>
-                        {!isEditing && (
-                          <button
-                            className="p-1 rounded hover:bg-card/80"
-                            title="Edit task"
-                            onClick={() => setEditTaskId(t.id)}
-                          >
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
-                          </button>
-                        )}
+                        {/* Edit pencil removed; replaced with per-task 3-dots menu next to title */}
                         {isEditing && (
                           <div className="flex items-center gap-1">
                             <PersonSelectPopover
@@ -494,7 +615,7 @@ export default function ProjectDetail() {
                       </RequireLead>
                     </div>
                     {rankedEnabled && (
-                      <span className="absolute top-2 right-3 text-tick text-muted font-semibold text-[8px] opacity-80">+{pts} · {ptsToHours(pts)}h</span>
+                      <span className="absolute top-2.5 right-3 text-tick text-muted font-semibold text-[10px] opacity-90">+{pts} · {ptsToHours(pts)}h</span>
                     )}
                     {/* Only leads/admins can edit task details and delete tasks */}
                     <RequireLead>
@@ -517,23 +638,27 @@ export default function ProjectDetail() {
 
                           <div className="flex items-center justify-between w-full gap-2 flex-wrap">
                             <div className="flex items-center gap-2 w-full">
-                              <select
-                                className="h-7 px-2.5 rounded bg-surface/60 border border-border text-xs text-foreground dark-select flex-[2] w-full sm:flex-none sm:w-auto"
-                                value={t.ranked_points || ""}
-                                onChange={e=>updateTask(t.id, { ranked_points: e.target.value ? Number(e.target.value) : undefined }).then(reloadTasks)}
+                              <Select
+                                value={t.ranked_points === undefined ? "none" : String(t.ranked_points)}
+                                onValueChange={(v) => updateTask(t.id, { ranked_points: v === "none" ? undefined : Number(v) }).then(reloadTasks)}
                               >
-                                  <option value="">Points…</option>
-                                  <option value="1">1 pt ~ 0.5 hr</option>
-                                  <option value="3">3 pts ~ 1 hr</option>
-                                  <option value="6">6 pts ~ 2 hrs</option>
-                                  <option value="10">10 pts ~ 3 hrs</option>
-                                  <option value="15">15 pts ~ 5 hrs</option>
-                                  <option value="40">40 pts ~ 10 hrs</option>
-                                  <option value="65">65 pts ~ 15 hrs</option>
-                                  <option value="98">98 pts ~ 20 hrs</option>
-                                  <option value="150">150 pts ~ 25 hrs</option>
-                                  <option value="200">200 pts ~ 30 hrs</option>
-                              </select>
+                                <SelectTrigger className="h-7 px-2.5 text-xs rounded border border-input flex-[2] w-full sm:flex-none sm:w-auto">
+                                  <SelectValue placeholder="Points…" />
+                                </SelectTrigger>
+                                <SelectContent disablePortal>
+                                  <SelectItem value="none">Points…</SelectItem>
+                                  <SelectItem value="1">1 pt ~ 0.5 hr</SelectItem>
+                                  <SelectItem value="3">3 pts ~ 1 hr</SelectItem>
+                                  <SelectItem value="6">6 pts ~ 2 hrs</SelectItem>
+                                  <SelectItem value="10">10 pts ~ 3 hrs</SelectItem>
+                                  <SelectItem value="15">15 pts ~ 5 hrs</SelectItem>
+                                  <SelectItem value="40">40 pts ~ 10 hrs</SelectItem>
+                                  <SelectItem value="65">65 pts ~ 15 hrs</SelectItem>
+                                  <SelectItem value="98">98 pts ~ 20 hrs</SelectItem>
+                                  <SelectItem value="150">150 pts ~ 25 hrs</SelectItem>
+                                  <SelectItem value="200">200 pts ~ 30 hrs</SelectItem>
+                                </SelectContent>
+                              </Select>
                               <button onClick={() => handleDelete(t)} className="inline-flex items-center gap-1 px-2.5 h-7 rounded border text-[11px] font-medium border-red-500/60 text-red-200 bg-red-500/10 hover:bg-red-500/20 transition flex-1 sm:flex-none">
                                 Delete
                               </button>
@@ -556,6 +681,16 @@ export default function ProjectDetail() {
             fixedProjectId={project.id}
             onCreated={()=>{ reloadTasks(); }}
           />
+          {editTaskId && (
+            <TaskCreateModal
+              open={true}
+              onClose={()=> setEditTaskId(null)}
+              people={allPeople}
+              fixedProjectId={project.id}
+              taskToEdit={tasks.find(tt => tt.id === editTaskId)!}
+              onCreated={()=>{ setEditTaskId(null); reloadTasks(); }}
+            />
+          )}
         </div>
     </>
   );

@@ -50,7 +50,7 @@ function Layout({ children }: { children?: ReactNode }) {
   // ...existing code...
 
   return (
-  <div className="min-h-[100dvh] bg-background bg-app-gradient text-foreground">
+  <div className={`min-h-[100dvh] bg-background bg-app-gradient text-foreground ${fullBleed ? 'h-[100dvh] overflow-hidden' : ''}`}> 
       {/* iOS PWA safe area top spacer to avoid visual gap under the status bar */}
       <div style={{ height: 'env(safe-area-inset-top)' }} className="bg-background" />
   <header className="sticky top-0 z-50 w-full bg-background/95 backdrop-blur border-b border-border">
@@ -297,7 +297,9 @@ function Layout({ children }: { children?: ReactNode }) {
       >
         {fullBleed ? children ?? <Outlet /> : <Outlet />}
       </main>
-      <footer className="py-6 text-center text-xs text-muted uppercase tracking-caps">© UConn FSAE</footer>
+      {!fullBleed && (
+        <footer className="py-6 text-center text-xs text-muted uppercase tracking-caps">© UConn FSAE</footer>
+      )}
     </div>
   );
 }

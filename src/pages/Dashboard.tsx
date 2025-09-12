@@ -1,7 +1,7 @@
 
 import { useEffect, useState } from "react";
 
-import ProjectCard from "../components/ProjectCard";
+import ProjectCard from "../components/overview/OverviewProjectCard";
 import TrophyIcon from "../components/TrophyIcon";
 import { fetchPeople, fetchProjects, fetchTasks } from "../lib/firestore";
 import type { Person, Project, Task } from "../types";

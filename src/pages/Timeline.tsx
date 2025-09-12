@@ -1,10 +1,18 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import '@/components/EdgesLayer.css';
+import { routeEdge, EdgeLaneAllocator, Rect as EdgeRect } from '@/lib/routeEdge';
+import { useTimeZoom } from '@/hooks/useTimeZoom';
+import { useLayoutCache } from '../hooks/useLayoutCache';
+// Legend moved to floating tooltip trigger beside timeline (see implementation below)
 import { listenAuth, isCurrentUserAdmin } from "../auth";
-import { fetchProjects, fetchTasks, fetchProjectDependencies, addProjectDependency, deleteProjectDependency, updateProject } from "../lib/firestore";
+import { fetchProjects, fetchTasks, fetchProjectDependencies, addProjectDependency, deleteProjectDependency, updateProject, deleteProject } from "../lib/firestore";
 import type { Project as AppProject, Task, ProjectDependency } from "../types";
 import { useRoles } from "../lib/roles";
 import { Info } from "lucide-react";
+import ProjectBlock from '@/components/timeline/ProjectBlock';
+import { Edit03, Link02, Trash03 } from '@untitledui/icons';
 import ProjectCreateModal from "../components/ProjectCreateModal";
+import { ContextMenu, ContextMenuTrigger, ContextMenuContent, ContextMenuItem, ContextMenuSeparator } from '@/components/ui/context-menu';
 import type { Person } from "../types";
 import { useDiscordMembers } from '@/hooks/useDiscordMembers';
 import { discordMembersToPersons } from '@/utils/discordMapping';
@@ -51,17 +59,17 @@ function isoToDate(iso: string) { const d = new Date(iso); if (isNaN(+d)) throw 
 // Academic year runs Aug -> Jun (11 months). We compute the window around `today` unless explicitly provided.
 export function academicYearWindow(base = new Date()) {
   const y = base.getFullYear();
-  const startsThisYear = base.getMonth() >= 7; // Aug = 7
-  const startYear = startsThisYear ? y : y - 1;
-  const start = new Date(startYear, 7, 1); // Aug 1
+  const startYear = base.getMonth() >= 7 ? y : y - 1; // academic year always starts Aug
+  const start = new Date(startYear, 7, 1);
   const months: { idx: number; year: number; month: number; name: string; start: Date; days: number; }[] = [];
+  // Build Aug..Dec of startYear then Jan..Jun of next year
   for (let m = 7; m <= 11; m++) {
     const s = new Date(startYear, m, 1);
-    months.push({ idx: months.length, year: s.getFullYear(), month: s.getMonth(), name: MONTH_NAMES[s.getMonth()].toUpperCase().slice(0,3), start: s, days: daysInMonth(s.getFullYear(), s.getMonth()) });
+    months.push({ idx: months.length, year: s.getFullYear(), month: s.getMonth(), name: MONTH_NAMES[m].toUpperCase().slice(0,3), start: s, days: daysInMonth(s.getFullYear(), s.getMonth()) });
   }
   for (let m = 0; m <= 5; m++) {
     const s = new Date(startYear + 1, m, 1);
-    months.push({ idx: months.length, year: s.getFullYear(), month: s.getMonth(), name: MONTH_NAMES[s.getMonth()].toUpperCase().slice(0,3), start: s, days: daysInMonth(s.getFullYear(), s.getMonth()) });
+    months.push({ idx: months.length, year: s.getFullYear(), month: s.getMonth(), name: MONTH_NAMES[m].toUpperCase().slice(0,3), start: s, days: daysInMonth(s.getFullYear(), s.getMonth()) });
   }
   return { start, months };
 }
@@ -279,96 +287,64 @@ function useYearLayout(projects: Project[] | null, cfg: LayoutCfg) {
 // =============================
 // Edge routing (lanes + side ports; grey by default, blue on highlight)
 // =============================
-function EdgesLayer({ items, dependencies, highlightId, monthWidth, months }:{ items: Map<string,LayoutItem>; dependencies: Dependency[]; highlightId?: string | null; monthWidth: number; months: ReturnType<typeof academicYearWindow>["months"]; }){
+// Renamed to avoid collision with new attachments-based EdgesLayer component
+function DueDateEdgesLayer({ items, dependencies, highlightId, monthWidth, months }:{ items: Map<string,LayoutItem>; dependencies: Dependency[]; highlightId?: string | null; monthWidth: number; months: ReturnType<typeof academicYearWindow>["months"]; }){
   const width = monthWidth * months.length;
   let maxBottom = 0; items.forEach(r => { maxBottom = Math.max(maxBottom, r.y + r.h); });
-  const base = maxBottom + 12; // just under the lowest row
+  const allocator = useMemo(() => new EdgeLaneAllocator(12), [items]);
+  // Build boxes array once per render
+  const boxes: EdgeRect[] = useMemo(() => Array.from(items.values()).map(r => ({ x:r.x, y:r.y, w:r.w, h:r.h })), [items]);
 
-  const valid = dependencies.filter(e => items.has(e.fromId) && items.has(e.toId));
+  // Path cache ref keyed by dependency id -> last key + path
+  const pathCacheRef = useRef<Map<string,{ key:string; d:string }>>(new Map());
 
-  // Compute minimal baselines per y-row to avoid dropping all the way down
-  const rowBottoms: number[] = [];
-  items.forEach(r => rowBottoms.push(r.y + r.h));
-  rowBottoms.sort((a,b) => a-b);
-  const bottoms: number[] = rowBottoms.filter((v,i,a)=> i===0 || v!==a[i-1]);
-
-  // Build adjacency for fan-out/fan-in slotting
-  const keyOf = (e: Dependency) => `${e.fromId}|${e.toId}`;
-  const outMap = new Map<string, Dependency[]>();
-  const inMap = new Map<string, Dependency[]>();
-  valid.forEach(e => {
+  const depsForPaths = dependencies.filter(e => items.has(e.fromId) && items.has(e.toId));
+  // Include highlightId in key so active styling applies immediately without waiting for scroll / relayout
+  const compositeKey = depsForPaths.map(e => {
     const a = items.get(e.fromId)!; const b = items.get(e.toId)!;
-    if (!outMap.has(e.fromId)) outMap.set(e.fromId, []);
-    if (!inMap.has(e.toId)) inMap.set(e.toId, []);
-    outMap.get(e.fromId)!.push(e);
-    inMap.get(e.toId)!.push(e);
-  });
-  // Sort adjacency by geometric order for stable visual lanes
-  outMap.forEach((arr) => arr.sort((e1, e2) => (items.get(e1.toId)!.x - items.get(e2.toId)!.x) || e1.toId.localeCompare(e2.toId)));
-  inMap.forEach((arr) => arr.sort((e1, e2) => (items.get(e1.fromId)!.x - items.get(e2.fromId)!.x) || e1.fromId.localeCompare(e2.fromId)));
-  const outSlot = new Map<string, number>(); const outCount = new Map<string, number>();
-  const inSlot = new Map<string, number>();  const inCount  = new Map<string, number>();
-  outMap.forEach((arr, fromId) => { outCount.set(fromId, arr.length); arr.forEach((e, i)=> outSlot.set(keyOf(e), i)); });
-  inMap.forEach((arr, toId)   => { inCount.set(toId,   arr.length); arr.forEach((e, i)=> inSlot.set(keyOf(e), i)); });
+    return `${e.id}:${a.x},${a.y},${a.w},${a.h}|${b.x},${b.y},${b.w},${b.h}`;
+  }).join(";") + `|hi:${highlightId||''}`;
 
-  const gap = 14; // px spacing between adjacent lanes near ports
-  const pad = 14; // stub pad from block edge to port lane
-
-  const paths = valid.map((e, i) => {
-    const a = items.get(e.fromId)!; const b = items.get(e.toId)!;
-  // Ports: right-out of source, left-in of target with vertical distribution
-  const sx = a.x + a.w;
-  const tx = b.x;
-
-    // Fan-out/fan-in slot offsets
-    const k = keyOf(e);
-    const fCount = outCount.get(e.fromId) || 1;
-    const fSlot = outSlot.get(k) || 0;
-    const tCount = inCount.get(e.toId) || 1;
-    const tSlot = inSlot.get(k) || 0;
-  const fOffset = (fSlot - (fCount - 1) / 2) * gap;
-  const tOffset = (tSlot - (tCount - 1) / 2) * gap;
-  const sy = a.y + ((fSlot + 1) / (fCount + 1)) * a.h; // vertically spaced out ports
-  const ty = b.y + ((tSlot + 1) / (tCount + 1)) * b.h; // vertically spaced in ports
-
-  let startX = sx + pad + fOffset;
-    const endX = tx - pad - tOffset;
-    const x1 = Math.min(startX, endX);
-    const x2 = Math.max(startX, endX);
-    let neededBottom = Math.max(a.y + a.h, b.y + b.h);
-    // Check for obstacles between source and target horizontally
-    items.forEach(r => {
-      const rx1 = r.x, rx2 = r.x + r.w;
-      const overlap = !(rx2 < x1 || rx1 > x2);
-      if (!overlap) return;
-      neededBottom = Math.max(neededBottom, r.y + r.h);
-    });
-  const laneY = (neededBottom + 8);
-  // extend further for higher slots to reduce overlap
-  const extraReach = (fCount - fSlot) * 18;
-  startX = Math.min(startX + extraReach, endX - 16);
-
-    // If no substantial drop is needed, route straight across then into target
-    const crossing = endX <= startX + 2; // not enough horizontal room after offsets
-    const needsDrop = laneY > Math.max(sy, ty) + 6 || crossing;
-    const d = needsDrop
-      // Drop to minimal lane, run horizontally using fanned ports, then rise into target
-      ? `M ${sx} ${sy} H ${startX} V ${laneY} H ${endX} V ${ty} H ${tx}`
-      // Go straight with pre-target fanned verticals
-      : `M ${sx} ${sy} H ${endX} V ${ty} H ${tx}`;
-
-    const active = !!(highlightId && (e.fromId === highlightId || e.toId === highlightId));
-    return (
-      <path key={i} d={d} stroke={active ? "hsl(var(--accent))" : "rgb(var(--overlay-10))"} strokeWidth={active ? 3 : 2.5} fill="none" strokeLinecap="round" strokeLinejoin="round" opacity={active ? 1 : 0.9} />
-    );
+  const paths = useLayoutCache(compositeKey, () => {
+    const out: { id:string; d:string; active:boolean; back:boolean }[] = [];
+    // Build fast lookup for immediate edges of highlighted node
+    const immediate = new Set<string>();
+    if (highlightId) {
+      for (const e of depsForPaths) {
+        if (e.fromId === highlightId || e.toId === highlightId) immediate.add(e.id || `${e.fromId}->${e.toId}`);
+      }
+    }
+    for (const e of depsForPaths) {
+      const depId = e.id || `${e.fromId}->${e.toId}`;
+      const a = items.get(e.fromId)!; const b = items.get(e.toId)!;
+      const key = `${e.fromId}->${e.toId}|${a.x},${a.y},${a.w},${a.h}|${b.x},${b.y},${b.w},${b.h}`;
+      const cached = pathCacheRef.current.get(depId);
+      let d: string;
+      if (cached && cached.key === key) {
+        d = cached.d;
+      } else {
+        d = routeEdge(a, b, {
+          padding: 8,
+          boxes,
+          reserveShelfY: (yMin,yMax,x1,x2) => allocator.reserve(yMin,yMax,x1,x2),
+        });
+        pathCacheRef.current.set(depId, { key, d });
+      }
+  // Only highlight immediate (one-hop) edges of the selected project
+  const active = !!highlightId && immediate.has(depId);
+      const back = (a.x + a.w) > b.x; // back edge
+      out.push({ id: depId, d, active, back });
+    }
+    return out;
   });
 
-  const guideYs = bottoms.map(b => b + 8);
-  const svgH = Math.max(base + 24, (guideYs[guideYs.length-1] || base) + 24);
+  const svgH = maxBottom + 220; // extra space for shelves
   return (
     <svg width={width} height={svgH} className="absolute left-0 top-0 pointer-events-none z-0">
-      {/* alignment guides hidden per request */}
-      {paths}
+  {paths.map((p: { id:string; d:string; active:boolean; back:boolean }) => {
+  const cls = `edge ${p.active ? 'edge--focus edge--active-blue' : ''} ${p.back ? 'edge--back' : ''}`;
+  return <path key={p.id} d={p.d} className={cls} strokeOpacity={p.active?1:0.18} />;
+      })}
     </svg>
   );
 }
@@ -376,20 +352,65 @@ function EdgesLayer({ items, dependencies, highlightId, monthWidth, months }:{ i
 // =============================
 // Presentational pieces
 // =============================
-function MonthHeader({ months, monthWidth, onPickMonth }: { months: ReturnType<typeof academicYearWindow>["months"]; monthWidth: number; onPickMonth?: (idx:number)=>void; }) {
+// Adaptive header with variable tick density (quarters -> months -> weeks -> days)
+function AdaptiveTimeHeader({ months, zoom, timeWindow }: { months: ReturnType<typeof academicYearWindow>["months"]; zoom: ReturnType<typeof useTimeZoom>; timeWindow: { start:number; end:number }; }) {
+  const pxPerDay = zoom.scale * 864e5;
+  const showDays = pxPerDay >= 30;
+  const showWeeks = !showDays && pxPerDay >= 8;
+  const showMonths = !showWeeks && !showDays;
+  const ticks: { x:number; label:string; key:string; className?:string }[] = [];
+  if (showMonths) {
+    months.forEach(m => {
+      const start = new Date(m.year, m.month, 1).getTime();
+      const next = new Date(m.year, m.month+1, 1).getTime();
+      const mid = start + (next-start)/2;
+      ticks.push({ x: zoom.toX(mid), label: MONTH_NAMES[m.month].slice(0,3).toUpperCase(), key:`mo-${m.idx}`, className:'text-[11px] font-semibold' });
+    });
+  } else if (showWeeks) {
+    const startD = new Date(timeWindow.start); startD.setHours(0,0,0,0);
+    const day = startD.getDay(); const diff = (day + 6) % 7; startD.setDate(startD.getDate() - diff);
+    for (let t = startD.getTime(); t < timeWindow.end; t += 7*864e5) {
+      const dt = new Date(t);
+      const label = `${dt.getMonth()+1}/${dt.getDate()}`;
+      ticks.push({ x: zoom.toX(t), label, key:`wk-${label}`, className:'text-[10px]' });
+    }
+  } else if (showDays) {
+    // Iterate calendar days defensively (avoids DST or arithmetic drift) and ensure unique keys.
+    const daySet = new Set<string>();
+    const dt = new Date(timeWindow.start);
+    dt.setHours(0,0,0,0);
+    while (dt.getTime() <= timeWindow.end) {
+      const stamp = dt.getTime();
+      const iso = dt.toISOString().slice(0,10); // YYYY-MM-DD
+      if (!daySet.has(iso)) {
+        daySet.add(iso);
+        ticks.push({
+          x: zoom.toX(stamp),
+          label: String(dt.getDate()),
+          key: `d-${iso}`,
+          className: 'text-[10px]'
+        });
+      }
+      dt.setDate(dt.getDate()+1);
+    }
+  }
+  let currentMonthLabel: string | null = null;
+  if (showDays) {
+    const centerT = zoom.toT(window.innerWidth/2);
+    const d = new Date(centerT);
+    currentMonthLabel = `${MONTH_NAMES[d.getMonth()].toUpperCase()} ${d.getFullYear()}`;
+  }
   return (
-  <div className="sticky top-0 z-10 bg-card/80 dark:bg-surface/80 backdrop-blur border-b border-border">
-      <div className="relative" style={{ width: monthWidth * months.length }}>
-        {months.map((m, i) => (
-          <div
-            key={i}
-            className="inline-flex items-center justify-center font-medium text-sm uppercase tracking-wide text-mutedToken-foreground hover:bg-surface/60 cursor-pointer select-none"
-            style={{ width: monthWidth, height: 36 }}
-            onClick={() => { if (onPickMonth) onPickMonth(i); }}
-          >
-            {m.name}
+    <div className="sticky top-0 z-10 bg-card/80 dark:bg-surface/80 backdrop-blur border-b border-border h-10 select-none flex items-center">
+      <div className="relative w-full h-full">
+        {ticks.map(t => (
+          <div key={t.key} className={`absolute top-1/2 -translate-y-1/2 px-1 text-mutedToken-foreground ${t.className||''}`} style={{ left: t.x, transform:'translate(-50%, -50%)' }}>
+            {t.label}
           </div>
         ))}
+        {currentMonthLabel && (
+          <div className="absolute left-2 top-1/2 -translate-y-1/2 text-[11px] font-semibold text-foreground/80 pointer-events-none">{currentMonthLabel}</div>
+        )}
       </div>
     </div>
   );
@@ -434,43 +455,12 @@ function InfoPopover({ canEdit }: { canEdit: boolean }){
   );
 }
 
-function ProjectBlock({ p, rect, selected, onClick, onDoubleClick, onMouseDown, onMouseUp, onMouseLeave, displayDueDateIso, elevate }:{ p: Project; rect: LayoutItem; selected: boolean; onClick: ()=>void; onDoubleClick: ()=>void; onMouseDown?: (e: React.MouseEvent<HTMLDivElement>)=>void; onMouseUp?: (e: React.MouseEvent<HTMLDivElement>)=>void; onMouseLeave?: (e: React.MouseEvent<HTMLDivElement>)=>void; displayDueDateIso?: string; elevate?: boolean; }){
-  const color = STATUS_COLOR[p.status];
-  const due = isoToDate(displayDueDateIso || p.dueDate);
-  return (
-    <div
-      role="button"
-      onClick={onClick}
-      onDoubleClick={onDoubleClick}
-  onMouseDown={onMouseDown}
-  onMouseUp={onMouseUp}
-  onMouseLeave={onMouseLeave}
-  className={`absolute rounded shadow-sm border border-black/50 dark:border-white/40 overflow-hidden text-black dark:text-white hover:scale-[1.02] transition-transform ${selected ? "ring-2 ring-[hsl(var(--accent))]" : ""}`}
-  style={{ left: rect.x, top: rect.y, width: rect.w, height: rect.h, background: color, zIndex: elevate ? 50 : 10 }}
-      title={`${p.name} - due ${fmtShort(due)}`}
-    >
-      {/* top-right date */}
-      <div className="absolute top-0.5 right-1 text-[9px] font-semibold leading-none text-black/80 dark:text-white/90 select-none">
-        {fmtShort(due)}
-      </div>
-      {/* centered title with more padding to avoid date overlap */}
-      <div className="absolute inset-0 grid place-items-center px-1.5 pt-3 pb-1.5 text-center">
-        <div className="text-[11px] leading-tight break-words" style={{ display: '-webkit-box', WebkitLineClamp: 3 as any, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{p.name}</div>
-      </div>
-      {p.milestone && (
-        <div className="absolute -top-5 left-1/2 -translate-x-1/2 text-[10px] bg-black text-white px-1.5 py-[2px] rounded">
-          {fmtShort(due)}
-        </div>
-      )}
-    </div>
-  );
-}
+// ProjectBlock extracted to components/timeline/ProjectBlock.tsx
 
 // =============================
 // Main Page Component
 // =============================
 
-type ViewMode = { kind: "year" } | { kind: "month"; monthIdx: number };
 const LINK_ARMED = "__ARMED__"; // sentinel meaning: user clicked "Link" and is choosing a source
 
 export default function TimelinePageBlue() {
@@ -480,31 +470,59 @@ export default function TimelinePageBlue() {
   const [toast, setToast] = useState<string>("");
   const showToast = (msg: string) => { setToast(msg); window.setTimeout(()=>setToast(""), 2500); };
   const [showCreateProject, setShowCreateProject] = useState(false);
+  const [initialCreateDate, setInitialCreateDate] = useState<Date | null>(null);
 
-  // UI state
-  const [view, setView] = useState<ViewMode>({ kind: "year" });
+  // Unified view (month drill removed)
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [linkFrom, setLinkFrom] = useState<string | null>(null);
   const [linkActive, setLinkActive] = useState<boolean>(false);
   const linkLabel = linkActive ? "Linking..." : "Link";
 
-  // Layout constants
-  const monthWidth = 640; // px per month in the year view
+  // Layout constants (baseline before zoom; we will derive from time span)
+  const monthWidth = 640; // base reference width per month prior to zoom rewrite
   const rowHeight = 74; // reduced spacing between rows
-  const block = { w: 104, h: 56 }; // slightly taller boxes
+  const block = { w: 96, h: 56 }; // slightly taller boxes (reduced base width)
   const headerH = 56; // space under month header before rows start
 
   const { months, layout } = useYearLayout(projects, { monthWidth, rowHeight, block, headerH });
-  const yearWidth = monthWidth * months.length;
+  // Academic year hard range (Aug -> Jul 1) to prevent panning past June
+  const academicStart = useMemo(() => months[0].start.getTime(), [months]);
+  const academicEnd = useMemo(() => new Date(months[months.length-1].year, months[months.length-1].month+1, 1).getTime(), [months]);
+  const timeWindow = useMemo(() => ({ start: academicStart, end: academicEnd }), [academicStart, academicEnd]);
+  const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 1280;
+  // Focus roughly one month ahead of today by default
+  const todayT = Date.now();
+  const monthAheadCenter = todayT + 15*864e5; // midpoint of next ~30 day span
+  const zoom = useTimeZoom({
+    viewportWidth,
+    timeWindow,
+    initialScale: 1/(864e5), // fallback if initialSpanDays not applied
+    minScale: 1/(30*864e5),
+    maxScale: 8/(3600e3),
+    wheelZoomNoCtrl: true,
+    initialSpanDays: 32,
+    initialCenterTime: monthAheadCenter,
+  });
+  const yearWidth = (timeWindow.end - timeWindow.start) * zoom.scale; // dynamic canvas width
   const monthNameFull = (idx: number) => `${MONTH_NAMES[months[idx].month]} ${months[idx].year}`;
   const projById = useMemo(() => new Map((projects||[]).map(p => [p.id, p] as const)), [projects]);
   const today = new Date();
+  // --- View badge derived from zoom scale (px per ms -> per hour) ---
+  const pxPerHour = zoom.scale * 3600e3;
+  const viewBadge = pxPerHour >= 6 ? 'Day' : pxPerHour >= 0.25 ? 'Week' : pxPerHour >= 0.02 ? 'Month' : 'Year';
+  const [badge, setBadge] = useState(viewBadge);
+  useEffect(()=>{ setBadge(viewBadge); }, [viewBadge]);
   const isSameYMD = (a: Date, b: Date) => a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate();
+
+  // Background context menu state (right-click anywhere to create project on that date)
+  const [rcDate, setRcDate] = useState<Date | null>(null);
 
   // Year view: primary scroller + synced bottom scrollbar
   const yearScrollRef = useRef<HTMLDivElement | null>(null);
-  const yearBottomBarRef = useRef<HTMLDivElement | null>(null);
+  const yearBottomBarRef = useRef<HTMLDivElement | null>(null); // now overflow hidden; used for coordinate mapping
   const isSyncing = useRef(false);
+  // Holds dynamically placed (collision-resolved) item rectangles for edge routing at current zoom
+  const currentPlacedItemsRef = useRef<{ map: Map<string, LayoutItem>; farOut: boolean; shrink: boolean } | null>(null);
   useEffect(() => {
     const top = yearScrollRef.current;
     const bottom = yearBottomBarRef.current;
@@ -520,39 +538,9 @@ export default function TimelinePageBlue() {
     top.addEventListener('scroll', onTop, { passive: true });
     bottom.addEventListener('scroll', onBottom, { passive: true });
     return () => { top.removeEventListener('scroll', onTop); bottom.removeEventListener('scroll', onBottom); };
-  }, [view, yearWidth]);
+  }, [yearWidth]);
 
-  // Month view sizing
-  // Month view dynamic sizing using ResizeObserver
-  const [monthHostWidth, setMonthHostWidth] = useState<number>(0);
-  const monthScrollRef = useRef<HTMLDivElement | null>(null);
-  const daysInSelectedMonth = view.kind === "month" ? months[view.monthIdx].days : 0;
-  const baseDayCellW = 56;
-  const dayCellW = view.kind === "month" && monthHostWidth ? Math.max(baseDayCellW, Math.floor(monthHostWidth / daysInSelectedMonth)) : baseDayCellW;
-  const monthViewW = view.kind === "month" ? dayCellW * (months[view.monthIdx].days) : 0;
-
-  // Month view layout map with per-day stacking
-  const filteredProjectsThisMonth = useMemo(() => {
-    if (!projects || view.kind !== "month") return [] as Project[];
-    const m = months[view.monthIdx];
-    return projects
-      .filter(p => { const d = isoToDate(p.dueDate); return d.getFullYear() === m.year && d.getMonth() === m.month; })
-      .sort((a,b) => isoToDate(a.dueDate).getDate() - isoToDate(b.dueDate).getDate() || a.id.localeCompare(b.id));
-  }, [projects, view, months]);
-
-  const monthItemsMap: Map<string, LayoutItem> = useMemo(() => {
-    if (view.kind !== "month") return new Map<string, LayoutItem>();
-    const map = new Map<string, LayoutItem>();
-    const dayRow: Record<number, number> = {};
-    filteredProjectsThisMonth.forEach(p => {
-      const day = isoToDate(p.dueDate).getDate();
-      const row = dayRow[day] !== undefined ? dayRow[day] : 0; dayRow[day] = row + 1;
-      const x = (day - 1) * dayCellW + (dayCellW - block.w) / 2;
-      const y = 70 + row * 60; // tighter vertical margins
-      map.set(p.id, { id: p.id, x, y, w: block.w, h: block.h, monthIdx: view.monthIdx });
-    });
-    return map;
-  }, [view, filteredProjectsThisMonth, dayCellW, block.w, block.h]);
+  // Removed legacy month view state & layout
 
   // Handlers
   async function handleProjectClick(id: string) {
@@ -591,6 +579,11 @@ export default function TimelinePageBlue() {
           }
           await createDependency(fromId, toId);
           showToast(`Linked ${sName} → ${tName}`);
+          // Auto-disable linking mode after one successful link creation
+          setLinkActive(false);
+          setLinkFrom(null);
+          setSelectedId(id);
+          return;
         }
         setSelectedId(id);
         // remain in linking mode but reset to choose a new source next
@@ -628,6 +621,7 @@ export default function TimelinePageBlue() {
   const dragState = useRef<{ id: string; startClientX: number; startIso: string } | null>(null);
   const [dragPreview, setDragPreview] = useState<{ id: string; iso: string } | null>(null);
   const justDragged = useRef<boolean>(false);
+  const timelineDragLock = useRef<boolean>(false);
 
   function clearHoldTimer() {
     if (holdTimer.current) { window.clearTimeout(holdTimer.current); holdTimer.current = null; }
@@ -642,32 +636,20 @@ export default function TimelinePageBlue() {
 
   function mapClientXToDate(clientX: number): Date {
     // Map depending on view
-    if (view.kind === 'year') {
-      const scroller = yearScrollRef.current;
-      if (!scroller) return new Date(isoToDate(dragState.current!.startIso));
-      const rect = scroller.getBoundingClientRect();
-      const xInContent = (clientX - rect.left) + scroller.scrollLeft;
-      const idx = Math.max(0, Math.min(months.length - 1, Math.floor(xInContent / monthWidth)));
-      const month = months[idx];
-      const xWithin = xInContent - idx * monthWidth;
-      const dayW = monthWidth / month.days;
-      const dayIdx = Math.max(0, Math.min(month.days - 1, Math.round(xWithin / dayW)));
-      return new Date(month.year, month.month, dayIdx + 1);
-    } else {
-      const scroller = monthScrollRef.current;
-      const idx = view.monthIdx;
-      const month = months[idx];
-      if (!scroller) return new Date(month.year, month.month, new Date(isoToDate(dragState.current!.startIso)).getDate());
-      const rect = scroller.getBoundingClientRect();
-      const xInContent = (clientX - rect.left) + scroller.scrollLeft;
-      const dayIdx = Math.max(0, Math.min(month.days - 1, Math.round(xInContent / dayCellW)));
-      return new Date(month.year, month.month, dayIdx + 1);
-    }
+  const scroller = yearScrollRef.current;
+  if (!scroller) return new Date(isoToDate(dragState.current!.startIso)); // no native scroll; translate handled by zoom
+  const rect = scroller.getBoundingClientRect();
+  const viewportX = clientX - rect.left; // no native scroll; translate handled by zoom
+  const t = zoom.toT(viewportX);
+  const d = new Date(t);
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
   }
 
   function onBlockMouseDown(e: React.MouseEvent<HTMLDivElement>, id: string) {
     if (!canEdit) return;
     if (linkActive) return; // don't conflict with linking mode
+  // Don't let the pointer event arm timeline panning
+  e.stopPropagation();
     clearHoldTimer();
     const p = projById.get(id);
     if (!p) return;
@@ -677,6 +659,7 @@ export default function TimelinePageBlue() {
     holdTimer.current = window.setTimeout(() => {
       longPressActive.current = true;
       setDragPreview({ id, iso: startIso });
+  timelineDragLock.current = true; // lock timeline panning while dragging a block
       // add listeners
       window.addEventListener('mousemove', onGlobalMouseMove);
       window.addEventListener('mouseup', onGlobalMouseUp, { once: true });
@@ -705,6 +688,7 @@ export default function TimelinePageBlue() {
     clearHoldTimer();
     const wasDragging = longPressActive.current && !!dragState.current;
     longPressActive.current = false;
+  timelineDragLock.current = false; // release timeline pan lock
     const state = dragState.current; dragState.current = null;
     // restore selection
     document.body.style.userSelect = '';
@@ -741,19 +725,18 @@ export default function TimelinePageBlue() {
   }
 
   return (
-    <div className="w-full min-h-screen flex flex-col bg-background">
+    <div className="w-full h-screen overflow-hidden flex flex-col bg-background relative">
       {/* Top bar (sub-header under your global navbar) */}
       <div className="flex items-center justify-between px-4 py-2 border-b border-border bg-card dark:bg-surface sticky top-0 z-40">
         <div className="flex items-center gap-3">
-          <h1 className="text-lg font-semibold flex items-center gap-1">
-            {view.kind === 'month' ? monthNameFull(view.monthIdx) : 'Timeline'}
+          <h1 className="text-lg font-semibold flex items-center gap-2">
+            Timeline
             <InfoPopover canEdit={canEdit} />
           </h1>
+          <span key={badge} className="inline-block rounded bg-foreground/10 dark:bg-white/10 px-2 py-1 text-[11px] font-medium text-foreground/70 dark:text-white/70" aria-label="Current zoom granularity">{badge}</span>
         </div>
         <div className="flex items-center gap-2">
-          {view.kind === 'month' && (
-            <button className="px-3 py-1.5 rounded border text-sm border-border bg-card dark:bg-surface" onClick={() => setView({ kind: 'year' })}>Back to Year View</button>
-          )}
+          {/* month drill removed */}
           {/* Dependencies manager (Admin) */}
           {canEdit && (
             <DependenciesManager
@@ -788,197 +771,221 @@ export default function TimelinePageBlue() {
         </div>
       </div>
 
-      {/* YEAR VIEW */}
-      {view.kind === "year" && (
-        <div className="flex-1 flex flex-col">
+  <div className="flex-1 flex flex-col">
           {/* Main scroll area */}
-          <div ref={yearScrollRef} className="relative overflow-x-auto overflow-y-hidden flex-1">
-            <div className="relative" style={{ width: yearWidth, height: layout.containerH, minHeight: '100vh' }}>
-            <MonthHeader months={months} monthWidth={monthWidth} onPickMonth={(i) => setView({ kind: 'month', monthIdx: i })} />
+          <div
+            ref={yearScrollRef}
+            className="relative overflow-hidden flex-1"
+              onWheel={(e)=>{ if (!timelineDragLock.current) zoom.onWheel(e.nativeEvent); }}
+              onPointerDown={(e)=>{ if (!timelineDragLock.current) zoom.onPointerDown(e.nativeEvent); }}
+              onPointerMove={(e)=>{ if (!timelineDragLock.current) zoom.onPointerMove(e.nativeEvent); }}
+              onPointerUp={(e)=>{ if (!timelineDragLock.current) zoom.onPointerUp(e.nativeEvent); }}
+            onTouchStart={(e)=>{ if (e.touches.length===2) zoom.onTouchPinchStart(e.nativeEvent); }}
+            onTouchMove={(e)=>{ if (e.touches.length===2) zoom.onTouchPinchMove(e.nativeEvent); }}
+            onTouchEnd={(e)=>{ if (e.touches.length<2) zoom.onTouchPinchEnd(e.nativeEvent); }}
+          >
+            <ContextMenu onOpenChange={(open)=>{ if (!open) setRcDate(null); }}>
+              <ContextMenuTrigger asChild>
+                <div
+                  className="relative"
+                  style={{ width: yearWidth, height: layout.containerH, minHeight: '100vh' }}
+                  onContextMenu={(e)=>{
+                    // Capture date under cursor for background menu
+                    try {
+                      const scroller = yearScrollRef.current;
+                      if (!scroller) return;
+                      const rect = scroller.getBoundingClientRect();
+                      const viewportX = e.clientX - rect.left;
+                      const t = zoom.toT(viewportX);
+                      const d = new Date(t);
+                      const day = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+                      setRcDate(day);
+                    } catch {}
+                  }}
+                >
+            <AdaptiveTimeHeader months={months} zoom={zoom} timeWindow={timeWindow} />
 
-            {/* Month vertical separators */}
-            {months.map((_,i) => (
-              <div key={i} className="absolute border-r border-border" style={{ left: i*monthWidth, top: 0, height: '100vh', width: 0 }} />
-            ))}
+            {/* Month boundaries */}
+            {months.map((m,i) => {
+              const startT = new Date(m.year, m.month, 1).getTime();
+              const x = zoom.toX(startT);
+              return <div key={i} className="absolute top-0 bottom-0 border-r border-border/40" style={{ left: x, width: 0 }} />;
+            })}
 
-            {/* Today vertical line (year view) */}
+            {/* Right-end hard wall (end of June) */}
             {(() => {
-              // find month and day position
-              const idx = months.findIndex(m => m.year===today.getFullYear() && m.month===today.getMonth());
-              if (idx === -1) return null;
-              const m = months[idx];
-              const dayW = monthWidth / m.days;
-              const x = idx*monthWidth + (today.getDate()-1)*dayW + dayW/2;
-              return <div className="absolute top-0 bottom-0" style={{ left: x, width: 0 }}>
+              const endJune = months[months.length-1];
+              const wallT = new Date(endJune.year, endJune.month+1, 1).getTime(); // July 1
+              const x = zoom.toX(wallT);
+              return <div className="absolute top-0 bottom-0 pointer-events-none" style={{ left: x, width:0 }}>
+                <div className="absolute top-0 bottom-0 w-[3px] bg-gradient-to-b from-red-500/70 via-red-500 to-red-500/70 rounded-sm" />
+              </div>;
+            })()}
+
+            {/* Today vertical line (follows pan/zoom) */}
+            {(() => {
+              const t = today.getTime();
+              const x = zoom.toX(t);
+              if (x < -50 || x > yearWidth + 50) return null; // offscreen
+              return <div className="absolute top-0 bottom-0 pointer-events-none" style={{ left: x, width: 0 }}>
                 <div className="absolute top-0 bottom-0 border-r" style={{ borderColor: '#E11D48' }} />
               </div>;
             })()}
 
-            {/* Project blocks */}
-            {(projects || []).map(p => {
-              let rect = layout.items.get(p.id); if (!rect) return null;
-              // If dragging this block, override its x-position to follow the mouse-mapped date
-              if (dragPreview?.id === p.id) {
-                try {
-                  const d = isoToDate(dragPreview.iso);
-                  const mIdx = months.findIndex(m => d.getFullYear() === m.year && d.getMonth() === m.month);
-                  if (mIdx !== -1) {
-                    const month = months[mIdx];
-                    const dayWidth = monthWidth / month.days;
-                    const xMonthStart = monthWidth * mIdx;
-                    const xNew = xMonthStart + dayWidth * (d.getDate() - 1) + Math.max(0, (dayWidth - rect.w) / 2);
-                    rect = { ...rect, x: xNew };
+            {(() => {
+              const pxPerDay = zoom.scale * 864e5;
+              // Derive visible day span (how many days fit in viewport) to decide shrink mode.
+              const visibleDays = viewportWidth / pxPerDay; // bigger span => smaller pxPerDay
+              // Enter shrink mode once roughly >= ~60 days (about 2 months) are visible.
+              const shrink = visibleDays >= 60; // primary trigger (shows ~2-3 months)
+              // Far-out tiny mode when >= ~120 days (semester wide) are in view.
+              const farOut = visibleDays >= 120;
+              const firstItemY = (() => { try { const it = layout.items.values().next(); return it && it.value ? it.value.y : headerH; } catch { return headerH; } })();
+
+              const placed: { id:string; x:number; y:number; w:number; h:number }[] = [];
+              // Unified vertical gap (10px) across ALL zoom levels (near, shrink, far) including same-date stacks
+              const gap = 10;
+              const entries: { id:string; xStart:number; w:number; h:number; baseY:number; due:Date }[] = [];
+              (projects || []).forEach(p => {
+                const baseRect = layout.items.get(p.id); if (!baseRect) return;
+                const due = isoToDate(dragPreview?.id === p.id ? dragPreview.iso : p.dueDate);
+                const xCenter = zoom.toX(due.getTime());
+                let dynW: number; if (pxPerDay < 0.5) dynW = 16; else if (pxPerDay < 0.8) dynW = 24; else if (pxPerDay < 1.2) dynW = 36; else if (pxPerDay < 2.5) dynW = 48; else if (pxPerDay < 5) dynW = 60; else if (pxPerDay < 10) dynW = 76; else dynW = 96;
+                const h = farOut ? 14 : shrink ? 32 : baseRect.h;
+                const baseY = shrink ? firstItemY + 4 : baseRect.y;
+                entries.push({ id: p.id, xStart: xCenter - dynW/2, w: dynW, h, baseY, due });
+              });
+              entries.sort((a,b)=> a.xStart - b.xStart || a.id.localeCompare(b.id));
+              if (shrink) {
+                // Use same collision stacking logic as non-shrink, but anchoring all blocks to the same baseY for uniform columns.
+                const verticalGap = gap;
+                entries.forEach(e => {
+                  let y = firstItemY + 4; // unified starting line
+                  while (true) {
+                    const collisions = placed.filter(r => {
+                      const horiz = !(e.xStart + e.w <= r.x || r.x + r.w <= e.xStart);
+                      if (!horiz) return false;
+                      const vertOverlap = !(y + e.h <= r.y || r.y + r.h <= y);
+                      return vertOverlap;
+                    });
+                    if (collisions.length === 0) break;
+                    const maxBottom = Math.max(...collisions.map(r => r.y + r.h));
+                    y = maxBottom + verticalGap;
                   }
-                } catch {}
+                  placed.push({ id: e.id, x: e.xStart, y, w: e.w, h: e.h });
+                });
+              } else {
+                // Non-shrink: deterministic vertical stacking for overlapping wide blocks.
+                const verticalGap = gap; // match fully zoomed-out spacing
+                entries.forEach(e => {
+                  let y = e.baseY;
+                  // Reposition until no vertical overlap with any horizontally-overlapping prior block.
+                  // Instead of incremental +2 nudges, jump to just below the lowest colliding block for stability.
+                  while (true) {
+                    const collisions = placed.filter(r => {
+                      const horiz = !(e.xStart + e.w <= r.x || r.x + r.w <= e.xStart);
+                      if (!horiz) return false;
+                      const vertOverlap = !(y + e.h <= r.y || r.y + r.h <= y);
+                      return vertOverlap;
+                    });
+                    if (collisions.length === 0) break;
+                    const maxBottom = Math.max(...collisions.map(r => r.y + r.h));
+                    y = maxBottom + verticalGap;
+                  }
+                  placed.push({ id: e.id, x: e.xStart, y, w: e.w, h: e.h });
+                });
               }
-              return (
-                <ProjectBlock
-                  key={p.id}
-                  p={p}
-                  rect={rect}
-                  selected={selectedId === p.id}
-                  onClick={() => { if (justDragged.current) return; handleProjectClick(p.id); }}
-                  onDoubleClick={() => handleProjectDoubleClick(p.id)}
-                  onMouseDown={(e)=>onBlockMouseDown(e, p.id)}
-                  onMouseUp={onBlockMouseUpOrLeave}
-                  onMouseLeave={onBlockMouseUpOrLeave}
-                  displayDueDateIso={dragPreview?.id === p.id ? dragPreview.iso : undefined}
-                  elevate={selectedId === p.id || dragPreview?.id === p.id}
-                />
-              );
-            })}
 
-            {/* Dependencies layer (SVG) */}
-            <EdgesLayer items={layout.items} dependencies={(dependencies || [])} highlightId={selectedId} monthWidth={monthWidth} months={months} />
-            </div>
-          </div>
-          {/* Bottom synced scrollbar */}
-          <div className="border-t border-border">
-            <div
-              ref={yearBottomBarRef}
-              className="overflow-x-auto overflow-y-hidden h-4"
-              style={{ scrollbarGutter: 'stable both-edges' as any }}
-            >
-              <div style={{ width: yearWidth, height: 1 }} />
-            </div>
-          </div>
-        </div>
-      )}
+              // Build map for edges with updated positions
+              const placedMap = new Map<string, LayoutItem>();
+              placed.forEach(r => placedMap.set(r.id, { id: r.id, x: r.x, y: r.y, w: r.w, h: r.h, monthIdx: 0 } as any));
+              currentPlacedItemsRef.current = { map: placedMap, farOut, shrink }; // store in ref for edge layer below
 
-      {/* MONTH VIEW */}
-      {view.kind === "month" && (
-        <div className="relative overflow-x-auto overflow-y-hidden flex-1" ref={(el) => {
-          if (!el) return;
-          monthScrollRef.current = el;
-          // Observe width changes to stretch days
-          const ro = new ResizeObserver(entries => {
-            for (const e of entries) {
-              const w = Math.floor(e.contentRect.width);
-              if (w && w !== monthHostWidth) setMonthHostWidth(w);
-            }
-          });
-          ro.observe(el);
-        }}>
-
-          {/* Month canvas */}
-    <div className="relative" style={{ width: monthViewW, height: 520 }}>
-            {/* Day columns */}
-            {Array.from({ length: months[view.monthIdx].days }).map((_, d) => {
-              const date = new Date(months[view.monthIdx].year, months[view.monthIdx].month, d+1);
-              const dow = date.getDay();
-              const dowLabel = DOW[dow];
-              const isMeeting = dow === 2 || dow === 4 || dow === 6; // Tue/Thu/Sat
-              return (
-                <React.Fragment key={d}>
-      <div className={"absolute top-0 bottom-0" + (isMeeting ? " bg-accent/5" : "") } style={{ left: d*dayCellW, width: dayCellW, zIndex: 0, pointerEvents: 'none' }} />
-      <div className="absolute top-0 bottom-0 border-r border-border/40" style={{ left: d*dayCellW, width: dayCellW, zIndex: 0, pointerEvents: 'none' }} />
-                  <div className="absolute top-0 bottom-0" style={{ left: d*dayCellW, width: dayCellW, zIndex: 0, pointerEvents: 'none' }}>
-                    <div className="sticky top-8 text-[10px] leading-tight text-center">
-                      <div className="font-medium text-foreground/80">{d+1}</div>
-                      <div className={"uppercase tracking-wide " + (isMeeting ? "text-accent" : "text-mutedToken-foreground")}>{dowLabel}</div>
-                    </div>
-                  </div>
-                </React.Fragment>
-              );
-            })}
-
-            {/* Today vertical line (month view) */}
-            {(() => {
-              const m = months[view.monthIdx];
-              if (today.getFullYear() !== m.year || today.getMonth() !== m.month) return null;
-              const x = (today.getDate()-1) * dayCellW + dayCellW/2;
-              return <div className="absolute top-0 bottom-0" style={{ left: x, width: 0 }}>
-                <div className="absolute top-0 bottom-0 border-r" style={{ borderColor: '#E11D48' }} />
-              </div>;
+              const scaleForBlock = Math.min(2, Math.max(0, pxPerHour / 0.25));
+              return placed.map(r => {
+                const p = projById.get(r.id)!;
+                const due = isoToDate(dragPreview?.id === p.id ? dragPreview.iso : p.dueDate);
+                return (
+                  <ContextMenu key={p.id}>
+                    <ContextMenuTrigger asChild>
+                      <div>
+                        <ProjectBlock
+                          name={p.name}
+                          dueDate={due}
+                          color={STATUS_COLOR[p.status]}
+                          rect={{ x: r.x, y: r.y, w: r.w, h: r.h }}
+                          selected={selectedId === p.id}
+                          milestone={p.milestone}
+                          elevate={selectedId === p.id || dragPreview?.id === p.id}
+                          hideDate={shrink}
+                          onClick={() => { if (justDragged.current) return; handleProjectClick(p.id); }}
+                          onDoubleClick={() => handleProjectDoubleClick(p.id)}
+                          onMouseDown={(e)=>onBlockMouseDown(e, p.id)}
+                          onMouseUp={onBlockMouseUpOrLeave}
+                          onMouseLeave={onBlockMouseUpOrLeave}
+                          scale={scaleForBlock}
+                        />
+                      </div>
+                    </ContextMenuTrigger>
+                    <ContextMenuContent className="w-52 bg-card dark:bg-surface border border-border/60 shadow-xl">
+                      <ContextMenuItem onClick={() => { setShowCreateProject(true); setSelectedId(p.id); }}>
+                        <Edit03 className="w-4 h-4 mr-2 opacity-80" /> Edit…
+                      </ContextMenuItem>
+                      <ContextMenuItem onClick={() => { const url = (projById.get(p.id) as any)?.design_url; if (url) window.open(url, '_blank'); }} disabled={!(projById.get(p.id) as any)?.design_url}>
+                        <Link02 className="w-4 h-4 mr-2 opacity-80" /> Open Design Link
+                      </ContextMenuItem>
+                      <ContextMenuSeparator />
+                      <ContextMenuItem className="text-danger focus:text-danger hover:text-danger" onClick={async () => { if (confirm('Delete project?')) { try { await deleteProject(p.id); refreshAll(); showToast('Deleted'); } catch { showToast('Delete failed'); } } }}>
+                        <Trash03 className="w-4 h-4 mr-2" /> Delete
+                      </ContextMenuItem>
+                    </ContextMenuContent>
+                  </ContextMenu>
+                );
+              });
             })()}
 
-            {/* Month projects */}
-            {filteredProjectsThisMonth.map((p) => {
-              let rect = monthItemsMap.get(p.id);
-              if (!rect) return null;
-              if (dragPreview?.id === p.id) {
-                try {
-                  const d = isoToDate(dragPreview.iso);
-                  const day = d.getDate();
-                  const xNew = (day - 1) * dayCellW + (dayCellW - rect.w) / 2;
-                  rect = { ...rect, x: xNew };
-                } catch {}
-              }
-              return (
-                <ProjectBlock
-                  key={p.id}
-                  p={p}
-                  rect={rect}
-                  selected={selectedId === p.id}
-                  onClick={() => { if (justDragged.current) return; handleProjectClick(p.id); }}
-                  onDoubleClick={() => handleProjectDoubleClick(p.id)}
-                  onMouseDown={(e)=>onBlockMouseDown(e, p.id)}
-                  onMouseUp={onBlockMouseUpOrLeave}
-                  onMouseLeave={onBlockMouseUpOrLeave}
-                  displayDueDateIso={dragPreview?.id === p.id ? dragPreview.iso : undefined}
-                  elevate={selectedId === p.id || dragPreview?.id === p.id}
-                />
-              );
-            })}
-
-            {/* Month edges including in/out-of-month connections (partial) */}
             {(() => {
-              // create ghost endpoints at left/right edges if the other endpoint is out of this month
-              const ghosts = new Map(monthItemsMap);
-              const m = months[view.monthIdx];
-              const leftX = 0, rightX = monthViewW;
-              const edgeDeps = (dependencies || []).filter(e => {
-                const aIn = monthItemsMap.has(e.fromId); const bIn = monthItemsMap.has(e.toId);
-                return aIn || bIn;
-              });
-              edgeDeps.forEach(e => {
-                if (!ghosts.has(e.fromId) && monthItemsMap.has(e.toId)) {
-                  // create a left ghost for source
-                  const target = monthItemsMap.get(e.toId)!;
-                  ghosts.set(e.fromId, { id: e.fromId, x: leftX, y: target.y, w: 0, h: target.h, monthIdx: view.monthIdx });
-                }
-                if (!ghosts.has(e.toId) && monthItemsMap.has(e.fromId)) {
-                  // create a right ghost for target
-                  const source = monthItemsMap.get(e.fromId)!;
-                  ghosts.set(e.toId, { id: e.toId, x: rightX, y: source.y, w: 0, h: source.h, monthIdx: view.monthIdx });
-                }
-              });
-              return (
-                <EdgesLayer
-                  items={ghosts}
-                  dependencies={edgeDeps}
-                  highlightId={selectedId}
-                  monthWidth={monthViewW}
-                  months={months.slice(view.monthIdx, view.monthIdx + 1)}
-                />
-              );
+              const map = currentPlacedItemsRef.current?.map;
+              if (!map) return null;
+              return <DueDateEdgesLayer items={map} dependencies={(dependencies || [])} highlightId={selectedId} monthWidth={monthWidth} months={months} />;
             })()}
+            {/* Aggregated month counts at far zoom */}
+            {(() => {
+              const pxPerDay = zoom.scale * 864e5;
+              if (pxPerDay >= 0.7) return null; // only show when very zoomed out
+              const counts = months.map(m => {
+                const startT = new Date(m.year, m.month, 1).getTime();
+                const endT = new Date(m.year, m.month+1, 1).getTime();
+                const count = (projects||[]).filter(p => {
+                  const t = isoToDate(p.dueDate).getTime();
+                  return t >= startT && t < endT;
+                }).length;
+                return { m, count, x: zoom.toX(startT + (endT-startT)/2) };
+              });
+              return counts.filter(c => c.count>0).map(c => (
+                <div key={c.m.idx} className="absolute -top-2 text-[10px] font-semibold text-mutedToken-foreground pointer-events-none" style={{ left: c.x, transform:'translateX(-50%)' }}>
+                  {c.count}
+                </div>
+              ));
+            })()}
+                </div>
+              </ContextMenuTrigger>
+              <ContextMenuContent className="w-56 bg-card dark:bg-surface border border-border/60 shadow-xl">
+                <ContextMenuItem
+                  onClick={() => {
+                    setInitialCreateDate(rcDate || null);
+                    setShowCreateProject(true);
+                  }}
+                >
+                  + Create project{rcDate ? ` on ${rcDate.getMonth()+1}/${rcDate.getDate()}` : ''}
+                </ContextMenuItem>
+              </ContextMenuContent>
+            </ContextMenu>
           </div>
         </div>
-      )}
 
       {loading && (
-        <div className="absolute inset-0 flex items-center justify-center text-mutedToken-foreground">Loading timeline...</div>
+        <div className="absolute inset-0 flex items-center justify-center text-mutedToken-foreground pointer-events-none">Loading timeline...</div>
       )}
 
       {/* Toast */}
@@ -991,9 +998,11 @@ export default function TimelinePageBlue() {
       {/* Create Project Modal */}
       <ProjectCreateModal
         open={!!showCreateProject && !!people}
-        onClose={() => setShowCreateProject(false)}
+        onClose={() => { setShowCreateProject(false); setInitialCreateDate(null); }}
         people={people || []}
-        onCreated={async () => { await refreshAll(); showToast("Project created"); }}
+        projectToEdit={selectedId ? (projById.get(selectedId) as any) : null}
+        initialDate={selectedId ? null : initialCreateDate}
+        onCreated={async () => { await refreshAll(); showToast("Project saved"); }}
       />
     </div>
   );

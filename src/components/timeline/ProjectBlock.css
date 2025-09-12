@@ -1,0 +1,11 @@
+.project-block { position: absolute; border: 0; }
+.project-block--selected {
+  /* Tight, solid accent outline + minimal outer glow (no gap) */
+  box-shadow:
+    0 0 0 1px hsl(var(--accent)) inset,
+    0 0 0 2px hsl(var(--accent)),
+    0 0 6px 2px hsl(var(--accent)/0.35);
+  outline: none;
+  background: hsl(var(--accent)/0.15);
+  transition: box-shadow 120ms ease;
+}

@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, useMemo, type ReactNode } from "react";
 import type { Person } from "../types";
+import { Avatar } from "@/components/base/avatar/avatar";
+import { getAvatarUrl } from "../utils/colorExtraction";
 
 // Standardized person selection popover component (single or multi select)
 // Appears centered and limited to maxItems (default 8) to avoid internal scrolling.
@@ -63,6 +65,10 @@ export default function PersonSelectPopover(props: PersonSelectPopoverProps) {
 
 	const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
 
+	const selectedPeople = useMemo(() => {
+		return selectedIds.map(id => people.find(pp => pp.id === id)).filter(Boolean) as Person[];
+	}, [selectedIds, people]);
+
 	const autoLabel = (() => {
 		if (triggerLabel) return triggerLabel;
 		if (mode === "single") {
@@ -89,14 +95,30 @@ export default function PersonSelectPopover(props: PersonSelectPopoverProps) {
 				<div className="fixed inset-0 z-[120] flex items-start justify-center pt-24 px-4">
 					{/* Removed dark backdrop to avoid covering underlying card */}
 					<div ref={ref} className="relative z-[121] w-full max-w-md rounded-lg border border-input bg-popover text-popover-foreground p-3 space-y-2 shadow-md">
-						<div className="flex items-center gap-2">
-							<input
-								autoFocus
-								value={q}
-								onChange={e => setQ(e.target.value)}
-								placeholder="Search people…"
-								className="w-full px-2 py-1.5 rounded-md border border-input bg-transparent text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-							/>
+						<div className="flex items-start gap-2">
+							{/* Chips-in-input container */}
+							<div className="flex flex-wrap items-center gap-1.5 w-full px-2.5 py-2 rounded-md border border-input bg-transparent text-sm shadow-sm focus-within:ring-1 focus-within:ring-ring min-h-[48px]">
+								{mode === "multi" && selectedPeople.length > 0 && selectedPeople.map(p => (
+									<span key={p.id} className="inline-flex items-center gap-1.5 max-w-full px-2 py-1 rounded-full border border-input bg-card text-xs">
+										<Avatar size="xs" className="ring-0" src={getAvatarUrl(p)} alt={p.name} />
+										<span className="truncate max-w-[140px]" title={p.name}>{p.name}</span>
+										<button
+											className="ml-0.5 -mr-0.5 px-1 leading-none rounded hover:bg-card/80"
+											aria-label={`Remove ${p.name}`}
+											onClick={() => onRemove?.(p.id)}
+										>
+											×
+										</button>
+									</span>
+								))}
+								<input
+									autoFocus
+									value={q}
+									onChange={e => setQ(e.target.value)}
+									placeholder={selectedPeople.length ? "Search…" : "Search people…"}
+									className="flex-1 min-w-[140px] border-none outline-none bg-transparent py-1"
+								/>
+							</div>
 							<button onClick={() => setOpen(false)} className="text-[11px] px-2 py-1 rounded border border-input hover:bg-card">Close</button>
 						</div>
 						<ul className={`space-y-1 text-sm ${allowScroll ? 'max-h-60 overflow-auto' : ''}`}>
@@ -112,9 +134,12 @@ export default function PersonSelectPopover(props: PersonSelectPopoverProps) {
 								const selected = mode === "single" ? p.id === selectedId : selectedSet.has(p.id);
 								return (
 									<li key={p.id} className="flex items-center gap-2 justify-between px-2 py-1 rounded hover:bg-card/80">
-										<div className="min-w-0">
-											<div className="truncate text-sm font-medium">{p.name}</div>
-											{p.skills && p.skills.length > 0 && (<div className="text-xs text-muted truncate uppercase tracking-caps">{p.skills.join(', ')}</div>)}
+										<div className="min-w-0 flex items-center gap-2">
+											<Avatar size="xs" className="ring-0" src={getAvatarUrl(p)} alt={p.name} />
+											<div className="min-w-0">
+												<div className="truncate text-sm font-medium">{p.name}</div>
+												{p.skills && p.skills.length > 0 && (<div className="text-xs text-muted truncate uppercase tracking-caps">{p.skills.join(', ')}</div>)}
+											</div>
 										</div>
 										{mode === "multi" ? (
 											<button

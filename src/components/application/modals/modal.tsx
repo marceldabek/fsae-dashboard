@@ -25,7 +25,8 @@ export const Modal = (props: AriaModalOverlayProps) => (
         {...props}
         className={(state) =>
             cx(
-                "max-h-full w-full align-middle outline-hidden max-sm:overflow-y-auto max-sm:rounded-xl",
+                // On small screens we still want the sheet-style full width. On larger screens allow content to shrink so flex centering works.
+                "max-h-full w-full sm:w-auto align-middle outline-hidden max-sm:overflow-y-auto max-sm:rounded-xl",
                 state.isEntering && "duration-300 ease-out animate-in zoom-in-95",
                 state.isExiting && "duration-200 ease-in animate-out zoom-out-95",
                 typeof props.className === "function" ? props.className(state) : props.className,

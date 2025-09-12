@@ -28,6 +28,8 @@
 
     --accent: 221 83% 53%;
     --accent-foreground: 0 0% 100%;
+  --accent-soft: 186 49% 60%; /* #64C7C9 */
+  --accent-hover: 220 50% 25%; /* #203363 */
 
     --destructive: 0 63% 46%;
     --destructive-foreground: 0 0% 100%;
@@ -65,6 +67,8 @@
 
     --accent: 221 83% 53%;
     --accent-foreground: 0 0% 100%;
+  --accent-soft: 186 49% 60%; /* #64C7C9 */
+  --accent-hover: 220 50% 25%; /* #203363 */
 
     --destructive: 0 63% 46%;
     --destructive-foreground: 0 0% 100%;
@@ -115,3 +119,46 @@
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-thumb { border-radius: 8px; background: rgba(0,0,0,.25); }
 .dark ::-webkit-scrollbar-thumb { background: rgba(255,255,255,.25); }
+
+/* ──────────────────────────────────────────────────────────────
+   DayPicker dot indicators (today & selected)
+   ────────────────────────────────────────────────────────────── */
+.rdp.rdp-fsae .rdp-day_today { position: relative; }
+.rdp.rdp-fsae .rdp-day_today::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 3px;
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background: hsl(var(--primary)); /* app primary */
+}
+.rdp.rdp-fsae .rdp-day_selected::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: 3px;
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+  background: color-mix(in oklab, hsl(var(--primary)) 60%, transparent);
+}
+
+/* Stronger hover override (and ensure it applies in dark theme) */
+.rdp.rdp-fsae .rdp-day:hover {
+  background-color: color-mix(in oklab, white 6%, transparent);
+}
+
+/* Compact DayPicker spacing */
+.rdp.rdp-compact { margin: 0; }
+.rdp.rdp-compact .rdp-month { margin: 0; padding: 0; }
+.rdp.rdp-compact .rdp-caption { margin: 0; }
+.rdp.rdp-compact .rdp-nav { padding-left: 2px; padding-right: 2px; }
+.rdp.rdp-compact .rdp-table { margin: 0; }
+.rdp.rdp-compact .rdp-head { margin: 0; }
+.rdp.rdp-compact .rdp-head_cell { padding: 0; }
+.rdp.rdp-compact .rdp-row { margin: 0; }
+.rdp.rdp-compact .rdp-cell { padding: 0; }

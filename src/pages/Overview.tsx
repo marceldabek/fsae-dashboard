@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState, useRef } from "react";
 import { fetchPeople, fetchProjects, fetchTasks, fetchAttendance, fetchProjectDependencies } from "../lib/firestore";
 import type { Person, Project, Task, Attendance, ProjectDependency } from "../types";
 import { useAuth } from "../hooks/useAuth";
-import ProjectCard from "../components/ProjectCard";
+import ProjectCard from "../components/overview/OverviewProjectCard";
 import TrophyIcon from "../components/TrophyIcon";
 import ProgressBar from "../components/ProgressBar";
 import SwipeCarousel from "../components/SwipeCarousel";
@@ -372,13 +372,7 @@ export default function Overview() {
           <span className="sr-only">Hide completed projects</span>
         </label>
       </div>
-  <div className="flex items-center gap-4 text-[10px] text-muted mb-1 uppercase tracking-caps">
-        <div className="flex items-center gap-1" title="Grey = To-do / Not started">
-          <span className="w-2 h-2 rounded-full" style={{ background: '#BDC0C3' }} /> To-do / Not started
-        </div>
-  <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full" style={{ background: '#64C7C9' }} /> In Progress</div>
-  <div className="flex items-center gap-1"><span className="w-2 h-2 rounded-full" style={{ background: '#34D399' }} /> Complete</div>
-      </div>
+  {/* Removed status legend per request */}
       {/* Toolbar: Subsystem multi-select + Sort dropdown */}
   <div className="grid grid-cols-2 gap-2 w-full">
         <div className="relative min-w-0">
