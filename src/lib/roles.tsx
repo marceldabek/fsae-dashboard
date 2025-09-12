@@ -1,7 +1,8 @@
 // roles.tsx
 import { getFunctions, httpsCallable } from "firebase/functions";
 import { onAuthStateChanged, User } from "firebase/auth";
-import { auth } from "../firebase";
+import { auth, db } from "../firebase";
+import { doc, getDoc } from "firebase/firestore";
 
 export type Roles = {
   uid: string;
@@ -37,8 +38,6 @@ export async function fetchRoles(): Promise<Roles> {
     // If no custom claims but user is Discord user, check Firestore
     if (!claimLead && !claimMember && d.uid.startsWith('discord:')) {
       try {
-        const { db } = await import('../firebase');
-        const { doc, getDoc } = await import('firebase/firestore');
         const userDoc = await getDoc(doc(db, 'users', d.uid));
         const userData = userDoc.data();
         claimLead = Boolean(userData?.roles?.team_lead);

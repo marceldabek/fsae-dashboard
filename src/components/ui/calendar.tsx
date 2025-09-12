@@ -1,5 +1,7 @@
 import * as React from "react";
 import { DayPicker } from "react-day-picker";
+// Ensure base styles are present even if global CSS import is missed
+import "react-day-picker/dist/style.css";
 import { cn } from "@/lib/utils";
 
 type CalendarProps = {
@@ -16,17 +18,24 @@ export function Calendar({ className, selected, onSelect }: CalendarProps) {
       defaultMonth={selected ?? new Date()}
       showOutsideDays
       onSelect={onSelect}
-  className={cn("rdp rdp-compact rdp-fsae text-sm m-0", className)}
+      className={cn("rdp rdp-compact rdp-fsae text-sm m-0", className)}
+      // Minimal runtime fallback to preserve grid if base CSS fails to load
+      styles={{
+        month_grid: {
+          display: "grid",
+          gridTemplateColumns: "repeat(7, minmax(0, 1fr))",
+        },
+      }}
       classNames={{
         caption: "relative grid place-items-center py-2",
         caption_label: "font-medium text-center",
         nav: "absolute inset-0 flex items-center justify-between px-1",
         head_cell: "w-10 text-center text-xs text-muted-foreground",
         cell: "p-0",
-  day: "h-10 w-10 rounded-2xl flex flex-col items-center justify-center transition hover:bg-accent/10 focus-visible:outline-none focus-visible:ring-0",
+        day: "h-10 w-10 rounded-2xl flex flex-col items-center justify-center transition hover:bg-accent/10 focus-visible:outline-none focus-visible:ring-0",
         day_selected: "bg-primary/20",
         day_today: "relative",
-  nav_button: "rounded-full focus:outline-none focus-visible:outline-none focus-visible:ring-0 hover:bg-accent/10",
+        nav_button: "rounded-full focus:outline-none focus-visible:outline-none focus-visible:ring-0 hover:bg-accent/10",
         month: "rounded-2xl p-0",
       }}
     />

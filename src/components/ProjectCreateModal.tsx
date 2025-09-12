@@ -6,7 +6,7 @@ import type { Person } from "../types";
 import PersonSelectPopover from "./PersonSelectPopover";
 import { addProject, fetchPeople } from "../lib/firestore";
 import { Input } from "./ui/input";
-import { DueDateField as DueDateFieldUntitled } from "./DueDateFieldUntitled";
+import DueDateFieldCard from "./DueDateFieldCard";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "./ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { Avatar } from "@/components/base/avatar/avatar";
@@ -48,13 +48,29 @@ export default function ProjectCreateModal({ open, onClose, people, onCreated, p
   // Use shared resolver that falls back to discord fields when avatar_url is missing
   const resolveAvatar = (p: any): string | undefined => (p ? getAvatarUrl(p) : undefined);
 
+  function toLocalMidnight(d: Date): Date {
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  }
   function parseDueDateString(raw: string | undefined | null): Date | null {
     if (!raw) return null;
-    let s = raw.trim();
-    if (s.includes("T")) s = s.split("T")[0];
+    let s = String(raw).trim();
+    // Normalize separators
     if (/^\d{4}\/\d{2}\/\d{2}$/.test(s)) s = s.replaceAll('/', '-');
+    // ISO with time -> convert to local date-only
+    if (s.includes('T')) {
+      const d = new Date(s);
+      return isNaN(+d) ? null : toLocalMidnight(d);
+    }
+    // YYYY-MM-DD -> parse as local date (not UTC) to avoid TZ off-by-one
+    const m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (m) {
+      const [, y, mo, da] = m;
+      const d = new Date(Number(y), Number(mo) - 1, Number(da));
+      return isNaN(+d) ? null : d;
+    }
+    // Fallback parse
     const d = new Date(s);
-    return isNaN(d.getTime()) ? null : d;
+    return isNaN(+d) ? null : toLocalMidnight(d);
   }
 
   function isoToYmd(iso: string): string {
@@ -67,11 +83,7 @@ export default function ProjectCreateModal({ open, onClose, people, onCreated, p
     return `${y}-${m}-${da}`;
   }
 
-  // initialize from global edit context if present (legacy)
-  React.useEffect(() => {
-    const existing = (typeof window !== 'undefined' ? (window as any).__EDITING_DUE_DATE__ : undefined) as string | undefined;
-    if (existing) setDueDate(parseDueDateString(existing));
-  }, []);
+  // Removed legacy global prefill on mount to avoid conflicting with Edit mode
 
   // When opening in create mode, prefer an explicit initialDate prop (timeline right-click),
   // fall back to global window flag if present.
@@ -105,15 +117,21 @@ export default function ProjectCreateModal({ open, onClose, people, onCreated, p
     if (open && projectToEdit) {
       // Support both API shapes (snake_case from Firestore and camelCase from timeline mapping)
       const anyPr: any = projectToEdit;
-    const dueRawOriginal: string = anyPr.due_date || anyPr.dueDate || "";
-    const dueRaw: string = anyPr.due_date ? anyPr.due_date : (anyPr.dueDate ? isoToYmd(anyPr.dueDate) : "");
+  const dueRaw: string = anyPr.due_date ? anyPr.due_date : (anyPr.dueDate ? isoToYmd(anyPr.dueDate) : "");
       setPrName(anyPr.name || "");
     const initialOwners: string[] = [...new Set([...(anyPr.owner_ids || anyPr.ownerIds || [])])];
     setPrOwners(initialOwners);
       setPrDesign(anyPr.design_link || anyPr.designLink || "");
       setPrDesc(anyPr.description || anyPr.desc || "");
   setPrSubsystem(anyPr.subsystem || anyPr.subSystem || "");
-  setDueDate(parseDueDateString(dueRaw));
+  {
+        const parsed = parseDueDateString(dueRaw);
+        setDueDate(prev => {
+          if (prev && parsed && prev.getTime() === parsed.getTime()) return prev;
+          if (!prev && !parsed) return prev;
+          return parsed;
+        });
+      }
 
       // If critical fields missing (e.g., owner_ids, subsystem, due_date) attempt to fetch full doc.
             const needsFetch = (
@@ -133,7 +151,14 @@ export default function ProjectCreateModal({ open, onClose, people, onCreated, p
               setPrDesign(full.design_link || "");
               setPrDesc(full.description || "");
               setPrSubsystem(full.subsystem || "");
-              setDueDate(parseDueDateString(full.due_date));
+              {
+                const parsed = parseDueDateString(full.due_date);
+                setDueDate(prev => {
+                  if (prev && parsed && prev.getTime() === parsed.getTime()) return prev;
+                  if (!prev && !parsed) return prev;
+                  return parsed;
+                });
+              }
             }
           } catch { /* ignore fetch errors silently */ }
         })();
@@ -200,7 +225,7 @@ export default function ProjectCreateModal({ open, onClose, people, onCreated, p
           owner_ids: prOwners,
           design_link: prDesign.trim() || undefined,
           description: prDesc.trim() || undefined,
-          due_date: dueDate ? dueDate.toISOString() : undefined,
+          due_date: dueDate ? dueDate.toISOString().slice(0, 10) : undefined,
           subsystem: prSubsystem || undefined,
         } as any);
         onCreated?.(projectToEdit.id);
@@ -210,7 +235,7 @@ export default function ProjectCreateModal({ open, onClose, people, onCreated, p
           owner_ids: prOwners,
           design_link: prDesign.trim() || undefined,
           description: prDesc.trim() || undefined,
-          due_date: dueDate ? dueDate.toISOString() : undefined,
+          due_date: dueDate ? dueDate.toISOString().slice(0, 10) : undefined,
           subsystem: prSubsystem || undefined,
         } as any);
         onCreated?.(id as any);
@@ -257,7 +282,7 @@ export default function ProjectCreateModal({ open, onClose, people, onCreated, p
                   </Select>
                 </div>
               </div>
-              <DueDateFieldUntitled value={dueDate} onChange={setDueDate} />
+              <DueDateFieldCard value={dueDate} onChange={setDueDate} />
             </div>
             <div className="flex items-center gap-2">
               <span className="text-[10px] uppercase tracking-wide opacity-80">Owners</span>

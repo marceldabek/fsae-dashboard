@@ -14,7 +14,7 @@ import {
     Heading as AriaHeading,
     useSlottedContext,
 } from "react-aria-components";
-import { Button } from "../../base/buttons/button";
+import { Button } from "@/components/base/buttons/button";
 import { cx } from "@/utils/cx";
 import { CalendarCell } from "./cell";
 import { DateInput } from "./date-input";
@@ -58,9 +58,11 @@ const PresetButton = ({ value, children, ...props }: HTMLAttributes<HTMLButtonEl
 interface CalendarProps extends AriaCalendarProps<DateValue> {
     /** The dates to highlight. */
     highlightedDates?: DateValue[];
+    /** Optional theme override for white text on colored background */
+    theme?: "default" | "white";
 }
 
-export const Calendar = ({ highlightedDates, className, ...props }: CalendarProps) => {
+export const Calendar = ({ highlightedDates, className, theme = "default", ...props }: CalendarProps) => {
     const context = useSlottedContext(AriaCalendarContext)!;
 
     const ContextWrapper = context ? Fragment : CalendarContextProvider;
@@ -69,27 +71,27 @@ export const Calendar = ({ highlightedDates, className, ...props }: CalendarProp
         <ContextWrapper>
             <AriaCalendar {...props} className={(state) => cx("flex flex-col gap-3", typeof className === "function" ? className(state) : className)}>
                 <header className="flex items-center justify-between">
-                    <Button slot="previous" iconLeading={ChevronLeft} size="sm" color="tertiary" className="size-8" />
-                    <AriaHeading className="text-sm font-semibold text-fg-secondary" />
-                    <Button slot="next" iconLeading={ChevronRight} size="sm" color="tertiary" className="size-8" />
+                    <Button slot="previous" iconLeading={ChevronLeft} size="sm" color="tertiary" className={cx("size-8", theme === "white" && "text-white hover:text-white focus-visible:outline-white/50")} />
+                    <AriaHeading className={cx("text-sm font-semibold", theme === "white" ? "text-white" : "text-fg-secondary")} />
+                    <Button slot="next" iconLeading={ChevronRight} size="sm" color="tertiary" className={cx("size-8", theme === "white" && "text-white hover:text-white focus-visible:outline-white/50")}/>
                 </header>
 
                 <div className="flex gap-3">
-                    <DateInput className="flex-1" />
-                    <PresetButton value={today(getLocalTimeZone())}>Today</PresetButton>
+                    <DateInput className="flex-1" theme={theme} />
+                    <PresetButton value={today(getLocalTimeZone())} className={cx(theme === "white" && "text-white ring-1 ring-white/50 bg-white/10 hover:bg-white/15 focus-visible:outline-none")}>Today</PresetButton>
                 </div>
 
                 <AriaCalendarGrid weekdayStyle="short" className="w-max">
                     <AriaCalendarGridHeader className="border-b-4 border-transparent">
                         {(day) => (
                             <AriaCalendarHeaderCell className="p-0">
-                                <div className="flex size-10 items-center justify-center text-sm font-medium text-secondary">{day.slice(0, 2)}</div>
+                                <div className={cx("flex size-10 items-center justify-center text-sm font-medium", theme === "white" ? "text-white" : "text-secondary")}>{day.slice(0, 2)}</div>
                             </AriaCalendarHeaderCell>
                         )}
                     </AriaCalendarGridHeader>
                     <AriaCalendarGridBody className="[&_td]:p-0 [&_tr]:border-b-4 [&_tr]:border-transparent [&_tr:last-of-type]:border-none">
                         {(date) => (
-                            <CalendarCell date={date} isHighlighted={highlightedDates?.some((highlightedDate) => date.compare(highlightedDate) === 0)} />
+                            <CalendarCell theme={theme} date={date} isHighlighted={highlightedDates?.some((highlightedDate) => date.compare(highlightedDate) === 0)} />
                         )}
                     </AriaCalendarGridBody>
                 </AriaCalendarGrid>

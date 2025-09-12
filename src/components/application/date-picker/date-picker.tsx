@@ -4,7 +4,7 @@ import { Calendar as CalendarIcon } from "@untitledui/icons";
 import { useDateFormatter } from "react-aria";
 import type { DatePickerProps as AriaDatePickerProps, DateValue } from "react-aria-components";
 import { DatePicker as AriaDatePicker, Dialog as AriaDialog, Group as AriaGroup, Popover as AriaPopover } from "react-aria-components";
-import { Button } from "./base/buttons/button";
+import { Button } from "@/components/base/buttons/button";
 import { cx } from "@/utils/cx";
 import { Calendar } from "./calendar";
 
@@ -47,7 +47,7 @@ export const DatePicker = ({ value: valueProp, defaultValue, onChange, onApply, 
                     )
                 }
             >
-                <AriaDialog className="rounded-2xl bg-primary shadow-xl ring ring-secondary_alt">
+                <AriaDialog className="rounded-2xl bg-surface shadow-xs ring-1 ring-secondary_alt">
                     {({ close }) => (
                         <>
                             <div className="flex px-6 py-5">

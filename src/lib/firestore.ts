@@ -391,7 +391,8 @@ export async function addProject(pr: Omit<Project, "id"> & { id?: string }) {
   const now = Date.now();
   if (pr.id) {
     const ref = doc(db, "projects", pr.id);
-    await setDoc(ref, pruneUndefined({ ...pr, id: pr.id, created_at: pr.created_at ?? now }), { merge: true }); // create-or-merge
+  // Update existing without touching created_at
+  await setDoc(ref, pruneUndefined({ ...pr, id: pr.id }), { merge: true }); // create-or-merge
     bustCache(["projects"]);
     return pr.id;
   } else {

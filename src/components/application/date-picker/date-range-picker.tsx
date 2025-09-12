@@ -5,7 +5,7 @@ import { Calendar as CalendarIcon } from "@untitledui/icons";
 import { useDateFormatter } from "react-aria";
 import type { DateRangePickerProps as AriaDateRangePickerProps, DateValue } from "react-aria-components";
 import { DateRangePicker as AriaDateRangePicker, Dialog as AriaDialog, Group as AriaGroup, Popover as AriaPopover, useLocale } from "react-aria-components";
-import { Button } from "./base/buttons/button";
+import { Button } from "@/components/base/buttons/button";
 import { cx } from "@/utils/cx";
 import { DateInput } from "./date-input";
 import { RangeCalendar } from "./range-calendar";
@@ -94,7 +94,7 @@ export const DateRangePicker = ({ value: valueProp, defaultValue, onChange, onAp
                     )
                 }
             >
-                <AriaDialog className="flex rounded-2xl bg-primary shadow-xl ring ring-secondary_alt focus:outline-hidden">
+                <AriaDialog className="flex rounded-2xl bg-surface shadow-xs ring-1 ring-secondary_alt focus:outline-hidden">
                     {({ close }) => (
                         <>
                             <div className="hidden w-38 flex-col gap-0.5 border-r border-solid border-secondary p-3 lg:flex">
